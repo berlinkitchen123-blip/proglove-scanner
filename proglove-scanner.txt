@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProGlove Scanner - Download First System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial; background: #1a1a1a; color: white; padding: 10px; }
+        .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
+        
+        .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        
+        .sync-section { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .download-btn { background: #4285f4; color: white; }
+        .upload-btn { background: #34a853; color: white; }
+        .sync-btn:disabled { background: #666; cursor: not-allowed; }
+        
+        .sync-status { 
+            padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px;
+            background: #444; border-left: 4px solid #4285f4;
+        }
+        .sync-status.success { border-left-color: #34a853; background: #2a2a2a; }
+        .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
+        
+        .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .kitchen-btn { background: #34a853; color: white; }
+        .return-btn { background: #ea4335; color: white; }
+        .mode-btn.active { box-shadow: 0 0 0 3px white; }
+        
+        .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
+        
+        .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .start-btn { background: #34a853; color: white; }
+        .stop-btn { background: #ea4335; color: white; }
+        .scan-btn:disabled { background: #666; cursor: not-allowed; }
+        
+        .proglove-input { 
+            width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; 
+            margin-bottom: 15px; text-align: center;
+        }
+        .proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
+        
+        .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
+        
+        .feedback { 
+            padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; 
+            display: flex; align-items: center; justify-content: center;
+        }
+        .success { background: #34a853; }
+        .error { background: #ea4335; }
+        .warning { background: #f57c00; }
+        .info { background: #4285f4; }
+        
+        .hidden { display: none; }
+        
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; }
+        .kitchen-stat { color: #34a853; }
+        .return-stat { color: #ea4335; }
+        .active-stat { color: #4285f4; }
+        
+        .response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
+        
+        .local-data { 
+            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
+            border-left: 4px solid #f57c00;
+        }
+        
+        .upload-info { 
+            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
+            border-left: 4px solid #4285f4;
+        }
+        
+        .cross-team-data { 
+            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
+            border-left: 4px solid #f57c00;
+        }
+        
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .data-label { font-weight: bold; }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧤 ProGlove Scanner</h1>
+            <p>Download First • Real-time Error Detection • Multi-Device Sync</p>
+        </div>
+        
+        <!-- Sync Section -->
+        <div class="card">
+            <h3>🔄 SYNC WITH GOOGLE SHEETS</h3>
+            <div class="sync-section">
+                <div class="sync-controls">
+                    <button class="sync-btn download-btn" onclick="downloadFromSheets()" id="downloadBtn">
+                        📥 DOWNLOAD LATEST DATA
+                    </button>
+                    <button class="sync-btn upload-btn" onclick="uploadToSheets()" id="uploadBtn" disabled>
+                        📤 UPLOAD MY SCANS
+                    </button>
+                </div>
+                <div class="sync-status" id="syncStatus">
+                    ⚠️ Download latest data first to enable error detection
+                </div>
+                <div class="local-data" id="localDataInfo">
+                    <strong>Local Data:</strong> No data downloaded yet
+                </div>
+                <div class="upload-info" id="uploadInfo">
+                    <strong>Upload History:</strong> No uploads yet
+                </div>
+            </div>
+        </div>
+
+        <!-- Mode Selection -->
+        <div class="card">
+            <h3>📱 SELECT MODE</h3>
+            <div class="mode-buttons">
+                <button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
+                <button class="mode-btn return-btn" onclick="setMode('return')" id="returnBtn">🔄 RETURN</button>
+            </div>
+        </div>
+        
+        <!-- User Selection -->
+        <div class="card">
+            <h3>👤 SELECT USER</h3>
+            <select class="dropdown" id="userDropdown" onchange="selectUser()" disabled>
+                <option value="">-- Download Data First --</option>
+            </select>
+        </div>
+        
+        <!-- Dish Selection -->
+        <div class="card hidden" id="dishSection">
+            <h3>📝 SELECT DISH LETTER</h3>
+            <select class="dropdown" id="dishDropdown" onchange="selectDishLetter()" disabled>
+                <option value="">-- Select Dish Letter --</option>
+            </select>
+        </div>
+        
+        <!-- Cross-Team Data Section -->
+        <div class="card hidden" id="crossTeamDataSection">
+            <h3>📊 CROSS-TEAM DATA</h3>
+            <div class="cross-team-data" id="crossTeamData">
+                Loading cross-team data...
+            </div>
+        </div>
+        
+        <!-- Scan Section -->
+        <div class="card" id="scanSection">
+            <h3>🔍 SCANNING</h3>
+            <div class="scan-controls">
+                <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()" disabled>▶ START SCANNING</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+            </div>
+            
+            <input type="text" class="proglove-input" id="progloveInput" placeholder="Download data first to enable scanning..." disabled>
+            
+            <!-- Response Time -->
+            <div class="response-time">
+                Response time: <span id="responseTimeValue">0</span>ms
+            </div>
+            
+            <!-- Statistics -->
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Active Bowls</div>
+                    <div class="stat-value active-stat" id="activeCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">My Scans Today</div>
+                    <div class="stat-value kitchen-stat" id="myScansCount">0</div>
+                </div>
+            </div>
+            
+            <div class="feedback info" id="feedback">
+                📥 Please download latest data first
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        let currentMode = null;
+        let selectedUser = null;
+        let selectedDishLetter = null;
+        let isScanning = false;
+        let isDataDownloaded = false;
+        
+        // Local Data Storage
+        let localData = {
+            activeData: [],
+            preparation: [],
+            archive: [],
+            companyData: [],
+            users: [],
+            myScans: [],
+            uploadHistory: []
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLocalData();
+            updateUI();
+            document.getElementById('progloveInput').addEventListener('input', handleProGloveScan);
+        });
+
+        // ==================== SYNC FUNCTIONS ====================
+
+        async function downloadFromSheets() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const status = document.getElementById('syncStatus');
+            
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = "⏳ DOWNLOADING...";
+            status.textContent = "⏳ Downloading latest data from Google Sheets...";
+            
+            try {
+                // YOUR GOOGLE APPS SCRIPT URL
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycby1yHrl5yOoNw0XjRPdhy1UifnYyUCdjVOT4kgF-VaA_o1R77VUUeXxlNnJwVLES3KM/exec';
+                const response = await fetch(`${scriptUrl}?action=getAllData`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Store the downloaded data for fast error detection
+                localData.activeData = data.activeData || [];
+                localData.preparation = data.preparation || [];
+                localData.archive = data.archive || [];
+                localData.companyData = data.companyData || [];
+                localData.users = data.users || [];
+                
+                saveLocalData();
+                isDataDownloaded = true;
+                
+                status.textContent = `✅ Downloaded ${localData.activeData.length} active bowls, ${localData.preparation.length} prepared today`;
+                status.className = "sync-status success";
+                
+                updateUI();
+                updateCrossTeamData();
+                showFeedback("✅ Latest data downloaded! Ready to scan.", "success");
+                
+            } catch (error) {
+                console.error('Download error:', error);
+                status.textContent = "❌ Download failed: " + error.message;
+                status.className = "sync-status error";
+                showFeedback("❌ Download failed", "error");
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "📥 DOWNLOAD LATEST DATA";
+            }
+        }
+
+        async function uploadToSheets() {
+            if (localData.myScans.length === 0) {
+                showFeedback("ℹ️ No scans to upload", "info");
+                return;
+            }
+            
+            const uploadBtn = document.getElementById('uploadBtn');
+            const status = document.getElementById('syncStatus');
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = "⏳ UPLOADING...";
+            status.textContent = `⏳ Uploading ${localData.myScans.length} scans to Google Sheets...`;
+            
+            try {
+                // YOUR GOOGLE APPS SCRIPT URL
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycby1yHrl5yOoNw0XjRPdhy1UifnYyUCdjVOT4kgF-VaA_o1R77VUUeXxlNnJwVLES3KM/exec';
+                const response = await fetch(`${scriptUrl}?action=uploadScans`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scans: localData.myScans,
+                        user: selectedUser,
+                        mode: currentMode,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Upload failed');
+                }
+                
+                // Record upload history
+                const uploadRecord = {
+                    user: selectedUser || "Unknown",
+                    timestamp: new Date().toISOString(),
+                    scanCount: localData.myScans.length,
+                    mode: currentMode,
+                    dishLetter: selectedDishLetter || "N/A"
+                };
+                
+                localData.uploadHistory.unshift(uploadRecord);
+                if (localData.uploadHistory.length > 5) {
+                    localData.uploadHistory = localData.uploadHistory.slice(0, 5);
+                }
+                
+                status.textContent = `✅ Uploaded ${localData.myScans.length} scans successfully!`;
+                status.className = "sync-status success";
+                
+                // Clear my scans after successful upload
+                localData.myScans = [];
+                saveLocalData();
+                
+                showFeedback(`✅ ${uploadRecord.scanCount} scans uploaded to Google Sheets`, "success");
+                updateUI();
+                updateUploadInfo();
+                
+                // Refresh data after upload to get latest state
+                setTimeout(downloadFromSheets, 1000);
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                status.textContent = "❌ Upload failed: " + error.message;
+                status.className = "sync-status error";
+                showFeedback("❌ Upload failed - saving locally", "error");
+                
+                // Save upload attempt locally even if failed
+                const uploadRecord = {
+                    user: selectedUser || "Unknown",
+                    timestamp: new Date().toISOString(),
+                    scanCount: localData.myScans.length,
+                    mode: currentMode,
+                    dishLetter: selectedDishLetter || "N/A",
+                    status: 'failed'
+                };
+                
+                localData.uploadHistory.unshift(uploadRecord);
+                if (localData.uploadHistory.length > 5) {
+                    localData.uploadHistory = localData.uploadHistory.slice(0, 5);
+                }
+                saveLocalData();
+                updateUploadInfo();
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = "📤 UPLOAD MY SCANS";
+            }
+        }
+
+        // ==================== SCANNING WITH REAL-TIME ERROR DETECTION ====================
+
+        function scanKitchen(bowlId, userName, dishLetter) {
+            const startTime = Date.now();
+            const fullVYTCode = repairVYTCode(bowlId);
+            const today = getTodayDate();
+            
+            // REAL-TIME ERROR DETECTION against downloaded data - FAST because data is local
+            const isInActive = localData.activeData.some(bowl => 
+                repairVYTCode(bowl[0]) === fullVYTCode
+            );
+            
+            if (isInActive) {
+                return {
+                    success: false,
+                    message: "❌ Already in Active Data: " + fullVYTCode,
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            const isPreparedToday = localData.preparation.some(bowl => 
+                repairVYTCode(bowl[0]) === fullVYTCode && bowl[3] === today
+            );
+            
+            if (isPreparedToday) {
+                return {
+                    success: false,
+                    message: "⚠️ Already prepared today: " + fullVYTCode,
+                    type: "warning",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            // Get company info from local data
+            const companyInfo = getCompanyInfo(fullVYTCode);
+            
+            // Add to local myScans (to be uploaded later)
+            const scanData = {
+                type: 'kitchen',
+                fullVYTCode: fullVYTCode,
+                dishLetter: dishLetter,
+                user: userName,
+                date: today,
+                time: new Date().toLocaleTimeString(),
+                company: companyInfo.company,
+                customer: companyInfo.customer,
+                department: companyInfo.department,
+                timestamp: new Date().toISOString()
+            };
+            
+            localData.myScans.push(scanData);
+            saveLocalData();
+            
+            return {
+                success: true,
+                message: "✅ " + dishLetter + " Prepared: " + fullVYTCode,
+                type: "success",
+                responseTime: Date.now() - startTime
+            };
+        }
+
+        function scanReturn(bowlId, userName) {
+            const startTime = Date.now();
+            const fullVYTCode = repairVYTCode(bowlId);
+            
+            // REAL-TIME ERROR DETECTION against downloaded data - FAST because data is local
+            const activeBowl = localData.activeData.find(bowl => 
+                repairVYTCode(bowl[0]) === fullVYTCode
+            );
+            
+            if (!activeBowl) {
+                return {
+                    success: false,
+                    message: "❌ Not in Active Data: " + fullVYTCode,
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            const isInArchive = localData.archive.some(bowl => 
+                repairVYTCode(bowl[0]) === fullVYTCode
+            );
+            
+            if (isInArchive) {
+                return {
+                    success: false, 
+                    message: "❌ Already returned: " + fullVYTCode,
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            // Add to local myScans (to be uploaded later)
+            const scanData = {
+                type: 'return',
+                fullVYTCode: fullVYTCode,
+                user: userName,
+                returnedBy: userName,
+                originalData: activeBowl,
+                timestamp: new Date().toISOString()
+            };
+            
+            localData.myScans.push(scanData);
+            saveLocalData();
+            
+            return {
+                success: true,
+                message: "✅ Returned: " + fullVYTCode,
+                type: "success",
+                responseTime: Date.now() - startTime
+            };
+        }
+
+        // ==================== UI FUNCTIONS ====================
+
+        function setMode(mode) {
+            if (!isDataDownloaded) {
+                showFeedback("❌ Please download data first", "error");
+                return;
+            }
+            
+            currentMode = mode;
+            selectedUser = null;
+            selectedDishLetter = null;
+            isScanning = false;
+            
+            // Update mode buttons
+            document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
+            document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
+            
+            document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
+            document.getElementById('crossTeamDataSection').classList.remove('hidden');
+            document.getElementById('userDropdown').value = '';
+            document.getElementById('dishDropdown').value = '';
+            document.getElementById('progloveInput').value = '';
+            
+            updateUI();
+            updateCrossTeamData();
+            loadUsers();
+            showFeedback(`📱 ${mode.toUpperCase()} mode selected - Select user`, 'info');
+        }
+
+        function loadUsers() {
+            const dropdown = document.getElementById('userDropdown');
+            dropdown.innerHTML = '<option value="">-- Select User --</option>';
+            localData.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.name;
+                option.textContent = user.name;
+                dropdown.appendChild(option);
+            });
+        }
+
+        function selectUser() {
+            const dropdown = document.getElementById('userDropdown');
+            selectedUser = dropdown.value;
+            
+            if (selectedUser) {
+                showFeedback(`✅ ${selectedUser} selected`, 'success');
+                if (currentMode === 'kitchen') {
+                    document.getElementById('dishSection').classList.remove('hidden');
+                    loadDishLetters();
+                }
+            } else {
+                showFeedback('👤 Please select a user', 'info');
+                document.getElementById('dishSection').classList.add('hidden');
+            }
+            updateUI();
+        }
+
+        function loadDishLetters() {
+            const dropdown = document.getElementById('dishDropdown');
+            dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
+            for (let i = 65; i <= 90; i++) {
+                const option = document.createElement('option');
+                option.value = String.fromCharCode(i);
+                option.textContent = String.fromCharCode(i);
+                dropdown.appendChild(option);
+            }
+        }
+
+        function selectDishLetter() {
+            const dropdown = document.getElementById('dishDropdown');
+            selectedDishLetter = dropdown.value;
+            
+            if (selectedDishLetter) {
+                showFeedback(`📝 Dish ${selectedDishLetter} selected - Ready to scan`, 'success');
+            } else {
+                showFeedback('📝 Please select a dish letter', 'info');
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            const userDropdown = document.getElementById('userDropdown');
+            const dishDropdown = document.getElementById('dishDropdown');
+            const startBtn = document.getElementById('startBtn');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const progloveInput = document.getElementById('progloveInput');
+            const scanSection = document.getElementById('scanSection');
+            const localDataInfo = document.getElementById('localDataInfo');
+            
+            // Enable/disable based on data download
+            userDropdown.disabled = !isDataDownloaded;
+            dishDropdown.disabled = !isDataDownloaded;
+            uploadBtn.disabled = !isDataDownloaded || localData.myScans.length === 0;
+            
+            // Enable scanning only when ready
+            let canScan = isDataDownloaded && selectedUser && !isScanning;
+            if (currentMode === 'kitchen') canScan = canScan && selectedDishLetter;
+            
+            startBtn.disabled = !canScan;
+            
+            if (isScanning) {
+                scanSection.classList.add('scanning-active');
+                progloveInput.placeholder = "Scan VYT code with ProGlove...";
+                progloveInput.disabled = false;
+            } else {
+                scanSection.classList.remove('scanning-active');
+                progloveInput.placeholder = isDataDownloaded ? 
+                    "Click START SCANNING to begin..." : 
+                    "Download data first to enable scanning...";
+                progloveInput.disabled = !isDataDownloaded || !isScanning;
+            }
+            
+            // Update statistics
+            document.getElementById('activeCount').textContent = localData.activeData.length;
+            document.getElementById('myScansCount').textContent = localData.myScans.length;
+            
+            // Update local data info
+            localDataInfo.innerHTML = `
+                <strong>Local Data:</strong> 
+                ${localData.activeData.length} active bowls • 
+                ${localData.myScans.length} scans ready to upload •
+                Last sync: ${new Date().toLocaleTimeString()}
+            `;
+            
+            // Update upload info
+            updateUploadInfo();
+        }
+
+        function updateUploadInfo() {
+            const uploadInfo = document.getElementById('uploadInfo');
+            
+            if (localData.uploadHistory.length === 0) {
+                uploadInfo.innerHTML = '<strong>Upload History:</strong> No uploads yet';
+                return;
+            }
+            
+            let html = '<strong>Upload History:</strong><br>';
+            localData.uploadHistory.forEach(record => {
+                const date = new Date(record.timestamp);
+                const statusIcon = record.status === 'failed' ? '❌' : '✅';
+                html += `
+                    <div class="data-row">
+                        <span class="data-label">${statusIcon} ${record.user} (${record.mode})</span>
+                        <span>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</span>
+                        <span>${record.scanCount} scans</span>
+                    </div>
+                `;
+            });
+            
+            uploadInfo.innerHTML = html;
+        }
+
+        function updateCrossTeamData() {
+            const crossTeamData = document.getElementById('crossTeamData');
+            
+            if (!isDataDownloaded) {
+                crossTeamData.innerHTML = 'Download data first to see cross-team information';
+                return;
+            }
+            
+            const today = getTodayDate();
+            const todayPrepCount = localData.preparation.filter(bowl => bowl[3] === today).length;
+            const todayReturnCount = localData.archive.filter(bowl => {
+                const bowlDate = bowl[3] || bowl[4];
+                return bowlDate === today;
+            }).length;
+            
+            let html = '';
+            
+            if (currentMode === 'kitchen') {
+                html += `
+                    <div class="data-row">
+                        <span class="data-label">Today's Returns:</span>
+                        <span>${todayReturnCount} bowls</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Last Return Upload:</span>
+                        <span>${getLastUploadInfo('return')}</span>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="data-row">
+                        <span class="data-label">Today's Preparations:</span>
+                        <span>${todayPrepCount} bowls</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Last Kitchen Upload:</span>
+                        <span>${getLastUploadInfo('kitchen')}</span>
+                    </div>
+                `;
+            }
+            
+            crossTeamData.innerHTML = html;
+        }
+
+        function getLastUploadInfo(mode) {
+            const upload = localData.uploadHistory.find(record => record.mode === mode && record.status !== 'failed');
+            if (upload) {
+                const date = new Date(upload.timestamp);
+                return `${upload.user} - ${date.toLocaleDateString()} ${date.toLocaleTimeString()} (${upload.scanCount} scans)`;
+            }
+            return 'No uploads yet';
+        }
+
+        function startScanning() {
+            if (!isDataDownloaded) {
+                showFeedback('❌ Please download data first', 'error');
+                return;
+            }
+            if (!selectedUser) {
+                showFeedback('❌ Please select a user first', 'error');
+                return;
+            }
+            if (currentMode === 'kitchen' && !selectedDishLetter) {
+                showFeedback('❌ Please select a dish letter first', 'error');
+                return;
+            }
+            
+            isScanning = true;
+            updateUI();
+            document.getElementById('progloveInput').focus();
+            showFeedback(`🎯 SCANNING ACTIVE - Ready for ProGlove`, 'success');
+        }
+
+        function stopScanning() {
+            isScanning = false;
+            updateUI();
+            showFeedback(`⏹ Scanning stopped`, 'info');
+        }
+
+        function handleProGloveScan(e) {
+            if (!isScanning || !selectedUser || !isDataDownloaded) return;
+            
+            const bowlId = e.target.value.trim();
+            if (bowlId.length >= 2) {
+                processScan(bowlId);
+                setTimeout(() => e.target.value = '', 100);
+            }
+        }
+
+        function processScan(bowlId) {
+            const startTime = Date.now();
+            let result;
+            
+            if (currentMode === 'kitchen') {
+                result = scanKitchen(bowlId, selectedUser, selectedDishLetter);
+            } else {
+                result = scanReturn(bowlId, selectedUser);
+            }
+            
+            document.getElementById('responseTimeValue').textContent = result.responseTime;
+            showFeedback(result.message, result.type || 'success');
+            
+            if (result.type === 'error') {
+                document.getElementById('progloveInput').classList.add('error');
+                setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
+            } else {
+                document.getElementById('progloveInput').classList.remove('error');
+            }
+            
+            if (result.success) {
+                updateUI();
+            }
+        }
+
+        // ==================== HELPER FUNCTIONS ====================
+
+        function showFeedback(message, type) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = message;
+            feedback.className = 'feedback ' + type;
+        }
+
+        function repairVYTCode(inputCode) {
+            try {
+                let cleanCode = inputCode.toString().trim().toUpperCase();
+                const prefixes = ['HTTP://VYT.TO/', 'VYT.TO/', 'VYT/', 'HTTP://', 'HTTPS://'];
+                
+                prefixes.forEach(prefix => {
+                    if (cleanCode.includes(prefix)) {
+                        cleanCode = cleanCode.replace(prefix, '');
+                    }
+                });
+                
+                if (cleanCode.includes('/')) {
+                    const parts = cleanCode.split('/');
+                    cleanCode = parts[parts.length - 1];
+                }
+                
+                cleanCode = cleanCode.replace(/[^A-Z0-9]/gi, '');
+                
+                return cleanCode ? 'HTTP://VYT.TO/' + cleanCode : inputCode;
+            } catch (error) {
+                return inputCode;
+            }
+        }
+
+        function getTodayDate() {
+            const now = new Date();
+            return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+        }
+
+        function getCompanyInfo(fullVYTCode) {
+            const company = localData.companyData.find(item => 
+                repairVYTCode(item[0]) === fullVYTCode
+            );
+            return {
+                company: company ? company[1] : "Unknown",
+                customer: company ? company[2] : "Unknown", 
+                department: company ? company[3] : "Unknown"
+            };
+        }
+
+        // Local storage functions
+        function saveLocalData() {
+            localStorage.setItem('proglove_local_data', JSON.stringify({
+                ...localData,
+                lastSaved: new Date().toISOString()
+            }));
+        }
+
+        function loadLocalData() {
+            const saved = localStorage.getItem('proglove_local_data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                localData.myScans = data.myScans || [];
+                localData.uploadHistory = data.uploadHistory || [];
+                isDataDownloaded = data.activeData && data.activeData.length > 0;
+                updateUI();
+                updateUploadInfo();
+            }
+        }
+    </script>
+</body>
+</html>
