@@ -60,12 +60,13 @@
         
         .hidden { display: none; }
         
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
         .stat-value { font-size: 24px; font-weight: bold; }
         .kitchen-stat { color: #34a853; }
         .return-stat { color: #ea4335; }
         .active-stat { color: #4285f4; }
+        .prep-stat { color: #f57c00; }
         
         .response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
         
@@ -112,10 +113,10 @@
             <h3>🔄 SYNC WITH GOOGLE SHEETS</h3>
             <div class="sync-section">
                 <div class="sync-controls">
-                    <button class="sync-btn download-btn" onclick="downloadData()" id="downloadBtn">
+                    <button class="sync-btn download-btn" onclick="downloadFromSheets()" id="downloadBtn">
                         📥 DOWNLOAD LATEST DATA
                     </button>
-                    <button class="sync-btn upload-btn" onclick="uploadData()" id="uploadBtn" disabled>
+                    <button class="sync-btn upload-btn" onclick="uploadToSheets()" id="uploadBtn" disabled>
                         📤 UPLOAD MY SCANS
                     </button>
                 </div>
@@ -186,6 +187,10 @@
                     <div class="stat-value active-stat" id="activeCount">0</div>
                 </div>
                 <div class="stat-item">
+                    <div class="stat-label">Prepared Today</div>
+                    <div class="stat-value prep-stat" id="prepCount">0</div>
+                </div>
+                <div class="stat-item">
                     <div class="stat-label">My Scans Today</div>
                     <div class="stat-value kitchen-stat" id="myScansCount">0</div>
                 </div>
@@ -198,7 +203,7 @@
     </div>
 
     <script>
-        // SIMPLE GUARANTEED WORKING VERSION
+        // ProGlove Scanner - REAL GOOGLE SHEETS INTEGRATION
         let appData = {
             mode: null,
             user: null,
@@ -214,6 +219,9 @@
             uploadHistory: []
         };
 
+        // Google Apps Script URL (replace with your actual deployed URL)
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1yHrl5yOoNw0XjRPdhy1UifnYyUCdjVOT4kgF-VaA_o1R77VUUeXxlNnJwVLES3KM/exec';
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             loadFromStorage();
@@ -221,28 +229,68 @@
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
         });
 
-        // SIMPLE DOWNLOAD - GUARANTEED TO WORK
-        function downloadData() {
+        // REAL DOWNLOAD FROM GOOGLE SHEETS
+        async function downloadFromSheets() {
             const btn = document.getElementById('downloadBtn');
             const status = document.getElementById('syncStatus');
             
             btn.disabled = true;
-            btn.textContent = "⏳ LOADING...";
-            status.textContent = "⏳ Loading demo data...";
+            btn.textContent = "⏳ DOWNLOADING...";
+            status.textContent = "⏳ Downloading data from Google Sheets...";
             
-            // SIMPLE MOCK DATA - NO API CALLS
-            setTimeout(() => {
+            try {
+                // Try to get real data from Google Sheets
+                const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAllData`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch data from Google Sheets');
+                }
+                
+                const data = await response.json();
+                
+                // Update app data with real Google Sheets data
+                appData.activeData = data.activeData || [];
+                appData.preparation = data.preparation || [];
+                appData.archive = data.archive || [];
+                appData.companyData = data.companyData || [];
+                appData.users = data.users || [
+                    {name: "Hamid", role: "Kitchen"},
+                    {name: "Richa", role: "Kitchen"},
+                    {name: "Jash", role: "Kitchen"},
+                    {name: "Joel", role: "Kitchen"},
+                    {name: "Alex", role: "Kitchen"},
+                    {name: "Sam", role: "Kitchen"},
+                    {name: "Taylor", role: "Kitchen"},
+                    {name: "Morgan", role: "Return"},
+                    {name: "Jordan", role: "Return"},
+                    {name: "Casey", role: "Return"},
+                    {name: "Riley", role: "Return"}
+                ];
+                
+                appData.dataLoaded = true;
+                saveToStorage();
+                
+                status.textContent = `✅ Real data loaded! ${appData.activeData.length} active bowls from Google Sheets`;
+                status.className = "sync-status success";
+                showMessage("✅ Real data loaded from Google Sheets!", "success");
+                
+            } catch (error) {
+                console.error('Download error:', error);
+                
+                // FALLBACK: Use mock data if real download fails
+                status.textContent = "⚠️ Using demo data (Google Sheets unavailable)";
+                status.className = "sync-status";
+                
+                // Load mock data as fallback
                 appData.activeData = [
                     ["HTTP://VYT.TO/75F7UR", "K", "Hamid", "07/10/2025", "3:45:34 AM", "ACTIVE", "ProGlove", "Ariane Strempel", "TAM"],
                     ["HTTP://VYT.TO/I1FF2V", "K", "Hamid", "07/10/2025", "3:45:34 AM", "ACTIVE", "ProGlove", "Ariane Strempel", "TAM"],
-                    ["HTTP://VYT.TO/ABC123", "A", "Richa", "07/10/2025", "10:30:15 AM", "ACTIVE", "ProGlove", "John Doe", "Engineering"]
+                    ["HTTP://VYT.TO/ABC123", "A", "Richa", "07/10/2025", "10:30:15 AM", "ACTIVE", "ProGlove", "John Doe", "Engineering"],
+                    ["HTTP://VYT.TO/DEF456", "B", "Jash", "07/10/2025", "11:20:30 AM", "ACTIVE", "ProGlove", "Sarah Wilson", "Marketing"],
+                    ["HTTP://VYT.TO/GHI789", "C", "Joel", "07/10/2025", "12:15:45 PM", "ACTIVE", "ProGlove", "Mike Johnson", "Support"]
                 ];
-                appData.preparation = [
-                    ["HTTP://VYT.TO/TEST123", "B", "Jash", "07/10/2025", "9:15:22 AM", "PREPARED", "ProGlove", "Jane Smith", "Sales"]
-                ];
-                appData.archive = [
-                    ["HTTP://VYT.TO/DEMO456", "C", "Joel", "07/10/2025", "2:30:45 PM", "RETURNED", "ProGlove", "Mike Johnson", "Support"]
-                ];
+                appData.preparation = [];
+                appData.archive = [];
                 appData.companyData = [
                     ["HTTP://VYT.TO/75F7UR", "ProGlove", "Ariane Strempel", "TAM"],
                     ["HTTP://VYT.TO/I1FF2V", "ProGlove", "Ariane Strempel", "TAM"]
@@ -251,24 +299,29 @@
                     {name: "Hamid", role: "Kitchen"},
                     {name: "Richa", role: "Kitchen"},
                     {name: "Jash", role: "Kitchen"},
-                    {name: "Joel", role: "Kitchen"}
+                    {name: "Joel", role: "Kitchen"},
+                    {name: "Alex", role: "Kitchen"},
+                    {name: "Sam", role: "Kitchen"},
+                    {name: "Taylor", role: "Kitchen"},
+                    {name: "Morgan", role: "Return"},
+                    {name: "Jordan", role: "Return"},
+                    {name: "Casey", role: "Return"},
+                    {name: "Riley", role: "Return"}
                 ];
                 
                 appData.dataLoaded = true;
                 saveToStorage();
                 
-                status.textContent = "✅ Demo data loaded successfully!";
-                status.className = "sync-status success";
-                showMessage("✅ Data loaded! Ready to scan.", "success");
-                
+                showMessage("⚠️ Using demo data - real data unavailable", "warning");
+            } finally {
                 btn.disabled = false;
                 btn.textContent = "📥 DOWNLOAD LATEST DATA";
-                
                 updateDisplay();
-            }, 1000);
+            }
         }
 
-        function uploadData() {
+        // REAL UPLOAD TO GOOGLE SHEETS
+        async function uploadToSheets() {
             if (appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to upload", "info");
                 return;
@@ -279,28 +332,75 @@
             
             btn.disabled = true;
             btn.textContent = "⏳ UPLOADING...";
-            status.textContent = `⏳ Uploading ${appData.myScans.length} scans...`;
+            status.textContent = `⏳ Uploading ${appData.myScans.length} scans to Google Sheets...`;
             
-            setTimeout(() => {
-                appData.uploadHistory.unshift({
-                    user: appData.user || "Unknown",
-                    timestamp: new Date().toISOString(),
-                    scanCount: appData.myScans.length,
-                    mode: appData.mode
+            try {
+                // Prepare scan data for upload
+                const uploadData = {
+                    scans: appData.myScans.map(scan => ({
+                        type: scan.type,
+                        fullVYTCode: scan.code,
+                        dishLetter: scan.dish,
+                        user: scan.user,
+                        date: new Date().toLocaleDateString('en-GB'),
+                        time: new Date().toLocaleTimeString(),
+                        company: "ProGlove",
+                        customer: "Customer",
+                        department: "Department",
+                        originalData: scan.originalData
+                    }))
+                };
+                
+                // Send to Google Sheets
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'uploadScans',
+                        ...uploadData
+                    })
                 });
                 
-                appData.myScans = [];
-                saveToStorage();
+                if (!response.ok) {
+                    throw new Error('Failed to upload to Google Sheets');
+                }
                 
-                status.textContent = `✅ Uploaded successfully!`;
-                status.className = "sync-status success";
-                showMessage("✅ Scans uploaded!", "success");
+                const result = await response.json();
                 
+                if (result.success) {
+                    // Record successful upload
+                    appData.uploadHistory.unshift({
+                        user: appData.user || "Unknown",
+                        timestamp: new Date().toISOString(),
+                        scanCount: appData.myScans.length,
+                        mode: appData.mode,
+                        details: result.details
+                    });
+                    
+                    // Clear scans after successful upload
+                    appData.myScans = [];
+                    saveToStorage();
+                    
+                    status.textContent = `✅ Uploaded to Google Sheets! ${result.details.successful} successful`;
+                    status.className = "sync-status success";
+                    showMessage("✅ Scans uploaded to Google Sheets!", "success");
+                    
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                status.textContent = "❌ Upload failed - scans saved locally";
+                status.className = "sync-status error";
+                showMessage("❌ Upload failed - scans saved locally", "error");
+            } finally {
                 btn.disabled = false;
                 btn.textContent = "📤 UPLOAD MY SCANS";
-                
                 updateDisplay();
-            }, 1500);
+            }
         }
 
         function setMode(mode) {
@@ -331,10 +431,11 @@
         function loadUsers() {
             const dropdown = document.getElementById('userDropdown');
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
+            
             appData.users.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.name;
-                option.textContent = user.name;
+                option.textContent = user.name + (user.role ? ` (${user.role})` : '');
                 dropdown.appendChild(option);
             });
         }
@@ -387,7 +488,7 @@
             appData.scanning = true;
             updateDisplay();
             document.getElementById('progloveInput').focus();
-            showMessage(`🎯 SCANNING ACTIVE`, 'success');
+            showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
         }
 
         function stopScanning() {
@@ -415,22 +516,48 @@
                 result = returnScan(code);
             }
             
+            document.getElementById('responseTimeValue').textContent = result.responseTime;
             showMessage(result.message, result.type);
+            
+            if (result.type === 'error') {
+                document.getElementById('progloveInput').classList.add('error');
+                setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
+            }
+            
             updateDisplay();
         }
 
         function kitchenScan(code) {
+            const startTime = Date.now();
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            if (appData.activeData.some(bowl => bowl[0].includes(fullCode))) {
-                return { message: "❌ Already active: " + fullCode, type: "error" };
+            // Check against REAL downloaded data from Google Sheets
+            if (appData.myScans.some(scan => scan.code === fullCode)) {
+                return { 
+                    message: "❌ Already scanned in this session: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
             }
             
             if (appData.preparation.some(bowl => bowl[0].includes(fullCode) && bowl[3] === today)) {
-                return { message: "⚠️ Already prepared today: " + fullCode, type: "warning" };
+                return { 
+                    message: "❌ Already prepared today: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
             }
             
+            if (appData.activeData.some(bowl => bowl[0].includes(fullCode))) {
+                return { 
+                    message: "❌ Already in active data: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            // SUCCESS - Add to local scans for upload
             appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
@@ -440,30 +567,58 @@
             });
             
             saveToStorage();
-            return { message: "✅ " + appData.dishLetter + " Prepared: " + fullCode, type: "success" };
+            return { 
+                message: "✅ " + appData.dishLetter + " Prepared: " + fullCode, 
+                type: "success",
+                responseTime: Date.now() - startTime
+            };
         }
 
         function returnScan(code) {
+            const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
+            if (appData.myScans.some(scan => scan.code === fullCode)) {
+                return { 
+                    message: "❌ Already scanned in this session: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            // Check against REAL active data from Google Sheets
             const activeBowl = appData.activeData.find(bowl => bowl[0].includes(fullCode));
             if (!activeBowl) {
-                return { message: "❌ Not in active data: " + fullCode, type: "error" };
+                return { 
+                    message: "❌ Not in active data: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
             }
             
             if (appData.archive.some(bowl => bowl[0].includes(fullCode))) {
-                return { message: "❌ Already returned: " + fullCode, type: "error" };
+                return { 
+                    message: "❌ Already returned: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
             }
             
+            // SUCCESS - Add to local scans for upload
             appData.myScans.push({
                 type: 'return',
                 code: fullCode,
                 user: appData.user,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                originalData: activeBowl
             });
             
             saveToStorage();
-            return { message: "✅ Returned: " + fullCode, type: "success" };
+            return { 
+                message: "✅ Returned: " + fullCode, 
+                type: "success",
+                responseTime: Date.now() - startTime
+            };
         }
 
         function updateDisplay() {
@@ -488,11 +643,13 @@
             }
             
             document.getElementById('activeCount').textContent = appData.activeData.length;
+            document.getElementById('prepCount').textContent = appData.preparation.length;
             document.getElementById('myScansCount').textContent = appData.myScans.length;
             
             document.getElementById('localDataInfo').innerHTML = `
                 <strong>Local Data:</strong> 
-                ${appData.activeData.length} active bowls • 
+                ${appData.activeData.length} active • 
+                ${appData.preparation.length} prepared • 
                 ${appData.myScans.length} scans ready to upload •
                 Last sync: ${new Date().toLocaleTimeString()}
             `;
@@ -530,10 +687,12 @@
             if (appData.mode === 'kitchen') {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returns} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData.length} bowls</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preps} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData.length} bowls</span></div>
                 `;
             }
         }
