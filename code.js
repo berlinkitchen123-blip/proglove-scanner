@@ -1,7 +1,6 @@
 // Additional utilities for ProGlove Scanner - FINAL VERSION
 class ProGloveUtils {
   static validateVYTCode(code) {
-    // Basic VYT code validation
     const vytRegex = /^(HTTP:\/\/VYT\.TO\/|VYT_)[A-Z0-9]+$/i;
     return vytRegex.test(code);
   }
