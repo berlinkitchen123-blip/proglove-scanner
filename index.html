@@ -16,12 +16,9 @@
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
         .export-btn { background: #f57c00; color: white; }
-        .emergency-btn { background: #ea4335; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
         .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
-        .sync-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #4285f4; }
-        .sync-status.success { border-left-color: #34a853; background: #2a2a2a; }
-        .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
+        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
         .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
@@ -56,9 +53,6 @@
         .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
-        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
-        .upload-zone { border: 2px dashed #666; padding: 30px; text-align: center; border-radius: 8px; background: #333; cursor: pointer; margin-bottom: 10px; }
-        .upload-zone:hover { border-color: #4285f4; }
         .json-textarea { width: 100%; height: 200px; background: #333; color: white; padding: 10px; border-radius: 5px; border: 1px solid #666; font-size: 12px; font-family: monospace; margin-bottom: 10px; }
         .results-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #34a853; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
@@ -144,17 +138,14 @@
             </div>
         </div>
 
-        <!-- EMERGENCY BACKUP SECTION -->
+        <!-- BACKUP SECTION (SIMPLIFIED) -->
         <div class="card admin-section">
-            <h3>🛡️ EMERGENCY BACKUP</h3>
+            <h3>🛡️ CLOUD BACKUP</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Auto-saves every 5 minutes</small>
+                <small>ℹ️ Auto-saves every 5 minutes • Parallel backup without interruption</small>
             </div>
             
             <div class="sync-controls">
-                <button class="sync-btn emergency-btn" onclick="forceEmergencyBackup()" id="emergencyBackupBtn">
-                    🔥 FORCE BACKUP NOW
-                </button>
                 <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
                     📥 LOAD FROM BACKUP
                 </button>
@@ -286,7 +277,7 @@
                 lastBackupTime = backupTime;
                 updateBackupDisplay();
                 
-                console.log('✅ Emergency backup completed');
+                console.log('✅ Auto-backup completed');
                 
             } catch (error) {
                 console.log('Firebase sync failed:', error);
@@ -436,10 +427,9 @@
             }
             
             window.appData.emergencyBackupTimer = setInterval(() => {
-                console.log('🔄 EMERGENCY BACKUP: Auto-saving to Firebase...');
+                console.log('🔄 AUTO BACKUP: Saving to Firebase...');
                 syncToFirebase();
-                showMessage('✅ Auto-backup completed', 'success');
-            }, 300000);
+            }, 300000); // 5 minutes
             
             window.nextBackupTime = new Date(Date.now() + 300000);
         }
@@ -448,22 +438,6 @@
             setInterval(() => {
                 updateBackupCountdown();
             }, 1000);
-        }
-
-        function forceEmergencyBackup() {
-            const btn = document.getElementById('emergencyBackupBtn');
-            btn.disabled = true;
-            btn.textContent = "🔄 BACKING UP...";
-            
-            console.log('🔥 FORCING EMERGENCY BACKUP...');
-            syncToFirebase();
-            
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = "🔥 FORCE BACKUP NOW";
-                showMessage('✅ Emergency backup forced successfully', 'success');
-                window.nextBackupTime = new Date(Date.now() + 300000);
-            }, 2000);
         }
 
         function startDailyCleanupTimer() {
