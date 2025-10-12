@@ -34,7 +34,7 @@
         .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
         
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 15px; border: noe; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
         .return-btn { background: #ea4335; color: white; }
         .mode-btn.active { box-shadow: 0 0 0 3px white; }
@@ -105,6 +105,15 @@
             25% { transform: translateX(-5px); }
             75% { transform: translateX(5px); }
         }
+
+        .debug-info {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 10px;
+            color: #888;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -119,6 +128,9 @@
             <h3>🔒 SYSTEM LOCK STATUS</h3>
             <div class="system-lock" id="systemLockStatus">
                 🔓 System Available - You can download data
+            </div>
+            <div class="debug-info" id="debugInfo">
+                Script URL: https://script.google.com/macros/s/AKfycbz-HGep7FTPfo9kciMrB9XG5bfYzymxMalgn3pS_Ot9ExDMkHWhqjxis31H1Feezu_T/exec
             </div>
         </div>
 
@@ -220,7 +232,7 @@
     </div>
 
     <script>
-        // ProGlove Scanner - SECURE SINGLE SYSTEM - FINAL VERSION
+        // ProGlove Scanner - SECURE SINGLE SYSTEM
         let appData = {
             mode: null,
             user: null,
@@ -239,41 +251,12 @@
             lastSync: null
         };
 
-        // ✅ YOUR GOOGLE SCRIPT URL
+        // ✅ YOUR LATEST GOOGLE SCRIPT URL
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz-HGep7FTPfo9kciMrB9XG5bfYzymxMalgn3pS_Ot9ExDMkHWhqjxis31H1Feezu_T/exec';
-
-        // =============================================
-        // 🔧 USER MANAGEMENT - EXACT NAMES AS SPECIFIED
-        // =============================================
-        
-        // KITCHEN TEAM - ONLY THESE 7 NAMES
-        const KITCHEN_TEAM = [
-            "Hamid",
-            "Richa", 
-            "Mary",
-            "Jash",
-            "Joel",
-            "Rushal",
-            "Sreekanth"
-        ];
-
-        // RETURN TEAM - ONLY THESE 4 NAMES  
-        const RETURN_TEAM = [
-            "M.Sultan",
-            "Riyaz",
-            "Alan", 
-            "Adesh"
-        ];
-
-        // ✅ GET ALL USERS FROM HARDCODED LISTS
-        function getAllUsers() {
-            const kitchenUsers = KITCHEN_TEAM.map(name => ({ name: name, role: "Kitchen" }));
-            const returnUsers = RETURN_TEAM.map(name => ({ name: name, role: "Return" }));
-            return [...kitchenUsers, ...returnUsers];
-        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing ProGlove Scanner...');
             loadFromStorage();
             checkSystemLock();
             updateDisplay();
@@ -283,8 +266,19 @@
         // Check system lock status
         async function checkSystemLock() {
             try {
-                const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=checkLock`);
+                console.log('Checking system lock status...');
+                const url = `${GOOGLE_SCRIPT_URL}?action=checkLock&timestamp=${Date.now()}`;
+                console.log('Fetching from:', url);
+                
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                console.log('Lock check response:', data);
                 
                 if (data.locked && data.lockId === appData.lockId) {
                     appData.systemLocked = true;
@@ -299,7 +293,8 @@
                 }
             } catch (error) {
                 console.error('Lock check error:', error);
-                updateLockDisplay(false, "⚠️ Cannot check system status");
+                updateLockDisplay(false, "⚠️ Cannot check system status - Check Script URL");
+                showMessage("❌ Cannot connect to Google Sheets. Check script deployment.", "error");
             }
         }
 
@@ -318,18 +313,29 @@
             status.textContent = "⏳ Downloading data from Google Sheets...";
             
             try {
+                // Generate unique lock ID
                 const lockId = 'lock_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 
-                const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAllData&lockId=${lockId}`);
+                // Try to acquire lock and get data
+                const url = `${GOOGLE_SCRIPT_URL}?action=getAllData&lockId=${lockId}&timestamp=${Date.now()}`;
+                console.log('Download URL:', url);
+                
+                const response = await fetch(url);
+                console.log('Download response status:', response.status);
                 
                 if (!response.ok) {
-                    throw new Error('Failed to fetch data from Google Sheets');
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log('Download response data:', data);
                 
                 if (data.error === 'SYSTEM_LOCKED') {
                     throw new Error('System is locked by another user: ' + data.lockedBy);
+                }
+                
+                if (data.error) {
+                    throw new Error('Google Script Error: ' + data.error);
                 }
                 
                 // Update app data with Google Sheets data
@@ -338,8 +344,20 @@
                 appData.archive = data.archive || [];
                 appData.companyData = data.companyData || [];
                 
-                // ✅ USE HARDCODED USERS - EXACT NAMES AS SPECIFIED
-                appData.users = getAllUsers();
+                // Use hardcoded users for now
+                appData.users = [
+                    {name: "Hamid", role: "Kitchen"},
+                    {name: "Richa", role: "Kitchen"},
+                    {name: "Mary", role: "Kitchen"},
+                    {name: "Jash", role: "Kitchen"},
+                    {name: "Joel", role: "Kitchen"},
+                    {name: "Rushal", role: "Kitchen"},
+                    {name: "Sreekanth", role: "Kitchen"},
+                    {name: "M.Sultan", role: "Return"},
+                    {name: "Riyaz", role: "Return"},
+                    {name: "Alan", role: "Return"},
+                    {name: "Aadesh", role: "Return"}
+                ];
                 
                 appData.systemLocked = true;
                 appData.lockId = lockId;
@@ -385,6 +403,7 @@
             status.textContent = `⏳ Uploading ${appData.myScans.length} scans...`;
             
             try {
+                // Prepare scan data for upload
                 const uploadData = {
                     scans: appData.myScans.map(scan => ({
                         type: scan.type,
@@ -400,6 +419,7 @@
                     lockId: appData.lockId
                 };
                 
+                // Send to Google Sheets
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     headers: {
@@ -529,10 +549,8 @@
             
             let usersToShow = [];
             if (appData.mode === 'kitchen') {
-                // ✅ SHOW ONLY KITCHEN TEAM NAMES
                 usersToShow = appData.users.filter(user => user.role === 'Kitchen');
             } else if (appData.mode === 'return') {
-                // ✅ SHOW ONLY RETURN TEAM NAMES
                 usersToShow = appData.users.filter(user => user.role === 'Return');
             }
             
@@ -832,5 +850,3 @@
     </script>
 </body>
 </html>
-
-
