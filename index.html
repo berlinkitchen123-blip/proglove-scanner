@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Fresh Start System</title>
+    <title>ProGlove Scanner - Real-Time Bowl Tracking</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -54,6 +54,7 @@
         .cross-team-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
         .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .data-label { font-weight: bold; }
+        .admin-section { border: 2px solid #f57c00; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
@@ -61,14 +62,14 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Fresh Start</h1>
-            <p>Start from Zero • Real Bowls Only • Auto Active State</p>
+            <h1>🧤 ProGlove Scanner - Real-Time Sync</h1>
+            <p>Multi-Device • Instant Error Detection • Live Bowl Tracking</p>
         </div>
         
         <div class="card">
             <h3>📊 SYSTEM STATUS</h3>
             <div class="system-status" id="systemStatus">
-                ✅ Ready to scan - Start fresh with real bowls
+                🔄 Connecting to cloud...
             </div>
         </div>
 
@@ -134,9 +135,30 @@
             </div>
         </div>
 
-        <!-- DATA MANAGEMENT AT BOTTOM - REMOVED CLEAR DATA BUTTON -->
+        <!-- ADMIN JSON IMPORT SECTION -->
+        <div class="card admin-section">
+            <h3>🔧 ADMIN: IMPORT ORDER DATA</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ For admin use only - imports company/customer data to bowls</small>
+            </div>
+            
+            <textarea id="jsonInput" placeholder="Paste JSON order data from Bella Bona website here..." 
+                      style="width:100%; height:120px; background:#333; color:white; padding:10px; border-radius:5px; border:1px solid #666; font-size: 12px;"></textarea>
+            
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="processBellaBonaJSON()" class="sync-btn upload-btn" style="flex:1;">
+                    📥 IMPORT & ASSIGN DATA
+                </button>
+                <button onclick="clearJSONInput()" class="sync-btn export-btn" style="flex:1;">
+                    🗑️ CLEAR
+                </button>
+            </div>
+            <div id="importResult" style="margin-top:10px; font-size:12px;"></div>
+        </div>
+
+        <!-- DATA EXPORT SECTION -->
         <div class="card">
-            <h3>💾 DATA MANAGEMENT</h3>
+            <h3>💾 DATA EXPORT</h3>
             <div class="sync-section">
                 <div class="sync-controls">
                     <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
@@ -144,32 +166,118 @@
                     </button>
                 </div>
                 <div class="sync-status" id="syncStatus">
-                    ✅ Fresh system - All bowls are real scans
+                    ✅ Data export ready
                 </div>
                 <div class="local-data" id="localDataInfo">
                     <strong>Current Data:</strong> Loading...
                 </div>
                 <div class="upload-info" id="uploadInfo">
-                    <strong>Scan History:</strong> No scans yet
+                    <strong>Last Sync:</strong> Never
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Firebase Configuration -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
+            authDomain: "proglove-scanner.firebaseapp.com",
+            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "proglove-scanner",
+            storageBucket: "proglove-scanner.firebasestorage.app",
+            messagingSenderId: "177575768177",
+            appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
+        };
+
+        let app;
+        let database;
+
+        function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                database = getDatabase(app);
+                setupFirebaseListeners();
+                if (typeof showMessage === 'function') {
+                    showMessage('✅ Connected to cloud sync', 'success');
+                }
+            } catch (error) {
+                console.log('Firebase initialization failed:', error);
+                if (typeof showMessage === 'function') {
+                    showMessage('⚠️ Offline mode - no cloud sync', 'warning');
+                }
+            }
+        }
+
+        function setupFirebaseListeners() {
+            if (!database) return;
+
+            const activeBowlsRef = ref(database, 'activeBowls');
+            onValue(activeBowlsRef, (snapshot) => {
+                const firebaseActiveBowls = snapshot.val() || [];
+                if (window.appData && firebaseActiveBowls.length !== window.appData.activeBowls.length) {
+                    window.appData.activeBowls = firebaseActiveBowls;
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                }
+            });
+
+            const preparedBowlsRef = ref(database, 'preparedBowls');
+            onValue(preparedBowlsRef, (snapshot) => {
+                const firebasePreparedBowls = snapshot.val() || [];
+                if (window.appData) {
+                    window.appData.preparedBowls = firebasePreparedBowls;
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                }
+            });
+
+            const returnedBowlsRef = ref(database, 'returnedBowls');
+            onValue(returnedBowlsRef, (snapshot) => {
+                const firebaseReturnedBowls = snapshot.val() || [];
+                if (window.appData) {
+                    window.appData.returnedBowls = firebaseReturnedBowls;
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                }
+            });
+        }
+
+        function syncToFirebase() {
+            if (!database) return;
+            try {
+                set(ref(database, 'activeBowls'), window.appData?.activeBowls || []);
+                set(ref(database, 'preparedBowls'), window.appData?.preparedBowls || []);
+                set(ref(database, 'returnedBowls'), window.appData?.returnedBowls || []);
+                set(ref(database, 'lastSync'), new Date().toISOString());
+            } catch (error) {
+                console.log('Firebase sync failed:', error);
+            }
+        }
+
+        window.initializeFirebase = initializeFirebase;
+        window.syncToFirebase = syncToFirebase;
+    </script>
+
+    <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - FRESH START SYSTEM
-        let appData = {
+        // ProGlove Scanner - REAL-TIME SYNC SYSTEM
+        window.appData = {
             mode: null,
             user: null,
             dishLetter: null,
             scanning: false,
             myScans: [],
-            activeBowls: [], // Bowls currently in circulation
-            preparedBowls: [], // Bowls prepared today
-            returnedBowls: [], // Bowls returned today
+            activeBowls: [], // Bowls currently in circulation (KEEP FOREVER until returned)
+            preparedBowls: [], // Bowls prepared today (RESET DAILY)
+            returnedBowls: [], // Bowls returned today (DELETE DAILY at 7:00 PM)
             scanHistory: [],
             lastActivity: Date.now(),
-            autoSaveTimer: null
+            autoSaveTimer: null,
+            lastCleanup: null
         };
 
         const USERS = [
@@ -184,67 +292,63 @@
             {name: "Riyaz", role: "Return"},
             {name: "Alan", role: "Return"},
             {name: "Aadesh", role: "Return"},
-            {name: "Kitchen Team", role: "Return"} // ADDED: Kitchen can also return bowls
+            {name: "Kitchen Team", role: "Return"}
         ];
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Fresh Start Scanner...');
-            
-            // Request persistent storage for Samsung Tab
-            if (navigator.storage && navigator.storage.persist) {
-                navigator.storage.persist().then(persisted => {
-                    console.log('Storage persisted:', persisted);
-                });
-            }
-            
+            console.log('Initializing Real-Time Scanner...');
+            initializeFirebase();
             loadFromStorage();
             initializeUsers();
             updateDisplay();
             startAutoSaveTimer();
+            startDailyCleanupTimer();
+            
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
             document.addEventListener('keydown', updateLastActivity);
-            
-            // Save data when page is about to be unloaded
-            window.addEventListener('beforeunload', saveToStorage);
-            
-            // Handle visibility changes (tab switching)
-            document.addEventListener('visibilitychange', function() {
-                if (document.hidden) {
-                    // Save when tab becomes hidden
-                    saveToStorage();
-                } else {
-                    // Reload data when tab becomes visible (in case of sync issues)
-                    setTimeout(() => {
-                        loadFromStorage();
-                        updateDisplay();
-                    }, 100);
-                }
-            });
         });
 
         function updateLastActivity() {
-            appData.lastActivity = Date.now();
+            window.appData.lastActivity = Date.now();
         }
 
         function startAutoSaveTimer() {
-            if (appData.autoSaveTimer) {
-                clearInterval(appData.autoSaveTimer);
+            if (window.appData.autoSaveTimer) {
+                clearInterval(window.appData.autoSaveTimer);
             }
             
-            appData.autoSaveTimer = setInterval(() => {
+            window.appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
-                console.log('Auto-saved data');
-            }, 30000); // Every 30 seconds
+                syncToFirebase();
+            }, 30000);
         }
 
-        // Enhanced storage functions for Samsung Tab
+        function startDailyCleanupTimer() {
+            setInterval(() => {
+                const now = new Date();
+                if (now.getHours() === 19 && now.getMinutes() === 0) { // 7:00 PM
+                    cleanupReturnedBowls();
+                }
+            }, 60000);
+        }
+
+        function cleanupReturnedBowls() {
+            const today = new Date().toLocaleDateString('en-GB');
+            if (window.appData.lastCleanup === today) return;
+            
+            window.appData.returnedBowls = [];
+            window.appData.lastCleanup = today;
+            saveToStorage();
+            syncToFirebase();
+            showMessage('✅ Daily cleanup completed - returned bowls cleared', 'success');
+        }
+
+        // Storage functions
         function saveToStorage() {
             try {
-                localStorage.setItem('proglove_fresh_data', JSON.stringify(appData));
-                // Also backup to sessionStorage
-                sessionStorage.setItem('proglove_backup_data', JSON.stringify(appData));
+                localStorage.setItem('proglove_data', JSON.stringify(window.appData));
             } catch (error) {
                 console.log('Storage save note:', error.message);
             }
@@ -252,30 +356,102 @@
 
         function loadFromStorage() {
             try {
-                // Try localStorage first
-                let saved = localStorage.getItem('proglove_fresh_data');
-                
-                // If no data in localStorage, try sessionStorage backup
-                if (!saved) {
-                    saved = sessionStorage.getItem('proglove_backup_data');
-                    if (saved) {
-                        console.log('Loaded from sessionStorage backup');
-                    }
-                }
-                
+                const saved = localStorage.getItem('proglove_data');
                 if (saved) {
                     const data = JSON.parse(saved);
-                    appData = { ...appData, ...data };
-                    console.log('Data loaded successfully');
+                    window.appData = { ...window.appData, ...data };
+                    console.log('Data loaded from storage');
                 }
             } catch (error) {
                 console.log('No previous data found - starting fresh');
             }
         }
 
-        // Export scans to CSV
+        // JSON Import Functions
+        function processBellaBonaJSON() {
+            const jsonText = document.getElementById('jsonInput').value.trim();
+            if (!jsonText) {
+                showMessage('❌ Please paste JSON data', 'error');
+                return;
+            }
+
+            try {
+                const orderData = JSON.parse(jsonText);
+                let enrichedCount = 0;
+                let createdCount = 0;
+                let errors = [];
+
+                const processOrder = (order) => {
+                    const { vytCode, customer, company, dishLetter } = order;
+                    
+                    if (!vytCode) {
+                        errors.push('❌ Missing VYT code in order data');
+                        return;
+                    }
+
+                    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytCode);
+                    if (activeBowlIndex !== -1) {
+                        window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
+                        window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
+                        window.appData.activeBowls[activeBowlIndex].dish = dishLetter || window.appData.activeBowls[activeBowlIndex].dish;
+                        enrichedCount++;
+                    } else {
+                        const today = new Date().toLocaleDateString('en-GB');
+                        const newBowl = {
+                            code: vytCode,
+                            dish: dishLetter || 'X',
+                            user: 'System Import',
+                            company: company || 'Unknown Company',
+                            customer: customer || 'Unknown Customer',
+                            date: today,
+                            time: new Date().toLocaleTimeString(),
+                            timestamp: new Date().toISOString(),
+                            status: 'ACTIVE',
+                            imported: true
+                        };
+                        window.appData.activeBowls.push(newBowl);
+                        window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
+                        createdCount++;
+                    }
+                };
+
+                if (Array.isArray(orderData)) {
+                    orderData.forEach(processOrder);
+                } else if (orderData.orders && Array.isArray(orderData.orders)) {
+                    orderData.orders.forEach(processOrder);
+                } else {
+                    processOrder(orderData);
+                }
+
+                saveToStorage();
+                syncToFirebase();
+                updateDisplay();
+
+                let resultMessage = `✅ Import completed: `;
+                if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
+                if (createdCount > 0) resultMessage += `${createdCount} new bowls created`;
+                
+                showMessage(resultMessage, 'success');
+                
+                if (errors.length > 0) {
+                    document.getElementById('importResult').innerHTML = 
+                        '<strong>Errors:</strong><br>' + errors.slice(0, 5).join('<br>') + 
+                        (errors.length > 5 ? '<br>...' : '');
+                }
+
+            } catch (error) {
+                showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+            }
+        }
+
+        function clearJSONInput() {
+            document.getElementById('jsonInput').value = '';
+            document.getElementById('importResult').innerHTML = '';
+        }
+
+        // Export to CSV
         function exportToCSV() {
-            if (appData.myScans.length === 0) {
+            if (window.appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to export", "info");
                 return;
             }
@@ -284,11 +460,10 @@
             btn.disabled = true;
             btn.textContent = "⏳ EXPORTING...";
             
-            // Convert scans to CSV
             const headers = ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp'];
             const csvData = [
                 headers,
-                ...appData.myScans.map(scan => [
+                ...window.appData.myScans.map(scan => [
                     scan.type,
                     scan.code,
                     scan.dish || '',
@@ -305,7 +480,6 @@
                 row.map(field => `"${field}"`).join(',')
             ).join('\n');
             
-            // Create download link
             const blob = new Blob([csvContent], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -322,6 +496,7 @@
             btn.textContent = "📤 EXPORT TO CSV";
         }
 
+        // User and Mode Management
         function initializeUsers() {
             const dropdown = document.getElementById('userDropdown');
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
@@ -335,10 +510,10 @@
         }
 
         function setMode(mode) {
-            appData.mode = mode;
-            appData.user = null;
-            appData.dishLetter = null;
-            appData.scanning = false;
+            window.appData.mode = mode;
+            window.appData.user = null;
+            window.appData.dishLetter = null;
+            window.appData.scanning = false;
             
             document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
             document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
@@ -358,7 +533,7 @@
 
         function updateStatsLabels() {
             const prepLabel = document.getElementById('prepLabel');
-            if (appData.mode === 'kitchen') {
+            if (window.appData.mode === 'kitchen') {
                 prepLabel.textContent = 'Prepared Today';
             } else {
                 prepLabel.textContent = 'Returned Today';
@@ -370,10 +545,9 @@
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
             
             let usersToShow = [];
-            if (appData.mode === 'kitchen') {
+            if (window.appData.mode === 'kitchen') {
                 usersToShow = USERS.filter(user => user.role === 'Kitchen');
-            } else if (appData.mode === 'return') {
-                // Return mode shows both Return users AND Kitchen Team for returns
+            } else if (window.appData.mode === 'return') {
                 usersToShow = USERS.filter(user => user.role === 'Return' || user.name === "Kitchen Team");
             }
             
@@ -387,11 +561,11 @@
 
         function selectUser() {
             const dropdown = document.getElementById('userDropdown');
-            appData.user = dropdown.value;
+            window.appData.user = dropdown.value;
             
-            if (appData.user) {
-                showMessage(`✅ ${appData.user} selected`, 'success');
-                if (appData.mode === 'kitchen') {
+            if (window.appData.user) {
+                showMessage(`✅ ${window.appData.user} selected`, 'success');
+                if (window.appData.mode === 'kitchen') {
                     document.getElementById('dishSection').classList.remove('hidden');
                     loadDishLetters();
                 }
@@ -413,26 +587,27 @@
 
         function selectDishLetter() {
             const dropdown = document.getElementById('dishDropdown');
-            appData.dishLetter = dropdown.value;
+            window.appData.dishLetter = dropdown.value;
             
-            if (appData.dishLetter) {
-                showMessage(`📝 Dish ${appData.dishLetter} selected`, 'success');
+            if (window.appData.dishLetter) {
+                showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
             }
             updateDisplay();
             updateLastActivity();
         }
 
+        // Scanning Functions
         function startScanning() {
-            if (!appData.user) {
+            if (!window.appData.user) {
                 showMessage('❌ Please select user first', 'error');
                 return;
             }
-            if (appData.mode === 'kitchen' && !appData.dishLetter) {
+            if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
                 showMessage('❌ Please select dish letter first', 'error');
                 return;
             }
             
-            appData.scanning = true;
+            window.appData.scanning = true;
             updateDisplay();
             document.getElementById('progloveInput').focus();
             updateLastActivity();
@@ -440,14 +615,14 @@
         }
 
         function stopScanning() {
-            appData.scanning = false;
+            window.appData.scanning = false;
             updateDisplay();
             updateLastActivity();
             showMessage(`⏹ Scanning stopped`, 'info');
         }
 
         function handleScanInput(e) {
-            if (!appData.scanning) return;
+            if (!window.appData.scanning) return;
             
             const scanValue = e.target.value.trim();
             if (scanValue.length >= 2) {
@@ -460,7 +635,7 @@
         function processScan(code) {
             let result;
             
-            if (appData.mode === 'kitchen') {
+            if (window.appData.mode === 'kitchen') {
                 result = kitchenScan(code);
             } else {
                 result = returnScan(code);
@@ -483,8 +658,7 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Check if bowl is already in active bowls (duplicate kitchen scan)
-            if (appData.activeBowls.some(bowl => bowl.code === fullCode)) {
+            if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
                     message: "❌ Bowl already active: " + fullCode, 
                     type: "error",
@@ -492,8 +666,7 @@
                 };
             }
             
-            // Check if already prepared today (by any user)
-            if (appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
+            if (window.appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
                     type: "error",
@@ -501,11 +674,10 @@
                 };
             }
             
-            // Create new bowl - automatically becomes ACTIVE
             const newBowl = {
                 code: fullCode,
-                dish: appData.dishLetter,
-                user: appData.user,
+                dish: window.appData.dishLetter,
+                user: window.appData.user,
                 company: "Unknown",
                 customer: "Unknown",
                 date: today,
@@ -514,38 +686,31 @@
                 status: 'ACTIVE'
             };
             
-            // Add to active bowls
-            appData.activeBowls.push(newBowl);
+            window.appData.activeBowls.push(newBowl);
+            window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
             
-            // Add to prepared bowls for today
-            appData.preparedBowls.push({
-                ...newBowl,
-                status: 'PREPARED'
-            });
-            
-            // Add to my scans
-            appData.myScans.push({
+            window.appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
-                dish: appData.dishLetter,
-                user: appData.user,
+                dish: window.appData.dishLetter,
+                user: window.appData.user,
                 company: "Unknown",
                 customer: "Unknown",
                 timestamp: new Date().toISOString()
             });
             
-            // Add to scan history
-            appData.scanHistory.unshift({
+            window.appData.scanHistory.unshift({
                 type: 'kitchen',
                 code: fullCode,
-                user: appData.user,
+                user: window.appData.user,
                 timestamp: new Date().toISOString(),
-                message: `${appData.dishLetter} Prepared: ${fullCode}`
+                message: `${window.appData.dishLetter} Prepared: ${fullCode}`
             });
             
             saveToStorage();
+            syncToFirebase();
             return { 
-                message: `✅ ${appData.dishLetter} Prepared: ${fullCode} - Now ACTIVE for returns`, 
+                message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode} - Now ACTIVE for returns`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -556,12 +721,10 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Check if bowl exists in active bowls
-            const activeBowlIndex = appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+            const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
             
             if (activeBowlIndex === -1) {
-                // Bowl not in active bowls - check if already returned
-                if (appData.returnedBowls.some(bowl => bowl.code === fullCode)) {
+                if (window.appData.returnedBowls.some(bowl => bowl.code === fullCode)) {
                     return { 
                         message: "❌ Already returned: " + fullCode, 
                         type: "error",
@@ -576,52 +739,41 @@
                 }
             }
             
-            const activeBowl = appData.activeBowls[activeBowlIndex];
+            const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
-            // Remove from BOTH active bowls AND prepared bowls
-            appData.activeBowls.splice(activeBowlIndex, 1);
+            window.appData.activeBowls.splice(activeBowlIndex, 1);
             
-            // Remove from prepared bowls for today
-            const preparedBowlIndex = appData.preparedBowls.findIndex(bowl => 
-                bowl.code === fullCode && bowl.date === today
-            );
-            if (preparedBowlIndex !== -1) {
-                appData.preparedBowls.splice(preparedBowlIndex, 1);
-            }
-            
-            // Add to returned bowls
-            appData.returnedBowls.push({
+            window.appData.returnedBowls.push({
                 ...activeBowl,
-                returnedBy: appData.user,
+                returnedBy: window.appData.user,
                 returnDate: today,
                 returnTime: new Date().toLocaleTimeString(),
                 returnTimestamp: new Date().toISOString(),
                 status: 'RETURNED'
             });
             
-            // Add to my scans
-            appData.myScans.push({
+            window.appData.myScans.push({
                 type: 'return',
                 code: fullCode,
-                user: appData.user,
+                user: window.appData.user,
                 company: activeBowl.company,
                 customer: activeBowl.customer,
                 timestamp: new Date().toISOString(),
                 originalData: activeBowl
             });
             
-            // Add to scan history
-            appData.scanHistory.unshift({
+            window.appData.scanHistory.unshift({
                 type: 'return',
                 code: fullCode,
-                user: appData.user,
+                user: window.appData.user,
                 timestamp: new Date().toISOString(),
                 message: `Returned: ${fullCode}`
             });
             
             saveToStorage();
+            syncToFirebase();
             return { 
-                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
+                message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -630,43 +782,36 @@
         function updateDisplay() {
             document.getElementById('userDropdown').disabled = false;
             document.getElementById('dishDropdown').disabled = false;
-            document.getElementById('exportBtn').disabled = appData.myScans.length === 0;
+            document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0;
             
-            let canScan = appData.user && !appData.scanning;
-            if (appData.mode === 'kitchen') canScan = canScan && appData.dishLetter;
+            let canScan = window.appData.user && !window.appData.scanning;
+            if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
             document.getElementById('startBtn').disabled = !canScan;
-            document.getElementById('stopBtn').disabled = !appData.scanning;
+            document.getElementById('stopBtn').disabled = !window.appData.scanning;
             
             const input = document.getElementById('progloveInput');
-            if (appData.scanning) {
+            if (window.appData.scanning) {
                 document.getElementById('scanSection').classList.add('scanning-active');
                 input.placeholder = "Scan VYT code...";
                 input.disabled = false;
             } else {
                 document.getElementById('scanSection').classList.remove('scanning-active');
                 input.placeholder = "Click START SCANNING...";
-                input.disabled = !appData.scanning;
+                input.disabled = !window.appData.scanning;
             }
             
-            // Update statistics based on mode
             const today = new Date().toLocaleDateString('en-GB');
-            
-            // Count today's scans for current user
-            const userTodayScans = appData.myScans.filter(scan => 
-                scan.user === appData.user && 
+            const userTodayScans = window.appData.myScans.filter(scan => 
+                scan.user === window.appData.user && 
                 new Date(scan.timestamp).toLocaleDateString('en-GB') === today
             ).length;
             
-            // Count prepared today
-            const preparedToday = appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
             
-            // Count returned today
-            const returnedToday = appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+            document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
             
-            // Update stats display
-            document.getElementById('activeCount').textContent = appData.activeBowls.length;
-            
-            if (appData.mode === 'kitchen') {
+            if (window.appData.mode === 'kitchen') {
                 document.getElementById('prepCount').textContent = preparedToday;
                 document.getElementById('myScansCount').textContent = userTodayScans;
             } else {
@@ -674,22 +819,20 @@
                 document.getElementById('myScansCount').textContent = userTodayScans;
             }
             
-            // Update data info
             document.getElementById('localDataInfo').innerHTML = `
                 <strong>Current Data:</strong> 
-                ${appData.activeBowls.length} active bowls • 
+                ${window.appData.activeBowls.length} active bowls • 
                 ${preparedToday} prepared today • 
                 ${returnedToday} returned today •
-                ${appData.myScans.length} total scans
+                ${window.appData.myScans.length} total scans
             `;
             
-            // Update scan history
             const uploadInfo = document.getElementById('uploadInfo');
-            if (appData.scanHistory.length === 0) {
+            if (window.appData.scanHistory.length === 0) {
                 uploadInfo.innerHTML = '<strong>Scan History:</strong> No scans yet';
             } else {
                 let html = '<strong>Recent Scans:</strong><br>';
-                appData.scanHistory.slice(0, 5).forEach(record => {
+                window.appData.scanHistory.slice(0, 5).forEach(record => {
                     const date = new Date(record.timestamp);
                     html += `<div class="data-row">
                         <span class="data-label">${record.type === 'kitchen' ? '🍳' : '🔄'} ${record.user}</span>
@@ -707,22 +850,22 @@
             const element = document.getElementById('crossTeamData');
             const today = new Date().toLocaleDateString('en-GB');
             
-            const preparedToday = appData.preparedBowls.filter(bowl => bowl.date === today).length;
-            const returnedToday = appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+            const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
             
-            if (appData.mode === 'kitchen') {
+            if (window.appData.mode === 'kitchen') {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
-                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${appData.myScans.filter(s => s.type === 'kitchen' && s.user === appData.user).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user).length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
-                    <div class="data-row"><span class="data-label">My Returns:</span><span>${appData.myScans.filter(s => s.type === 'return' && s.user === appData.user).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">My Returns:</span><span>${window.appData.myScans.filter(s => s.type === 'return' && s.user === window.appData.user).length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
         }
