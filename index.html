@@ -201,13 +201,20 @@
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
-                if (typeof showMessage === 'function') {
-                    showMessage('✅ Connected to cloud sync', 'success');
-                }
+                
+                // Show success after 2 seconds
+                setTimeout(() => {
+                    if (typeof showMessage === 'function') {
+                        showMessage('✅ Cloud sync active', 'success');
+                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active - Real-time multi-device';
+                    }
+                }, 2000);
+                
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
                 if (typeof showMessage === 'function') {
-                    showMessage('⚠️ Offline mode - no cloud sync', 'warning');
+                    showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                    document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
                 }
             }
         }
@@ -215,31 +222,18 @@
         function setupFirebaseListeners() {
             if (!database) return;
 
-            const activeBowlsRef = ref(database, 'activeBowls');
-            onValue(activeBowlsRef, (snapshot) => {
-                const firebaseActiveBowls = snapshot.val() || [];
-                if (window.appData && firebaseActiveBowls.length !== window.appData.activeBowls.length) {
-                    window.appData.activeBowls = firebaseActiveBowls;
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof saveToStorage === 'function') saveToStorage();
-                }
-            });
-
-            const preparedBowlsRef = ref(database, 'preparedBowls');
-            onValue(preparedBowlsRef, (snapshot) => {
-                const firebasePreparedBowls = snapshot.val() || [];
-                if (window.appData) {
-                    window.appData.preparedBowls = firebasePreparedBowls;
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof saveToStorage === 'function') saveToStorage();
-                }
-            });
-
-            const returnedBowlsRef = ref(database, 'returnedBowls');
-            onValue(returnedBowlsRef, (snapshot) => {
-                const firebaseReturnedBowls = snapshot.val() || [];
-                if (window.appData) {
-                    window.appData.returnedBowls = firebaseReturnedBowls;
+            // Listen for ALL data changes
+            const appDataRef = ref(database, 'appData');
+            onValue(appDataRef, (snapshot) => {
+                const firebaseAppData = snapshot.val();
+                if (firebaseAppData && window.appData) {
+                    // Sync all data from Firebase
+                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
+                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
+                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
+                    window.appData.myScans = firebaseAppData.myScans || [];
+                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
+                    
                     if (typeof updateDisplay === 'function') updateDisplay();
                     if (typeof saveToStorage === 'function') saveToStorage();
                 }
@@ -249,10 +243,15 @@
         function syncToFirebase() {
             if (!database) return;
             try {
-                set(ref(database, 'activeBowls'), window.appData?.activeBowls || []);
-                set(ref(database, 'preparedBowls'), window.appData?.preparedBowls || []);
-                set(ref(database, 'returnedBowls'), window.appData?.returnedBowls || []);
-                set(ref(database, 'lastSync'), new Date().toISOString());
+                // Sync ALL app data to Firebase
+                set(ref(database, 'appData'), {
+                    activeBowls: window.appData?.activeBowls || [],
+                    preparedBowls: window.appData?.preparedBowls || [],
+                    returnedBowls: window.appData?.returnedBowls || [],
+                    myScans: window.appData?.myScans || [],
+                    scanHistory: window.appData?.scanHistory || [],
+                    lastSync: new Date().toISOString()
+                });
             } catch (error) {
                 console.log('Firebase sync failed:', error);
             }
@@ -270,10 +269,10 @@
             user: null,
             dishLetter: null,
             scanning: false,
-            myScans: [],
-            activeBowls: [], // Bowls currently in circulation (KEEP FOREVER until returned)
-            preparedBowls: [], // Bowls prepared today (RESET DAILY)
-            returnedBowls: [], // Bowls returned today (DELETE DAILY at 7:00 PM)
+            myScans: [], // FIXED: Now syncs across all devices
+            activeBowls: [],
+            preparedBowls: [],
+            returnedBowls: [],
             scanHistory: [],
             lastActivity: Date.now(),
             autoSaveTimer: null,
@@ -328,7 +327,7 @@
         function startDailyCleanupTimer() {
             setInterval(() => {
                 const now = new Date();
-                if (now.getHours() === 19 && now.getMinutes() === 0) { // 7:00 PM
+                if (now.getHours() === 19 && now.getMinutes() === 0) {
                     cleanupReturnedBowls();
                 }
             }, 60000);
@@ -689,6 +688,7 @@
             window.appData.activeBowls.push(newBowl);
             window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
             
+            // FIXED: Add to myScans (now syncs across devices)
             window.appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
@@ -741,7 +741,16 @@
             
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
+            // Remove from BOTH active bowls AND prepared bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
+            
+            // Remove from prepared bowls for today
+            const preparedBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === fullCode && bowl.date === today
+            );
+            if (preparedBowlIndex !== -1) {
+                window.appData.preparedBowls.splice(preparedBowlIndex, 1);
+            }
             
             window.appData.returnedBowls.push({
                 ...activeBowl,
@@ -752,6 +761,7 @@
                 status: 'RETURNED'
             });
             
+            // FIXED: Add to myScans (now syncs across devices)
             window.appData.myScans.push({
                 type: 'return',
                 code: fullCode,
@@ -773,7 +783,7 @@
             saveToStorage();
             syncToFirebase();
             return { 
-                message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
+                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -801,6 +811,8 @@
             }
             
             const today = new Date().toLocaleDateString('en-GB');
+            
+            // FIXED: Count scans for current user today (syncs across devices)
             const userTodayScans = window.appData.myScans.filter(scan => 
                 scan.user === window.appData.user && 
                 new Date(scan.timestamp).toLocaleDateString('en-GB') === today
