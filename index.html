@@ -3,22 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Reusable Bowl Tracking</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <title>ProGlove Scanner - Hybrid Backup System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
         .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
         .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        .sync-section { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
         .export-btn { background: #f57c00; color: white; }
+        .emergency-btn { background: #ea4335; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
         .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
-        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+        .sync-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #4285f4; }
+        .sync-status.success { border-left-color: #34a853; background: #2a2a2a; }
+        .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
         .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
@@ -53,17 +56,82 @@
         .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
-        .json-textarea { width: 100%; height: 200px; background: #333; color: white; padding: 10px; border-radius: 5px; border: 1px solid #666; font-size: 12px; font-family: monospace; margin-bottom: 10px; }
-        .results-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #34a853; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+        
+        /* Backup Popup Styles */
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .popup-content {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            border: 3px solid #4285f4;
+            text-align: center;
+        }
+        .popup-header h3 {
+            color: #4285f4;
+            margin-bottom: 15px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34a853, #4285f4);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        .backup-stats {
+            background: #333;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: left;
+            margin: 10px 0;
+        }
+        .popup-footer small {
+            color: #888;
+        }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
+        }
+        @keyframes shake { 
+            0%, 100% { transform: translateX(0); } 
+            25% { transform: translateX(-5px); } 
+            75% { transform: translateX(5px); } 
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Reusable Bowl Tracking</h1>
-            <p>Multi-Device • 5-Minute Backup • Reusable Bowl Management</p>
+            <h1>🧤 ProGlove Scanner - Hybrid Backup</h1>
+            <p>Multi-Device • Smart Backup • Zero Data Loss</p>
         </div>
         
         <div class="card">
@@ -72,7 +140,7 @@
                 🔄 Connecting to cloud...
             </div>
             <div class="backup-status" id="backupStatus">
-                ⏳ Next backup in: 5:00
+                💾 Hybrid backup initializing...
             </div>
         </div>
 
@@ -109,7 +177,7 @@
             <h3>🔍 SCANNING</h3>
             <div class="scan-controls">
                 <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP & BACKUP</button>
             </div>
             
             <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
@@ -138,14 +206,17 @@
             </div>
         </div>
 
-        <!-- BACKUP SECTION (SIMPLIFIED) -->
+        <!-- HYBRID BACKUP SECTION -->
         <div class="card admin-section">
-            <h3>🛡️ CLOUD BACKUP</h3>
+            <h3>💾 HYBRID BACKUP SYSTEM</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Auto-saves every 5 minutes • Parallel backup without interruption</small>
+                <small>ℹ️ Instant sync + Smart backup • Never runs during scanning</small>
             </div>
             
             <div class="sync-controls">
+                <button class="sync-btn emergency-btn" onclick="forceSmartBackup()" id="smartBackupBtn">
+                    🔥 SMART BACKUP NOW
+                </button>
                 <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
                     📥 LOAD FROM BACKUP
                 </button>
@@ -155,45 +226,73 @@
             </div>
         </div>
 
-        <!-- DATA INFO SECTION -->
-        <div class="card">
-            <h3>💾 DATA INFO</h3>
-            <div class="local-data" id="localDataInfo">
-                <strong>Current Data:</strong> Loading...
+        <!-- ADMIN JSON IMPORT SECTION -->
+        <div class="card admin-section">
+            <h3>🔧 ADMIN: IMPORT ORDER DATA</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ For admin use only - imports company/customer data to bowls</small>
             </div>
-            <div class="upload-info" id="uploadInfo">
-                <strong>Scan History:</strong> No scans yet
+            
+            <textarea id="jsonInput" placeholder="Paste JSON order data from Bella Bona website here..." 
+                      style="width:100%; height:120px; background:#333; color:white; padding:10px; border-radius:5px; border:1px solid #666; font-size: 12px;"></textarea>
+            
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="processBellaBonaJSON()" class="sync-btn upload-btn" style="flex:1;">
+                    📥 IMPORT & ASSIGN DATA
+                </button>
+                <button onclick="clearJSONInput()" class="sync-btn export-btn" style="flex:1;">
+                    🗑️ CLEAR
+                </button>
+            </div>
+            <div id="importResult" style="margin-top:10px; font-size:12px;"></div>
+        </div>
+
+        <!-- Backup Progress Popup -->
+        <div id="backupPopup" class="popup-overlay hidden">
+            <div class="popup-content">
+                <div class="popup-header">
+                    <h3>💾 SAVING BACKUP...</h3>
+                </div>
+                <div class="popup-body">
+                    <div class="backup-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Starting backup process...</div>
+                    </div>
+                    <div class="backup-stats" id="backupStats">
+                        <div>📊 Preparing to save: 0 scans</div>
+                    </div>
+                </div>
+                <div class="popup-footer">
+                    <small>⏰ Please don't close the app during backup</small>
+                </div>
             </div>
         </div>
 
-        <!-- JSON UPLOAD SECTION - AT THE BOTTOM -->
-        <div class="card admin-section">
-            <h3>📤 UPLOAD BELLA BONA JSON DATA</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Paste JSON to add historical data to Active sheet</small>
-            </div>
-            
-            <textarea class="json-textarea" id="jsonInput" placeholder="Paste Bella Bona JSON data here..."></textarea>
-            
-            <div class="sync-controls">
-                <button class="sync-btn upload-btn" onclick="processAndAddToActive()" id="processBtn">
-                    📥 PROCESS & ADD TO ACTIVE
-                </button>
-                <button class="sync-btn export-btn" onclick="exportColorCodedExcel()" id="exportBtn">
-                    📊 EXPORT COLOR-CODED EXCEL
-                </button>
-                <button class="sync-btn download-btn" onclick="exportScansToExcel()">
-                    📄 EXPORT SCANS EXCEL
-                </button>
-            </div>
-            
-            <div class="results-info" id="processResults">
-                Ready to process JSON data
+        <!-- DATA EXPORT SECTION -->
+        <div class="card">
+            <h3>📤 DATA EXPORT</h3>
+            <div class="sync-section">
+                <div class="sync-controls">
+                    <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
+                        📤 EXPORT TO CSV
+                    </button>
+                </div>
+                <div class="sync-status" id="syncStatus">
+                    ✅ Data export ready
+                </div>
+                <div class="local-data" id="localDataInfo">
+                    <strong>Current Data:</strong> Loading...
+                </div>
+                <div class="upload-info" id="uploadInfo">
+                    <strong>Last Sync:</strong> Never
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase -->
+    <!-- Firebase Configuration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
@@ -211,27 +310,239 @@
         let app;
         let database;
         let lastBackupTime = null;
+        let isSyncing = false;
+
+        // HYBRID BACKUP SYSTEM
+        class SmartBackupSystem {
+            constructor() {
+                this.lastIncrementalBackup = 0;
+                this.lastFullBackup = 0;
+                this.pendingScans = [];
+                this.isBackupRunning = false;
+                this.backupTimer = null;
+            }
+
+            // 1. INSTANT SYNC: Real-time per scan
+            async syncScanInstantly(scanData) {
+                if (!database) {
+                    this.queueScanForBackup(scanData);
+                    return;
+                }
+                
+                try {
+                    // Quick sync for this scan
+                    await this.syncSingleScan(scanData);
+                    console.log('✅ Instant scan sync completed');
+                } catch (error) {
+                    console.log('Instant sync failed, queuing for backup:', error);
+                    this.queueScanForBackup(scanData);
+                }
+            }
+
+            // Quick sync for single scan
+            async syncSingleScan(scanData) {
+                const appDataRef = ref(database, 'appData');
+                const snapshot = await get(appDataRef);
+                const currentData = snapshot.val() || {};
+                
+                const updatedData = {
+                    ...currentData,
+                    activeBowls: this.mergeArrays(currentData.activeBowls || [], window.appData.activeBowls),
+                    preparedBowls: this.mergeArrays(currentData.preparedBowls || [], window.appData.preparedBowls),
+                    myScans: this.mergeArrays(currentData.myScans || [], [scanData]),
+                    scanHistory: [{
+                        type: scanData.type,
+                        code: scanData.code,
+                        user: scanData.user,
+                        timestamp: new Date().toISOString(),
+                        message: `${scanData.dish} ${scanData.type}: ${scanData.code}`
+                    }, ...(currentData.scanHistory || [])],
+                    lastSync: new Date().toISOString()
+                };
+
+                await set(appDataRef, updatedData);
+            }
+
+            mergeArrays(arr1, arr2) {
+                const merged = [...arr1];
+                const existingKeys = new Set(arr1.map(item => item.code + item.timestamp));
+                
+                arr2.forEach(item => {
+                    const key = item.code + item.timestamp;
+                    if (!existingKeys.has(key)) {
+                        merged.push(item);
+                    }
+                });
+                
+                return merged;
+            }
+
+            // 2. QUEUE: Add scan to pending backup queue
+            queueScanForBackup(scanData) {
+                this.pendingScans.push({
+                    ...scanData,
+                    queueTime: Date.now()
+                });
+                console.log('📦 Scan queued for backup. Queue size:', this.pendingScans.length);
+                this.updateBackupStatus();
+            }
+
+            // 3. INCREMENTAL BACKUP: Lightweight, frequent
+            async runIncrementalBackup() {
+                if (this.isBackupRunning || this.pendingScans.length === 0 || window.appData.scanning) {
+                    return;
+                }
+                
+                this.isBackupRunning = true;
+                const scansToBackup = [...this.pendingScans];
+                this.pendingScans = [];
+
+                try {
+                    if (!database) throw new Error('Firebase not available');
+                    
+                    const backupRef = ref(database, `incrementalBackups/${Date.now()}`);
+                    await set(backupRef, {
+                        scans: scansToBackup,
+                        count: scansToBackup.length,
+                        timestamp: new Date().toISOString(),
+                        type: 'incremental'
+                    });
+
+                    this.lastIncrementalBackup = Date.now();
+                    console.log(`✅ Incremental backup: ${scansToBackup.length} scans`);
+                    this.updateBackupStatus();
+                    
+                } catch (error) {
+                    console.log('Incremental backup failed, re-queueing scans:', error);
+                    this.pendingScans = [...scansToBackup, ...this.pendingScans];
+                } finally {
+                    this.isBackupRunning = false;
+                }
+            }
+
+            // 4. FULL BACKUP: Complete data backup (when safe)
+            async runFullBackup() {
+                if (window.appData.scanning) {
+                    console.log('⏸️ Full backup deferred - scanning in progress');
+                    return false;
+                }
+
+                this.isBackupRunning = true;
+
+                try {
+                    if (!database) throw new Error('Firebase not available');
+                    
+                    const backupData = {
+                        activeBowls: [...window.appData.activeBowls],
+                        preparedBowls: [...window.appData.preparedBowls],
+                        returnedBowls: [...window.appData.returnedBowls],
+                        myScans: [...window.appData.myScans],
+                        scanHistory: [...window.appData.scanHistory],
+                        lastSync: new Date().toISOString(),
+                        lastUpdatedBy: window.appData.user || 'System',
+                        backupType: 'full',
+                        timestamp: new Date().toISOString()
+                    };
+
+                    await Promise.all([
+                        set(ref(database, 'appData'), backupData),
+                        set(ref(database, 'lastBackupTime'), new Date().toISOString())
+                    ]);
+
+                    this.lastFullBackup = Date.now();
+                    lastBackupTime = new Date().toISOString();
+                    updateBackupDisplay();
+                    
+                    console.log('✅ Full backup completed');
+                    this.updateBackupStatus();
+                    return true;
+                    
+                } catch (error) {
+                    console.log('Full backup failed:', error);
+                    throw error;
+                } finally {
+                    this.isBackupRunning = false;
+                }
+            }
+
+            // 5. SMART TIMER: Manages backup timing
+            startSmartTimer() {
+                if (this.backupTimer) {
+                    clearInterval(this.backupTimer);
+                }
+
+                this.backupTimer = setInterval(() => {
+                    const conditions = [
+                        !window.appData.scanning,
+                        isUserActive(),
+                        !this.isBackupRunning
+                    ];
+
+                    if (conditions.every(Boolean)) {
+                        // First clear pending scans
+                        if (this.pendingScans.length > 0) {
+                            this.runIncrementalBackup();
+                        }
+                        
+                        // Then run full backup if needed (every 5 minutes when safe)
+                        if (Date.now() - this.lastFullBackup > 300000) {
+                            this.runFullBackup();
+                        }
+                    }
+                }, 60000);
+            }
+
+            // 6. MANUAL BACKUP: When user stops scanning
+            async onStopScanning() {
+                console.log('🔄 Manual backup triggered by stop scanning');
+                
+                // First, run incremental to clear pending scans
+                if (this.pendingScans.length > 0) {
+                    await this.runIncrementalBackup();
+                }
+                
+                // Then run full backup
+                const result = await this.runFullBackup();
+                
+                if (result) {
+                    showMessage('✅ Backup completed', 'success');
+                }
+            }
+
+            // Update backup status display
+            updateBackupStatus() {
+                const backupStatus = document.getElementById('backupStatus');
+                if (this.pendingScans.length > 0) {
+                    backupStatus.innerHTML = `💾 Backup active • ${this.pendingScans.length} scans queued`;
+                } else {
+                    backupStatus.innerHTML = `💾 Backup ready • No pending scans`;
+                }
+            }
+        }
+
+        // Initialize backup system
+        const backupSystem = new SmartBackupSystem();
 
         function initializeFirebase() {
             try {
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
+                backupSystem.startSmartTimer();
+                startDailyCleanupTimer();
+                
                 loadLastBackupTime();
                 
                 setTimeout(() => {
-                    if (typeof showMessage === 'function') {
-                        showMessage('✅ Cloud sync active • 5-min backup enabled', 'success');
-                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active • 5-min backup enabled';
-                    }
+                    showMessage('✅ HYBRID SYNC ACTIVE • Smart backup enabled', 'success');
+                    document.getElementById('systemStatus').textContent = '✅ HYBRID SYNC ACTIVE • Smart backup enabled';
+                    backupSystem.updateBackupStatus();
                 }, 2000);
                 
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
-                if (typeof showMessage === 'function') {
-                    showMessage('⚠️ Offline mode - scanning works locally', 'warning');
-                    document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
-                }
+                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
             }
         }
 
@@ -241,15 +552,19 @@
             const appDataRef = ref(database, 'appData');
             onValue(appDataRef, (snapshot) => {
                 const firebaseAppData = snapshot.val();
-                if (firebaseAppData && window.appData) {
+                if (firebaseAppData && !isSyncing) {
+                    isSyncing = true;
+                    
                     window.appData.activeBowls = firebaseAppData.activeBowls || [];
                     window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
                     window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
                     window.appData.myScans = firebaseAppData.myScans || [];
                     window.appData.scanHistory = firebaseAppData.scanHistory || [];
                     
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof saveToStorage === 'function') saveToStorage();
+                    updateDisplay();
+                    saveToStorage();
+                    
+                    isSyncing = false;
                 }
             });
 
@@ -260,32 +575,93 @@
             });
         }
 
-        function syncToFirebase() {
-            if (!database) return;
-            try {
-                set(ref(database, 'appData'), {
-                    activeBowls: window.appData?.activeBowls || [],
-                    preparedBowls: window.appData?.preparedBowls || [],
-                    returnedBowls: window.appData?.returnedBowls || [],
-                    myScans: window.appData?.myScans || [],
-                    scanHistory: window.appData?.scanHistory || [],
-                    lastSync: new Date().toISOString()
-                });
-                
-                const backupTime = new Date().toISOString();
-                set(ref(database, 'lastBackupTime'), backupTime);
-                lastBackupTime = backupTime;
-                updateBackupDisplay();
-                
-                console.log('✅ Auto-backup completed');
-                
-            } catch (error) {
-                console.log('Firebase sync failed:', error);
+        // DAILY CLEANUP SYSTEM - CLEARS RETURNED BOWLS AT 7:00 PM
+        function startDailyCleanupTimer() {
+            // Check immediately and then every minute
+            checkAndRunCleanup();
+            
+            setInterval(() => {
+                checkAndRunCleanup();
+            }, 60000);
+        }
+
+        function checkAndRunCleanup() {
+            const now = new Date();
+            const today = now.toLocaleDateString('en-GB');
+            
+            // Check if we should run cleanup (7:00 PM or after)
+            const shouldCleanup = (
+                (now.getHours() === 19 && now.getMinutes() === 0) || // Exactly 7:00 PM
+                (now.getHours() >= 19 && window.appData.lastCleanup !== today) // After 7PM if not cleaned today
+            );
+            
+            if (shouldCleanup) {
+                runFirebaseCleanup();
             }
         }
 
+        async function runFirebaseCleanup() {
+            if (!database) {
+                console.log('❌ Firebase not available for cleanup');
+                return;
+            }
+
+            const today = new Date().toLocaleDateString('en-GB');
+            
+            try {
+                console.log('🧹 RUNNING FIREBASE CLEANUP AT 7:00 PM...');
+                
+                // Get current data from Firebase
+                const appDataRef = ref(database, 'appData');
+                const snapshot = await get(appDataRef);
+                const currentData = snapshot.val() || {};
+                
+                // Create backup of returned bowls before clearing
+                const backupData = {
+                    returnedBowls: currentData.returnedBowls || [],
+                    cleanupDate: today,
+                    cleanupTime: new Date().toISOString(),
+                    returnedCount: currentData.returnedBowls ? currentData.returnedBowls.length : 0
+                };
+                
+                // Save backup
+                const backupRef = ref(database, `cleanupBackups/${today}`);
+                await set(backupRef, backupData);
+                
+                // Update Firebase - clear returnedBowls only, keep everything else
+                const updatedData = {
+                    ...currentData,
+                    returnedBowls: [], // CLEAR RETURNED BOWLS ONLY
+                    lastCleanup: today,
+                    lastCleanupTime: new Date().toISOString()
+                };
+                
+                await set(appDataRef, updatedData);
+                
+                console.log('✅ Firebase cleanup completed - returned bowls cleared');
+                
+                // Update local data
+                window.appData.returnedBowls = [];
+                window.appData.lastCleanup = today;
+                saveToStorage();
+                updateDisplay();
+                
+                showMessage(`✅ 7:00 PM Cleanup: Cleared ${backupData.returnedCount} returned bowls • Active bowls preserved`, 'success');
+                
+            } catch (error) {
+                console.log('❌ Firebase cleanup failed:', error);
+            }
+        }
+
+        function syncToFirebase() {
+            return backupSystem.runFullBackup();
+        }
+
         async function loadFromFirebase() {
-            if (!database) return;
+            if (!database) {
+                showMessage('❌ Firebase not available', 'error');
+                return;
+            }
             
             try {
                 const appDataRef = ref(database, 'appData');
@@ -299,8 +675,8 @@
                     window.appData.myScans = data.myScans || [];
                     window.appData.scanHistory = data.scanHistory || [];
                     
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof saveToStorage === 'function') saveToStorage();
+                    updateDisplay();
+                    saveToStorage();
                     
                     showMessage('✅ Data loaded from Firebase backup', 'success');
                 } else {
@@ -330,31 +706,21 @@
             } else {
                 backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
             }
-            
-            updateBackupCountdown();
         }
 
-        function updateBackupCountdown() {
-            const backupStatus = document.getElementById('backupStatus');
-            if (!window.nextBackupTime) return;
-            
-            const now = new Date();
-            const timeLeft = Math.max(0, window.nextBackupTime - now);
-            const minutes = Math.floor(timeLeft / 60000);
-            const seconds = Math.floor((timeLeft % 60000) / 1000);
-            
-            backupStatus.textContent = `⏳ Next backup in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        function isUserActive() {
+            return (Date.now() - window.appData.lastActivity) < 300000; // 5 minutes
         }
 
         window.initializeFirebase = initializeFirebase;
         window.syncToFirebase = syncToFirebase;
         window.loadFromFirebase = loadFromFirebase;
-        window.updateBackupDisplay = updateBackupDisplay;
+        window.backupSystem = backupSystem;
     </script>
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - REUSABLE BOWL TRACKING SYSTEM
+        // ProGlove Scanner - HYBRID BACKUP SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -367,7 +733,6 @@
             scanHistory: [],
             lastActivity: Date.now(),
             autoSaveTimer: null,
-            emergencyBackupTimer: null,
             lastCleanup: null
         };
 
@@ -386,21 +751,14 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
-        // JSON Processing Variables
-        window.jsonData = null;
-        window.multiOrderMap = {};
-
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Reusable Bowl Tracking System...');
+            console.log('Initializing Hybrid Backup Scanner...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
             updateDisplay();
             startAutoSaveTimer();
-            startEmergencyBackupTimer();
-            startDailyCleanupTimer();
-            startBackupCountdownTimer();
             
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
@@ -419,45 +777,6 @@
             window.appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
             }, 30000);
-        }
-
-        function startEmergencyBackupTimer() {
-            if (window.appData.emergencyBackupTimer) {
-                clearInterval(window.appData.emergencyBackupTimer);
-            }
-            
-            window.appData.emergencyBackupTimer = setInterval(() => {
-                console.log('🔄 AUTO BACKUP: Saving to Firebase...');
-                syncToFirebase();
-            }, 300000); // 5 minutes
-            
-            window.nextBackupTime = new Date(Date.now() + 300000);
-        }
-
-        function startBackupCountdownTimer() {
-            setInterval(() => {
-                updateBackupCountdown();
-            }, 1000);
-        }
-
-        function startDailyCleanupTimer() {
-            setInterval(() => {
-                const now = new Date();
-                if (now.getHours() === 19 && now.getMinutes() === 0) {
-                    cleanupReturnedBowls();
-                }
-            }, 60000);
-        }
-
-        function cleanupReturnedBowls() {
-            const today = new Date().toLocaleDateString('en-GB');
-            if (window.appData.lastCleanup === today) return;
-            
-            window.appData.returnedBowls = [];
-            window.appData.lastCleanup = today;
-            saveToStorage();
-            syncToFirebase();
-            showMessage('✅ Daily cleanup completed - returned bowls cleared', 'success');
         }
 
         // Storage functions
@@ -482,184 +801,122 @@
             }
         }
 
-        // JSON PROCESSING FUNCTIONS
-        function processAndAddToActive() {
+        // JSON Import Functions
+        function processBellaBonaJSON() {
             const jsonText = document.getElementById('jsonInput').value.trim();
             if (!jsonText) {
-                showMessage('❌ Please paste JSON data first', 'error');
+                showMessage('❌ Please paste JSON data', 'error');
                 return;
             }
 
             try {
-                const jsonData = JSON.parse(jsonText);
-                window.jsonData = jsonData;
+                const orderData = JSON.parse(jsonText);
+                let enrichedCount = 0;
+                let createdCount = 0;
+                let removedFromPrepCount = 0;
+                let errors = [];
+
+                const processOrder = (order) => {
+                    const { vytCode, customer, company, dishLetter } = order;
+                    
+                    if (!vytCode) {
+                        errors.push('❌ Missing VYT code in order data');
+                        return;
+                    }
+
+                    const code = vytCode.toUpperCase();
+                    const today = new Date().toLocaleDateString('en-GB');
+
+                    // Check if bowl exists in active bowls
+                    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
+                    
+                    if (activeBowlIndex !== -1) {
+                        // Update existing active bowl
+                        window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
+                        window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
+                        window.appData.activeBowls[activeBowlIndex].dish = dishLetter || window.appData.activeBowls[activeBowlIndex].dish;
+                        enrichedCount++;
+
+                        // REMOVE FROM PREPARATION SHEET (preparedBowls)
+                        const prepBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
+                            bowl.code === code && bowl.date === today
+                        );
+                        
+                        if (prepBowlIndex !== -1) {
+                            window.appData.preparedBowls.splice(prepBowlIndex, 1);
+                            removedFromPrepCount++;
+                            console.log(`✅ Removed ${code} from preparation sheet`);
+                        }
+                        
+                    } else {
+                        // Create new bowl
+                        const newBowl = {
+                            code: code,
+                            dish: dishLetter || 'X',
+                            user: 'System Import',
+                            company: company || 'Unknown Company',
+                            customer: customer || 'Unknown Customer',
+                            date: today,
+                            time: new Date().toLocaleTimeString(),
+                            timestamp: new Date().toISOString(),
+                            status: 'ACTIVE',
+                            imported: true
+                        };
+                        window.appData.activeBowls.push(newBowl);
+                        createdCount++;
+                    }
+                };
+
+                if (Array.isArray(orderData)) {
+                    orderData.forEach(processOrder);
+                } else if (orderData.orders && Array.isArray(orderData.orders)) {
+                    orderData.orders.forEach(processOrder);
+                } else {
+                    processOrder(orderData);
+                }
+
+                saveToStorage();
+                syncToFirebase();
+                updateDisplay();
+
+                let resultMessage = `✅ Import completed: `;
+                if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
+                if (createdCount > 0) resultMessage += `${createdCount} new bowls created, `;
+                if (removedFromPrepCount > 0) resultMessage += `${removedFromPrepCount} removed from prep sheet`;
                 
-                const results = processJSONData(jsonData);
-                updateProcessResults(results);
-                showMessage(`✅ Processed ${results.totalBowls} bowls • ${results.addedToActive} added to Active`, 'success');
+                showMessage(resultMessage, 'success');
                 
+                if (errors.length > 0) {
+                    document.getElementById('importResult').innerHTML = 
+                        '<strong>Errors:</strong><br>' + errors.slice(0, 5).join('<br>') + 
+                        (errors.length > 5 ? '<br>...' : '');
+                }
+
             } catch (error) {
                 showMessage('❌ Invalid JSON format: ' + error.message, 'error');
             }
         }
 
-        function processJSONData(jsonData) {
-            let totalBowls = 0;
-            let addedToActive = 0;
-            let enrichedBowls = 0;
-            
-            // Build multi-order map for color coding
-            buildMultiOrderMap(jsonData);
-            
-            jsonData.forEach(company => {
-                company.boxes.forEach(box => {
-                    box.dishes.forEach(dish => {
-                        dish.bowlCodes.forEach((vytCode, index) => {
-                            totalBowls++;
-                            
-                            // Try to find in Active
-                            const activeBowl = window.appData.activeBowls.find(
-                                bowl => bowl.code === vytCode
-                            );
-                            
-                            if (activeBowl) {
-                                // Enrich existing bowl
-                                activeBowl.company = company.name;
-                                activeBowl.customer = dish.users[index]?.username || 'Unknown';
-                                activeBowl.dish = dish.label;
-                                activeBowl.dishName = dish.name;
-                                enrichedBowls++;
-                            } else {
-                                // CREATE NEW BOWL IN ACTIVE
-                                const newBowl = {
-                                    code: vytCode,
-                                    dish: dish.label,
-                                    user: 'Historical Data',
-                                    company: company.name,
-                                    customer: dish.users[index]?.username || 'Unknown',
-                                    date: extractDateFromJSON(jsonData),
-                                    time: '12:00',
-                                    timestamp: new Date().toISOString(),
-                                    status: 'ACTIVE',
-                                    historical: true,
-                                    dishName: dish.name
-                                };
-                                window.appData.activeBowls.push(newBowl);
-                                addedToActive++;
-                            }
-                        });
-                    });
-                });
-            });
-            
-            saveToStorage();
-            syncToFirebase();
-            updateDisplay();
-            
-            return {
-                totalBowls: totalBowls,
-                addedToActive: addedToActive,
-                enrichedBowls: enrichedBowls
-            };
+        function clearJSONInput() {
+            document.getElementById('jsonInput').value = '';
+            document.getElementById('importResult').innerHTML = '';
         }
 
-        function buildMultiOrderMap(jsonData) {
-            window.multiOrderMap = {};
-            
-            jsonData.forEach(company => {
-                if (!window.multiOrderMap[company.name]) {
-                    window.multiOrderMap[company.name] = {};
-                }
-                
-                company.boxes.forEach(box => {
-                    box.dishes.forEach(dish => {
-                        const dishLetter = dish.label;
-                        if (!window.multiOrderMap[company.name][dishLetter]) {
-                            window.multiOrderMap[company.name][dishLetter] = [];
-                        }
-                        
-                        // Add all customers for this dish letter
-                        dish.users.forEach(user => {
-                            if (user.username && !window.multiOrderMap[company.name][dishLetter].includes(user.username)) {
-                                window.multiOrderMap[company.name][dishLetter].push(user.username);
-                            }
-                        });
-                    });
-                });
-            });
-        }
-
-        function extractDateFromJSON(jsonData) {
-            // Try to extract date from uniqueIdentifier
-            if (jsonData[0]?.boxes[0]?.uniqueIdentifier) {
-                const dateMatch = jsonData[0].boxes[0].uniqueIdentifier.match(/\d{4}-\d{2}-\d{2}/);
-                if (dateMatch) return dateMatch[0];
-            }
-            return new Date().toISOString().split('T')[0];
-        }
-
-        function updateProcessResults(results) {
-            const resultsElement = document.getElementById('processResults');
-            resultsElement.innerHTML = `
-                <strong>📊 Processing Results:</strong><br>
-                <div class="data-row"><span>Total Bowls in JSON:</span><span>${results.totalBowls}</span></div>
-                <div class="data-row"><span>Added to Active Sheet:</span><span>${results.addedToActive}</span></div>
-                <div class="data-row"><span>Enriched Existing Bowls:</span><span>${results.enrichedBowls}</span></div>
-                <div class="data-row"><span>Current Active Bowls:</span><span>${window.appData.activeBowls.length}</span></div>
-            `;
-        }
-
-        // EXCEL EXPORT FUNCTIONS
-        function exportColorCodedExcel() {
-            if (!window.jsonData) {
-                showMessage('❌ Please process JSON data first', 'error');
-                return;
-            }
-
-            // Create worksheet data
-            const worksheetData = [
-                ['VYT Code', 'Company', 'Customer', 'Dish Letter', 'Dish Name', 'Order Type']
-            ];
-            
-            window.jsonData.forEach(company => {
-                company.boxes.forEach(box => {
-                    box.dishes.forEach(dish => {
-                        dish.bowlCodes.forEach((vytCode, index) => {
-                            const customer = dish.users[index]?.username || 'Unknown';
-                            
-                            // Check if multiple customers for this dish letter
-                            const isMultiple = window.multiOrderMap[company.name]?.[dish.label]?.length > 1;
-                            const orderType = isMultiple ? 'MULTIPLE' : 'SINGLE';
-                            
-                            worksheetData.push([
-                                vytCode || 'NO_CODE',
-                                company.name,
-                                customer,
-                                dish.label,
-                                dish.name,
-                                orderType
-                            ]);
-                        });
-                    });
-                });
-            });
-            
-            downloadExcel(worksheetData, `bowl_tracking_${new Date().toISOString().split('T')[0]}.xlsx`);
-            showMessage('✅ Color-coded Excel exported!', 'success');
-        }
-
-        function exportScansToExcel() {
+        // Export to CSV
+        function exportToCSV() {
             if (window.appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to export", "info");
                 return;
             }
             
-            const worksheetData = [
-                ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp']
-            ];
+            const btn = document.getElementById('exportBtn');
+            btn.disabled = true;
+            btn.textContent = "⏳ EXPORTING...";
             
-            window.appData.myScans.forEach(scan => {
-                worksheetData.push([
+            const headers = ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp'];
+            const csvData = [
+                headers,
+                ...window.appData.myScans.map(scan => [
                     scan.type,
                     scan.code,
                     scan.dish || '',
@@ -669,26 +926,30 @@
                     scan.company,
                     scan.customer,
                     scan.timestamp
-                ]);
-            });
+                ])
+            ];
             
-            downloadExcel(worksheetData, `scans_${new Date().toISOString().split('T')[0]}.xlsx`);
-            showMessage("✅ Scans exported to Excel!", "success");
+            const csvContent = csvData.map(row => 
+                row.map(field => `"${field}"`).join(',')
+            ).join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `proglove_scans_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showMessage("✅ Scans exported to CSV file!", "success");
+            
+            btn.disabled = false;
+            btn.textContent = "📤 EXPORT TO CSV";
         }
 
-        function downloadExcel(data, filename) {
-            // Create workbook and worksheet
-            const workbook = XLSX.utils.book_new();
-            const worksheet = XLSX.utils.aoa_to_sheet(data);
-            
-            // Add worksheet to workbook
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bowl Data');
-            
-            // Generate Excel file and download
-            XLSX.writeFile(workbook, filename);
-        }
-
-        // USER AND MODE MANAGEMENT
+        // User and Mode Management
         function initializeUsers() {
             const dropdown = document.getElementById('userDropdown');
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
@@ -788,7 +1049,7 @@
             updateLastActivity();
         }
 
-        // SCANNING FUNCTIONS
+        // Scanning Functions
         function startScanning() {
             if (!window.appData.user) {
                 showMessage('❌ Please select user first', 'error');
@@ -810,7 +1071,11 @@
             window.appData.scanning = false;
             updateDisplay();
             updateLastActivity();
-            showMessage(`⏹ Scanning stopped`, 'info');
+            
+            // Trigger smart backup when scanning stops
+            backupSystem.onStopScanning();
+            
+            showMessage(`⏹ Scanning stopped • Backup started`, 'info');
         }
 
         function handleScanInput(e) {
@@ -881,7 +1146,7 @@
             window.appData.activeBowls.push(newBowl);
             window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
             
-            window.appData.myScans.push({
+            const scanRecord = {
                 type: 'kitchen',
                 code: fullCode,
                 dish: window.appData.dishLetter,
@@ -889,7 +1154,9 @@
                 company: "Unknown",
                 customer: "Unknown",
                 timestamp: new Date().toISOString()
-            });
+            };
+            
+            window.appData.myScans.push(scanRecord);
             
             window.appData.scanHistory.unshift({
                 type: 'kitchen',
@@ -900,9 +1167,12 @@
             });
             
             saveToStorage();
-            syncToFirebase();
+            
+            // USE HYBRID BACKUP SYSTEM
+            backupSystem.syncScanInstantly(scanRecord);
+            
             return { 
-                message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode} - Now ACTIVE for returns`, 
+                message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -933,8 +1203,14 @@
             
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
-            // Remove from active bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
+            
+            const preparedBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === fullCode && bowl.date === today
+            );
+            if (preparedBowlIndex !== -1) {
+                window.appData.preparedBowls.splice(preparedBowlIndex, 1);
+            }
             
             window.appData.returnedBowls.push({
                 ...activeBowl,
@@ -945,7 +1221,7 @@
                 status: 'RETURNED'
             });
             
-            window.appData.myScans.push({
+            const scanRecord = {
                 type: 'return',
                 code: fullCode,
                 user: window.appData.user,
@@ -953,20 +1229,25 @@
                 customer: activeBowl.customer,
                 timestamp: new Date().toISOString(),
                 originalData: activeBowl
-            });
+            };
+            
+            window.appData.myScans.push(scanRecord);
             
             window.appData.scanHistory.unshift({
                 type: 'return',
                 code: fullCode,
                 user: window.appData.user,
                 timestamp: new Date().toISOString(),
-                message: `Returned: ${fullCode} (${activeBowl.company} - ${activeBowl.customer})`
+                message: `Returned: ${fullCode}`
             });
             
             saveToStorage();
-            syncToFirebase();
+            
+            // USE HYBRID BACKUP SYSTEM
+            backupSystem.syncScanInstantly(scanRecord);
+            
             return { 
-                message: `✅ Returned: ${fullCode} - ${activeBowl.company} - ${activeBowl.customer}`, 
+                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -975,6 +1256,7 @@
         function updateDisplay() {
             document.getElementById('userDropdown').disabled = false;
             document.getElementById('dishDropdown').disabled = false;
+            document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0;
             
             let canScan = window.appData.user && !window.appData.scanning;
             if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
@@ -1050,12 +1332,14 @@
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user).length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Returns:</span><span>${window.appData.myScans.filter(s => s.type === 'return' && s.user === window.appData.user).length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
         }
@@ -1064,6 +1348,45 @@
             const element = document.getElementById('feedback');
             element.textContent = text;
             element.className = 'feedback ' + type;
+        }
+
+        // Smart backup function
+        function forceSmartBackup() {
+            const btn = document.getElementById('smartBackupBtn');
+            btn.disabled = true;
+            btn.textContent = "🔄 BACKING UP...";
+            
+            console.log('🔥 FORCING SMART BACKUP...');
+            backupSystem.onStopScanning();
+            
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = "🔥 SMART BACKUP NOW";
+            }, 3000);
+        }
+
+        // Backup popup functions
+        function showBackupPopup() {
+            const popup = document.getElementById('backupPopup');
+            const stats = document.getElementById('backupStats');
+            
+            stats.innerHTML = `
+                <div>📊 Active Bowls: ${window.appData.activeBowls.length}</div>
+                <div>🍳 Prepared Today: ${window.appData.preparedBowls.filter(b => b.date === new Date().toLocaleDateString('en-GB')).length}</div>
+                <div>🔄 My Scans: ${window.appData.myScans.length}</div>
+            `;
+            
+            popup.classList.remove('hidden');
+        }
+
+        function hideBackupPopup() {
+            const popup = document.getElementById('backupPopup');
+            popup.classList.add('hidden');
+        }
+
+        function updateBackupProgress(percent, message) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = message;
         }
     </script>
 </body>
