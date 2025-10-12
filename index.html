@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Secure System</title>
+    <title>ProGlove Scanner - Simple System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -18,10 +18,9 @@
         .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
-        .release-btn { background: #f57c00; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
         
-        .system-lock { 
+        .system-status { 
             padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px;
             background: #444; border-left: 4px solid #f57c00;
         }
@@ -119,18 +118,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Secure System</h1>
-            <p>Single System Lock • Real-time Error Detection • Spreadsheet Sync</p>
+            <h1>🧤 ProGlove Scanner - Simple System</h1>
+            <p>Download Data First • Real-time Error Detection • Auto Upload</p>
         </div>
         
-        <!-- System Lock Status -->
+        <!-- System Status -->
         <div class="card">
-            <h3>🔒 SYSTEM LOCK STATUS</h3>
-            <div class="system-lock" id="systemLockStatus">
-                🔓 System Available - You can download data
-            </div>
-            <div class="debug-info" id="debugInfo">
-                Script URL: https://script.google.com/macros/s/AKfycbz-HGep7FTPfo9kciMrB9XG5bfYzymxMalgn3pS_Ot9ExDMkHWhqjxis31H1Feezu_T/exec
+            <h3>📊 SYSTEM STATUS</h3>
+            <div class="system-status" id="systemStatus">
+                ⬇️ Please download data first to start scanning
             </div>
         </div>
 
@@ -140,17 +136,14 @@
             <div class="sync-section">
                 <div class="sync-controls">
                     <button class="sync-btn download-btn" onclick="downloadFromSheets()" id="downloadBtn">
-                        📥 DOWNLOAD & LOCK SYSTEM
+                        📥 DOWNLOAD DATA
                     </button>
                     <button class="sync-btn upload-btn" onclick="uploadToSheets()" id="uploadBtn" disabled>
-                        📤 UPLOAD & RELEASE
-                    </button>
-                    <button class="sync-btn release-btn" onclick="forceReleaseLock()" id="releaseBtn">
-                        🔓 FORCE RELEASE
+                        📤 UPLOAD SCANS
                     </button>
                 </div>
                 <div class="sync-status" id="syncStatus">
-                    ⚠️ Download data first to enable error detection
+                    ⚠️ Download data first to enable scanning
                 </div>
                 <div class="local-data" id="localDataInfo">
                     <strong>Local Data:</strong> No data downloaded yet
@@ -232,119 +225,102 @@
     </div>
 
     <script>
-        // ProGlove Scanner - SECURE SINGLE SYSTEM
+        // ProGlove Scanner - SIMPLE SYSTEM
         let appData = {
             mode: null,
             user: null,
             dishLetter: null,
             scanning: false,
             dataLoaded: false,
-            systemLocked: false,
-            lockId: null,
-            activeData: [],
-            preparation: [],
-            archive: [],
-            companyData: [],
-            users: [],
             myScans: [],
             uploadHistory: [],
-            lastSync: null
+            lastSync: null,
+            lastActivity: Date.now(),
+            autoUploadTimer: null
         };
 
-        // ✅ YOUR LATEST GOOGLE SCRIPT URL
+        // Google Script URL
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz-HGep7FTPfo9kciMrB9XG5bfYzymxMalgn3pS_Ot9ExDMkHWhqjxis31H1Feezu_T/exec';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Initializing ProGlove Scanner...');
             loadFromStorage();
-            checkSystemLock();
             updateDisplay();
+            startAutoUploadTimer();
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
+            
+            // Track user activity
+            document.addEventListener('click', updateLastActivity);
+            document.addEventListener('keydown', updateLastActivity);
         });
 
-        // Check system lock status
-        async function checkSystemLock() {
-            try {
-                console.log('Checking system lock status...');
-                const url = `${GOOGLE_SCRIPT_URL}?action=checkLock&timestamp=${Date.now()}`;
-                console.log('Fetching from:', url);
-                
-                const response = await fetch(url);
-                console.log('Response status:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('Lock check response:', data);
-                
-                if (data.locked && data.lockId === appData.lockId) {
-                    appData.systemLocked = true;
-                    updateLockDisplay(true, "🔒 System locked by YOU");
-                } else if (data.locked) {
-                    appData.systemLocked = false;
-                    appData.dataLoaded = false;
-                    updateLockDisplay(false, `🔒 System locked by ${data.lockedBy} at ${data.lockTime}`);
-                } else {
-                    appData.systemLocked = false;
-                    updateLockDisplay(false, "🔓 System Available - You can download data");
-                }
-            } catch (error) {
-                console.error('Lock check error:', error);
-                updateLockDisplay(false, "⚠️ Cannot check system status - Check Script URL");
-                showMessage("❌ Cannot connect to Google Sheets. Check script deployment.", "error");
-            }
+        // Update last activity time
+        function updateLastActivity() {
+            appData.lastActivity = Date.now();
+            console.log('Activity detected, reset auto-upload timer');
         }
 
-        // SECURE DOWNLOAD FROM GOOGLE SHEETS
-        async function downloadFromSheets() {
-            if (appData.systemLocked) {
-                showMessage("❌ System is already locked by another user", "error");
-                return;
+        // Auto upload after 5 minutes of inactivity
+        function startAutoUploadTimer() {
+            // Clear existing timer
+            if (appData.autoUploadTimer) {
+                clearInterval(appData.autoUploadTimer);
             }
+            
+            // Check every 30 seconds for inactivity
+            appData.autoUploadTimer = setInterval(() => {
+                const inactiveTime = Date.now() - appData.lastActivity;
+                const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+                
+                if (appData.dataLoaded && appData.myScans.length > 0 && inactiveTime >= fiveMinutes) {
+                    console.log('Auto-upload triggered due to inactivity');
+                    showMessage('🔄 Auto-uploading scans due to inactivity...', 'warning');
+                    uploadToSheets();
+                }
+            }, 30000); // Check every 30 seconds
+        }
 
+        // SIMPLE DOWNLOAD FROM GOOGLE SHEETS
+        async function downloadFromSheets() {
             const btn = document.getElementById('downloadBtn');
             const status = document.getElementById('syncStatus');
             
             btn.disabled = true;
             btn.textContent = "⏳ DOWNLOADING...";
-            status.textContent = "⏳ Downloading data from Google Sheets...";
+            status.textContent = "⏳ Downloading latest data from Google Sheets...";
             
             try {
-                // Generate unique lock ID
-                const lockId = 'lock_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                console.log('Starting download from:', GOOGLE_SCRIPT_URL);
                 
-                // Try to acquire lock and get data
-                const url = `${GOOGLE_SCRIPT_URL}?action=getAllData&lockId=${lockId}&timestamp=${Date.now()}`;
+                // Simple GET request to download data
+                const url = `${GOOGLE_SCRIPT_URL}?action=getAllData&timestamp=${Date.now()}`;
                 console.log('Download URL:', url);
                 
                 const response = await fetch(url);
-                console.log('Download response status:', response.status);
+                console.log('Response status:', response.status, 'ok:', response.ok);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    // Try to get more detailed error info
+                    let errorText = await response.text();
+                    console.error('Response text:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
-                console.log('Download response data:', data);
-                
-                if (data.error === 'SYSTEM_LOCKED') {
-                    throw new Error('System is locked by another user: ' + data.lockedBy);
-                }
+                console.log('Download successful, data received:', data);
                 
                 if (data.error) {
                     throw new Error('Google Script Error: ' + data.error);
                 }
                 
-                // Update app data with Google Sheets data
+                // Update app data
                 appData.activeData = data.activeData || [];
                 appData.preparation = data.preparation || [];
                 appData.archive = data.archive || [];
                 appData.companyData = data.companyData || [];
                 
-                // Use hardcoded users for now
+                // Use hardcoded users
                 appData.users = [
                     {name: "Hamid", role: "Kitchen"},
                     {name: "Richa", role: "Kitchen"},
@@ -359,37 +335,38 @@
                     {name: "Aadesh", role: "Return"}
                 ];
                 
-                appData.systemLocked = true;
-                appData.lockId = lockId;
                 appData.dataLoaded = true;
                 appData.lastSync = new Date().toISOString();
                 
                 saveToStorage();
                 
-                status.textContent = `✅ Data loaded! ${appData.activeData.length} active bowls`;
+                status.textContent = `✅ Data loaded! ${appData.activeData.length} active bowls, ${appData.preparation.length} prepared today`;
                 status.className = "sync-status success";
-                updateLockDisplay(true, "🔒 System locked by YOU");
-                showMessage("✅ Data loaded from Google Sheets! System locked.", "success");
+                document.getElementById('systemStatus').textContent = "✅ Data loaded - Ready to scan";
+                showMessage("✅ Latest data loaded! You can start scanning.", "success");
                 
             } catch (error) {
-                console.error('Download error:', error);
+                console.error('Download failed:', error);
                 status.textContent = "❌ Download failed: " + error.message;
                 status.className = "sync-status error";
                 showMessage("❌ Download failed: " + error.message, "error");
+                
+                // Show more detailed error in console
+                console.error('Full error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    scriptUrl: GOOGLE_SCRIPT_URL
+                });
             } finally {
                 btn.disabled = false;
-                btn.textContent = "📥 DOWNLOAD & LOCK SYSTEM";
+                btn.textContent = "📥 DOWNLOAD DATA";
                 updateDisplay();
+                updateLastActivity(); // Reset inactivity timer
             }
         }
 
-        // SECURE UPLOAD TO GOOGLE SHEETS
+        // UPLOAD TO GOOGLE SHEETS
         async function uploadToSheets() {
-            if (!appData.systemLocked || !appData.lockId) {
-                showMessage("❌ You don't have system lock", "error");
-                return;
-            }
-            
             if (appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to upload", "info");
                 return;
@@ -403,7 +380,6 @@
             status.textContent = `⏳ Uploading ${appData.myScans.length} scans...`;
             
             try {
-                // Prepare scan data for upload
                 const uploadData = {
                     scans: appData.myScans.map(scan => ({
                         type: scan.type,
@@ -415,11 +391,11 @@
                         company: scan.company || "Unknown",
                         customer: scan.customer || "Unknown",
                         department: scan.department || "Unknown"
-                    })),
-                    lockId: appData.lockId
+                    }))
                 };
                 
-                // Send to Google Sheets
+                console.log('Uploading data:', uploadData);
+                
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     headers: {
@@ -447,14 +423,11 @@
                     });
                     
                     appData.myScans = [];
-                    appData.systemLocked = false;
-                    appData.lockId = null;
                     saveToStorage();
                     
-                    status.textContent = `✅ Uploaded! ${result.details.successful} successful. System released.`;
+                    status.textContent = `✅ Uploaded! ${result.details.successful} successful`;
                     status.className = "sync-status success";
-                    updateLockDisplay(false, "🔓 System Available");
-                    showMessage("✅ Scans uploaded! System released.", "success");
+                    showMessage("✅ Scans uploaded successfully!", "success");
                     
                 } else {
                     throw new Error(result.error || 'Upload failed');
@@ -467,54 +440,9 @@
                 showMessage("❌ Upload failed - scans saved locally", "error");
             } finally {
                 btn.disabled = false;
-                btn.textContent = "📤 UPLOAD & RELEASE";
+                btn.textContent = "📤 UPLOAD SCANS";
                 updateDisplay();
-            }
-        }
-
-        // Force release lock
-        async function forceReleaseLock() {
-            try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        action: 'forceReleaseLock'
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    appData.systemLocked = false;
-                    appData.lockId = null;
-                    saveToStorage();
-                    updateLockDisplay(false, "🔓 System Released");
-                    showMessage("✅ System lock released", "success");
-                } else {
-                    showMessage("❌ Failed to release lock", "error");
-                }
-            } catch (error) {
-                console.error('Force release error:', error);
-                showMessage("❌ Error releasing lock", "error");
-            }
-        }
-
-        function updateLockDisplay(locked, message) {
-            const lockStatus = document.getElementById('systemLockStatus');
-            lockStatus.textContent = message;
-            
-            const downloadBtn = document.getElementById('downloadBtn');
-            downloadBtn.disabled = locked && !appData.systemLocked;
-            
-            if (locked && !appData.systemLocked) {
-                lockStatus.style.borderLeftColor = '#ea4335';
-            } else if (locked) {
-                lockStatus.style.borderLeftColor = '#34a853';
-            } else {
-                lockStatus.style.borderLeftColor = '#f57c00';
+                updateLastActivity(); // Reset inactivity timer
             }
         }
 
@@ -540,6 +468,7 @@
             
             loadUsers();
             updateDisplay();
+            updateLastActivity();
             showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
         }
 
@@ -574,6 +503,7 @@
                 }
             }
             updateDisplay();
+            updateLastActivity();
         }
 
         function loadDishLetters() {
@@ -595,6 +525,7 @@
                 showMessage(`📝 Dish ${appData.dishLetter} selected`, 'success');
             }
             updateDisplay();
+            updateLastActivity();
         }
 
         function startScanning() {
@@ -610,12 +541,14 @@
             appData.scanning = true;
             updateDisplay();
             document.getElementById('progloveInput').focus();
+            updateLastActivity();
             showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
         }
 
         function stopScanning() {
             appData.scanning = false;
             updateDisplay();
+            updateLastActivity();
             showMessage(`⏹ Scanning stopped`, 'info');
         }
 
@@ -627,6 +560,7 @@
                 processScan(scanValue);
                 setTimeout(() => e.target.value = '', 100);
             }
+            updateLastActivity();
         }
 
         function processScan(code) {
@@ -647,6 +581,7 @@
             }
             
             updateDisplay();
+            updateLastActivity();
         }
 
         function kitchenScan(code) {
@@ -654,6 +589,7 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
+            // Check for duplicates in current session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -662,7 +598,8 @@
                 };
             }
             
-            if (appData.preparation.some(bowl => bowl[0].includes(fullCode) && bowl[3] === today)) {
+            // Check if already prepared today
+            if (appData.preparation.some(bowl => bowl[0] && bowl[0].includes(fullCode) && bowl[3] === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
                     type: "error",
@@ -670,7 +607,8 @@
                 };
             }
             
-            if (appData.activeData.some(bowl => bowl[0].includes(fullCode))) {
+            // Check if already in active data
+            if (appData.activeData.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already in active data: " + fullCode, 
                     type: "error",
@@ -678,7 +616,7 @@
                 };
             }
             
-            const companyInfo = appData.companyData.find(item => item[0].includes(fullCode));
+            const companyInfo = appData.companyData.find(item => item[0] && item[0].includes(fullCode));
             const company = companyInfo ? companyInfo[1] : "Unknown";
             const customer = companyInfo ? companyInfo[2] : "Unknown";
             
@@ -704,6 +642,7 @@
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
+            // Check for duplicates in current session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -712,7 +651,8 @@
                 };
             }
             
-            const activeBowl = appData.activeData.find(bowl => bowl[0].includes(fullCode));
+            // Check against active data
+            const activeBowl = appData.activeData.find(bowl => bowl[0] && bowl[0].includes(fullCode));
             if (!activeBowl) {
                 return { 
                     message: "❌ Not in active data: " + fullCode, 
@@ -721,7 +661,8 @@
                 };
             }
             
-            if (appData.archive.some(bowl => bowl[0].includes(fullCode))) {
+            // Check if already returned
+            if (appData.archive.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already returned: " + fullCode, 
                     type: "error",
@@ -729,7 +670,7 @@
                 };
             }
             
-            const companyInfo = appData.companyData.find(item => item[0].includes(fullCode));
+            const companyInfo = appData.companyData.find(item => item[0] && item[0].includes(fullCode));
             const company = companyInfo ? companyInfo[1] : "Unknown";
             const customer = companyInfo ? companyInfo[2] : "Unknown";
             
@@ -754,9 +695,9 @@
         function updateDisplay() {
             document.getElementById('userDropdown').disabled = !appData.dataLoaded;
             document.getElementById('dishDropdown').disabled = !appData.dataLoaded;
-            document.getElementById('uploadBtn').disabled = !appData.dataLoaded || appData.myScans.length === 0 || !appData.systemLocked;
+            document.getElementById('uploadBtn').disabled = !appData.dataLoaded || appData.myScans.length === 0;
             
-            let canScan = appData.dataLoaded && appData.user && !appData.scanning && appData.systemLocked;
+            let canScan = appData.dataLoaded && appData.user && !appData.scanning;
             if (appData.mode === 'kitchen') canScan = canScan && appData.dishLetter;
             document.getElementById('startBtn').disabled = !canScan;
             document.getElementById('stopBtn').disabled = !appData.scanning;
@@ -772,15 +713,15 @@
                 input.disabled = !appData.dataLoaded || !appData.scanning;
             }
             
-            document.getElementById('activeCount').textContent = appData.activeData.length;
-            document.getElementById('prepCount').textContent = appData.preparation.length;
+            document.getElementById('activeCount').textContent = appData.activeData ? appData.activeData.length : 0;
+            document.getElementById('prepCount').textContent = appData.preparation ? appData.preparation.length : 0;
             document.getElementById('myScansCount').textContent = appData.myScans.length;
             
             const lastSyncTime = appData.lastSync ? new Date(appData.lastSync).toLocaleTimeString() : 'Never';
             document.getElementById('localDataInfo').innerHTML = `
                 <strong>Local Data:</strong> 
-                ${appData.activeData.length} active • 
-                ${appData.preparation.length} prepared • 
+                ${appData.activeData ? appData.activeData.length : 0} active • 
+                ${appData.preparation ? appData.preparation.length : 0} prepared • 
                 ${appData.myScans.length} scans ready to upload •
                 Last sync: ${lastSyncTime}
             `;
@@ -812,19 +753,19 @@
             }
             
             const today = new Date().toLocaleDateString('en-GB');
-            const preps = appData.preparation.filter(bowl => bowl[3] === today).length;
-            const returns = appData.archive.filter(bowl => bowl[3] === today).length;
+            const preps = appData.preparation ? appData.preparation.filter(bowl => bowl[3] === today).length : 0;
+            const returns = appData.archive ? appData.archive.filter(bowl => bowl[3] === today).length : 0;
             
             if (appData.mode === 'kitchen') {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returns} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData ? appData.activeData.length : 0} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Preparations Today:</span><span>${appData.myScans.filter(s => s.type === 'kitchen').length} bowls</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preps} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeData ? appData.activeData.length : 0} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Returns Today:</span><span>${appData.myScans.filter(s => s.type === 'return').length} bowls</span></div>
                 `;
             }
