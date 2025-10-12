@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Real-Time Bowl Tracking</title>
+    <title>ProGlove Scanner - Reusable Bowl Tracking</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
         .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
         .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-        .sync-section { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .download-btn { background: #4285f4; color: white; }
@@ -57,6 +56,10 @@
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
         .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+        .upload-zone { border: 2px dashed #666; padding: 30px; text-align: center; border-radius: 8px; background: #333; cursor: pointer; margin-bottom: 10px; }
+        .upload-zone:hover { border-color: #4285f4; }
+        .json-textarea { width: 100%; height: 200px; background: #333; color: white; padding: 10px; border-radius: 5px; border: 1px solid #666; font-size: 12px; font-family: monospace; margin-bottom: 10px; }
+        .results-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #34a853; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
@@ -64,8 +67,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Real-Time Sync</h1>
-            <p>Multi-Device • 5-Minute Backup • Zero Data Loss</p>
+            <h1>🧤 ProGlove Scanner - Reusable Bowl Tracking</h1>
+            <p>Multi-Device • 5-Minute Backup • Reusable Bowl Management</p>
         </div>
         
         <div class="card">
@@ -75,6 +78,32 @@
             </div>
             <div class="backup-status" id="backupStatus">
                 ⏳ Next backup in: 5:00
+            </div>
+        </div>
+
+        <!-- JSON UPLOAD SECTION -->
+        <div class="card admin-section">
+            <h3>📤 UPLOAD BELLA BONA JSON DATA</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ Paste JSON to add historical data to Active sheet</small>
+            </div>
+            
+            <textarea class="json-textarea" id="jsonInput" placeholder="Paste Bella Bona JSON data here..."></textarea>
+            
+            <div class="sync-controls">
+                <button class="sync-btn upload-btn" onclick="processAndAddToActive()" id="processBtn">
+                    📥 PROCESS & ADD TO ACTIVE
+                </button>
+                <button class="sync-btn export-btn" onclick="exportColorCodedCSV()" id="exportBtn">
+                    📊 EXPORT COLOR-CODED CSV
+                </button>
+                <button class="sync-btn download-btn" onclick="exportToCSV()">
+                    📄 EXPORT SCANS CSV
+                </button>
+            </div>
+            
+            <div class="results-info" id="processResults">
+                Ready to process JSON data
             </div>
         </div>
 
@@ -144,7 +173,7 @@
         <div class="card admin-section">
             <h3>🛡️ EMERGENCY BACKUP</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Auto-saves every 5 minutes • Protects against JavaScript updates</small>
+                <small>ℹ️ Auto-saves every 5 minutes</small>
             </div>
             
             <div class="sync-controls">
@@ -160,50 +189,19 @@
             </div>
         </div>
 
-        <!-- ADMIN JSON IMPORT SECTION -->
-        <div class="card admin-section">
-            <h3>🔧 ADMIN: IMPORT ORDER DATA</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ For admin use only - imports company/customer data to bowls</small>
-            </div>
-            
-            <textarea id="jsonInput" placeholder="Paste JSON order data from Bella Bona website here..." 
-                      style="width:100%; height:120px; background:#333; color:white; padding:10px; border-radius:5px; border:1px solid #666; font-size: 12px;"></textarea>
-            
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <button onclick="processBellaBonaJSON()" class="sync-btn upload-btn" style="flex:1;">
-                    📥 IMPORT & ASSIGN DATA
-                </button>
-                <button onclick="clearJSONInput()" class="sync-btn export-btn" style="flex:1;">
-                    🗑️ CLEAR
-                </button>
-            </div>
-            <div id="importResult" style="margin-top:10px; font-size:12px;"></div>
-        </div>
-
-        <!-- DATA EXPORT SECTION -->
+        <!-- DATA INFO SECTION -->
         <div class="card">
-            <h3>💾 DATA EXPORT</h3>
-            <div class="sync-section">
-                <div class="sync-controls">
-                    <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
-                        📤 EXPORT TO CSV
-                    </button>
-                </div>
-                <div class="sync-status" id="syncStatus">
-                    ✅ Data export ready
-                </div>
-                <div class="local-data" id="localDataInfo">
-                    <strong>Current Data:</strong> Loading...
-                </div>
-                <div class="upload-info" id="uploadInfo">
-                    <strong>Last Sync:</strong> Never
-                </div>
+            <h3>💾 DATA INFO</h3>
+            <div class="local-data" id="localDataInfo">
+                <strong>Current Data:</strong> Loading...
+            </div>
+            <div class="upload-info" id="uploadInfo">
+                <strong>Scan History:</strong> No scans yet
             </div>
         </div>
     </div>
 
-    <!-- Firebase Configuration -->
+    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
@@ -227,11 +225,8 @@
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
-                
-                // Load last backup time
                 loadLastBackupTime();
                 
-                // Show success after 2 seconds
                 setTimeout(() => {
                     if (typeof showMessage === 'function') {
                         showMessage('✅ Cloud sync active • 5-min backup enabled', 'success');
@@ -251,12 +246,10 @@
         function setupFirebaseListeners() {
             if (!database) return;
 
-            // Listen for ALL data changes
             const appDataRef = ref(database, 'appData');
             onValue(appDataRef, (snapshot) => {
                 const firebaseAppData = snapshot.val();
                 if (firebaseAppData && window.appData) {
-                    // Sync all data from Firebase
                     window.appData.activeBowls = firebaseAppData.activeBowls || [];
                     window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
                     window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
@@ -268,7 +261,6 @@
                 }
             });
 
-            // Listen for backup time updates
             const backupTimeRef = ref(database, 'lastBackupTime');
             onValue(backupTimeRef, (snapshot) => {
                 lastBackupTime = snapshot.val();
@@ -279,7 +271,6 @@
         function syncToFirebase() {
             if (!database) return;
             try {
-                // Sync ALL app data to Firebase
                 set(ref(database, 'appData'), {
                     activeBowls: window.appData?.activeBowls || [],
                     preparedBowls: window.appData?.preparedBowls || [],
@@ -289,13 +280,12 @@
                     lastSync: new Date().toISOString()
                 });
                 
-                // Update backup time
                 const backupTime = new Date().toISOString();
                 set(ref(database, 'lastBackupTime'), backupTime);
                 lastBackupTime = backupTime;
                 updateBackupDisplay();
                 
-                console.log('✅ Emergency backup completed at:', new Date().toLocaleTimeString());
+                console.log('✅ Emergency backup completed');
                 
             } catch (error) {
                 console.log('Firebase sync failed:', error);
@@ -341,7 +331,6 @@
 
         function updateBackupDisplay() {
             const backupInfo = document.getElementById('backupInfo');
-            const backupStatus = document.getElementById('backupStatus');
             
             if (lastBackupTime) {
                 const backupDate = new Date(lastBackupTime);
@@ -350,7 +339,6 @@
                 backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
             }
             
-            // Update countdown timer
             updateBackupCountdown();
         }
 
@@ -374,7 +362,7 @@
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - REAL-TIME SYNC SYSTEM
+        // ProGlove Scanner - REUSABLE BOWL TRACKING SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -406,9 +394,13 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
+        // JSON Processing Variables
+        window.jsonData = null;
+        window.multiOrderMap = {};
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Real-Time Scanner with 5-Minute Backup...');
+            console.log('Initializing Reusable Bowl Tracking System...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
@@ -434,7 +426,6 @@
             
             window.appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
-                // Note: syncToFirebase is called separately for emergency backup
             }, 30000);
         }
 
@@ -443,19 +434,16 @@
                 clearInterval(window.appData.emergencyBackupTimer);
             }
             
-            // Emergency backup every 5 minutes
             window.appData.emergencyBackupTimer = setInterval(() => {
                 console.log('🔄 EMERGENCY BACKUP: Auto-saving to Firebase...');
                 syncToFirebase();
                 showMessage('✅ Auto-backup completed', 'success');
-            }, 300000); // 5 minutes = 300,000 milliseconds
+            }, 300000);
             
-            // Set next backup time for countdown
             window.nextBackupTime = new Date(Date.now() + 300000);
         }
 
         function startBackupCountdownTimer() {
-            // Update countdown every second
             setInterval(() => {
                 updateBackupCountdown();
             }, 1000);
@@ -473,7 +461,7 @@
                 btn.disabled = false;
                 btn.textContent = "🔥 FORCE BACKUP NOW";
                 showMessage('✅ Emergency backup forced successfully', 'success');
-                window.nextBackupTime = new Date(Date.now() + 300000); // Reset countdown
+                window.nextBackupTime = new Date(Date.now() + 300000);
             }, 2000);
         }
 
@@ -519,98 +507,178 @@
             }
         }
 
-        // JSON Import Functions
-        function processBellaBonaJSON() {
+        // JSON PROCESSING FUNCTIONS
+        function processAndAddToActive() {
             const jsonText = document.getElementById('jsonInput').value.trim();
             if (!jsonText) {
-                showMessage('❌ Please paste JSON data', 'error');
+                showMessage('❌ Please paste JSON data first', 'error');
                 return;
             }
 
             try {
-                const orderData = JSON.parse(jsonText);
-                let enrichedCount = 0;
-                let createdCount = 0;
-                let errors = [];
-
-                const processOrder = (order) => {
-                    const { vytCode, customer, company, dishLetter } = order;
-                    
-                    if (!vytCode) {
-                        errors.push('❌ Missing VYT code in order data');
-                        return;
-                    }
-
-                    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytCode);
-                    if (activeBowlIndex !== -1) {
-                        window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
-                        window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
-                        window.appData.activeBowls[activeBowlIndex].dish = dishLetter || window.appData.activeBowls[activeBowlIndex].dish;
-                        enrichedCount++;
-                    } else {
-                        const today = new Date().toLocaleDateString('en-GB');
-                        const newBowl = {
-                            code: vytCode,
-                            dish: dishLetter || 'X',
-                            user: 'System Import',
-                            company: company || 'Unknown Company',
-                            customer: customer || 'Unknown Customer',
-                            date: today,
-                            time: new Date().toLocaleTimeString(),
-                            timestamp: new Date().toISOString(),
-                            status: 'ACTIVE',
-                            imported: true
-                        };
-                        window.appData.activeBowls.push(newBowl);
-                        window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
-                        createdCount++;
-                    }
-                };
-
-                if (Array.isArray(orderData)) {
-                    orderData.forEach(processOrder);
-                } else if (orderData.orders && Array.isArray(orderData.orders)) {
-                    orderData.orders.forEach(processOrder);
-                } else {
-                    processOrder(orderData);
-                }
-
-                saveToStorage();
-                syncToFirebase();
-                updateDisplay();
-
-                let resultMessage = `✅ Import completed: `;
-                if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
-                if (createdCount > 0) resultMessage += `${createdCount} new bowls created`;
+                const jsonData = JSON.parse(jsonText);
+                window.jsonData = jsonData;
                 
-                showMessage(resultMessage, 'success');
+                const results = processJSONData(jsonData);
+                updateProcessResults(results);
+                showMessage(`✅ Processed ${results.totalBowls} bowls • ${results.addedToActive} added to Active`, 'success');
                 
-                if (errors.length > 0) {
-                    document.getElementById('importResult').innerHTML = 
-                        '<strong>Errors:</strong><br>' + errors.slice(0, 5).join('<br>') + 
-                        (errors.length > 5 ? '<br>...' : '');
-                }
-
             } catch (error) {
                 showMessage('❌ Invalid JSON format: ' + error.message, 'error');
             }
         }
 
-        function clearJSONInput() {
-            document.getElementById('jsonInput').value = '';
-            document.getElementById('importResult').innerHTML = '';
+        function processJSONData(jsonData) {
+            let totalBowls = 0;
+            let addedToActive = 0;
+            let enrichedBowls = 0;
+            
+            // Build multi-order map for color coding
+            buildMultiOrderMap(jsonData);
+            
+            jsonData.forEach(company => {
+                company.boxes.forEach(box => {
+                    box.dishes.forEach(dish => {
+                        dish.bowlCodes.forEach((vytCode, index) => {
+                            totalBowls++;
+                            
+                            // Try to find in Active
+                            const activeBowl = window.appData.activeBowls.find(
+                                bowl => bowl.code === vytCode
+                            );
+                            
+                            if (activeBowl) {
+                                // Enrich existing bowl
+                                activeBowl.company = company.name;
+                                activeBowl.customer = dish.users[index]?.username || 'Unknown';
+                                activeBowl.dish = dish.label;
+                                activeBowl.dishName = dish.name;
+                                enrichedBowls++;
+                            } else {
+                                // CREATE NEW BOWL IN ACTIVE
+                                const newBowl = {
+                                    code: vytCode,
+                                    dish: dish.label,
+                                    user: 'Historical Data',
+                                    company: company.name,
+                                    customer: dish.users[index]?.username || 'Unknown',
+                                    date: extractDateFromJSON(jsonData),
+                                    time: '12:00',
+                                    timestamp: new Date().toISOString(),
+                                    status: 'ACTIVE',
+                                    historical: true,
+                                    dishName: dish.name
+                                };
+                                window.appData.activeBowls.push(newBowl);
+                                addedToActive++;
+                            }
+                        });
+                    });
+                });
+            });
+            
+            saveToStorage();
+            syncToFirebase();
+            updateDisplay();
+            
+            return {
+                totalBowls: totalBowls,
+                addedToActive: addedToActive,
+                enrichedBowls: enrichedBowls
+            };
         }
 
-        // Export to CSV
+        function buildMultiOrderMap(jsonData) {
+            window.multiOrderMap = {};
+            
+            jsonData.forEach(company => {
+                if (!window.multiOrderMap[company.name]) {
+                    window.multiOrderMap[company.name] = {};
+                }
+                
+                company.boxes.forEach(box => {
+                    box.dishes.forEach(dish => {
+                        const dishLetter = dish.label;
+                        if (!window.multiOrderMap[company.name][dishLetter]) {
+                            window.multiOrderMap[company.name][dishLetter] = [];
+                        }
+                        
+                        // Add all customers for this dish letter
+                        dish.users.forEach(user => {
+                            if (user.username && !window.multiOrderMap[company.name][dishLetter].includes(user.username)) {
+                                window.multiOrderMap[company.name][dishLetter].push(user.username);
+                            }
+                        });
+                    });
+                });
+            });
+        }
+
+        function extractDateFromJSON(jsonData) {
+            // Try to extract date from uniqueIdentifier
+            if (jsonData[0]?.boxes[0]?.uniqueIdentifier) {
+                const dateMatch = jsonData[0].boxes[0].uniqueIdentifier.match(/\d{4}-\d{2}-\d{2}/);
+                if (dateMatch) return dateMatch[0];
+            }
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function updateProcessResults(results) {
+            const resultsElement = document.getElementById('processResults');
+            resultsElement.innerHTML = `
+                <strong>📊 Processing Results:</strong><br>
+                <div class="data-row"><span>Total Bowls in JSON:</span><span>${results.totalBowls}</span></div>
+                <div class="data-row"><span>Added to Active Sheet:</span><span>${results.addedToActive}</span></div>
+                <div class="data-row"><span>Enriched Existing Bowls:</span><span>${results.enrichedBowls}</span></div>
+                <div class="data-row"><span>Current Active Bowls:</span><span>${window.appData.activeBowls.length}</span></div>
+            `;
+        }
+
+        // COLOR-CODED CSV EXPORT
+        function exportColorCodedCSV() {
+            if (!window.jsonData) {
+                showMessage('❌ Please process JSON data first', 'error');
+                return;
+            }
+
+            const csvData = [['VYT Code', 'Company', 'Customer', 'Dish Letter', 'Dish Name']];
+            
+            window.jsonData.forEach(company => {
+                company.boxes.forEach(box => {
+                    box.dishes.forEach(dish => {
+                        dish.bowlCodes.forEach((vytCode, index) => {
+                            const customer = dish.users[index]?.username || 'Unknown';
+                            
+                            // Check if multiple customers for this dish letter
+                            const isMultiple = window.multiOrderMap[company.name]?.[dish.label]?.length > 1;
+                            
+                            // Color code the customer name
+                            const coloredCustomer = isMultiple ? 
+                                `🔴 ${customer}` :  // Red for multiple
+                                `🟢 ${customer}`;   // Green for single
+                            
+                            csvData.push([
+                                vytCode || 'NO_CODE',
+                                company.name,
+                                coloredCustomer,
+                                dish.label,
+                                dish.name
+                            ]);
+                        });
+                    });
+                });
+            });
+            
+            downloadCSV(csvData, `color_coded_bowls_${new Date().toISOString().split('T')[0]}.csv`);
+            showMessage('✅ Color-coded CSV exported!', 'success');
+        }
+
+        // REGULAR CSV EXPORT
         function exportToCSV() {
             if (window.appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to export", "info");
                 return;
             }
-            
-            const btn = document.getElementById('exportBtn');
-            btn.disabled = true;
-            btn.textContent = "⏳ EXPORTING...";
             
             const headers = ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp'];
             const csvData = [
@@ -628,6 +696,11 @@
                 ])
             ];
             
+            downloadCSV(csvData, `proglove_scans_${new Date().toISOString().split('T')[0]}.csv`);
+            showMessage("✅ Scans exported to CSV!", "success");
+        }
+
+        function downloadCSV(csvData, filename) {
             const csvContent = csvData.map(row => 
                 row.map(field => `"${field}"`).join(',')
             ).join('\n');
@@ -636,19 +709,14 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `proglove_scans_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
-            showMessage("✅ Scans exported to CSV file!", "success");
-            
-            btn.disabled = false;
-            btn.textContent = "📤 EXPORT TO CSV";
         }
 
-        // User and Mode Management
+        // USER AND MODE MANAGEMENT
         function initializeUsers() {
             const dropdown = document.getElementById('userDropdown');
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
@@ -748,7 +816,7 @@
             updateLastActivity();
         }
 
-        // Scanning Functions
+        // SCANNING FUNCTIONS
         function startScanning() {
             if (!window.appData.user) {
                 showMessage('❌ Please select user first', 'error');
@@ -893,16 +961,8 @@
             
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
-            // Remove from BOTH active bowls AND prepared bowls
+            // Remove from active bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
-            
-            // Remove from prepared bowls for today
-            const preparedBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
-                bowl.code === fullCode && bowl.date === today
-            );
-            if (preparedBowlIndex !== -1) {
-                window.appData.preparedBowls.splice(preparedBowlIndex, 1);
-            }
             
             window.appData.returnedBowls.push({
                 ...activeBowl,
@@ -928,13 +988,13 @@
                 code: fullCode,
                 user: window.appData.user,
                 timestamp: new Date().toISOString(),
-                message: `Returned: ${fullCode}`
+                message: `Returned: ${fullCode} (${activeBowl.company} - ${activeBowl.customer})`
             });
             
             saveToStorage();
             syncToFirebase();
             return { 
-                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
+                message: `✅ Returned: ${fullCode} - ${activeBowl.company} - ${activeBowl.customer}`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -943,7 +1003,6 @@
         function updateDisplay() {
             document.getElementById('userDropdown').disabled = false;
             document.getElementById('dishDropdown').disabled = false;
-            document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0;
             
             let canScan = window.appData.user && !window.appData.scanning;
             if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
@@ -1019,14 +1078,12 @@
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Returns:</span><span>${window.appData.myScans.filter(s => s.type === 'return' && s.user === window.appData.user).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
         }
