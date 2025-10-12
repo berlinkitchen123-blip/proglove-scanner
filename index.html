@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ProGlove Scanner - Reusable Bowl Tracking</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -78,32 +79,6 @@
             </div>
             <div class="backup-status" id="backupStatus">
                 ⏳ Next backup in: 5:00
-            </div>
-        </div>
-
-        <!-- JSON UPLOAD SECTION -->
-        <div class="card admin-section">
-            <h3>📤 UPLOAD BELLA BONA JSON DATA</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Paste JSON to add historical data to Active sheet</small>
-            </div>
-            
-            <textarea class="json-textarea" id="jsonInput" placeholder="Paste Bella Bona JSON data here..."></textarea>
-            
-            <div class="sync-controls">
-                <button class="sync-btn upload-btn" onclick="processAndAddToActive()" id="processBtn">
-                    📥 PROCESS & ADD TO ACTIVE
-                </button>
-                <button class="sync-btn export-btn" onclick="exportColorCodedCSV()" id="exportBtn">
-                    📊 EXPORT COLOR-CODED CSV
-                </button>
-                <button class="sync-btn download-btn" onclick="exportToCSV()">
-                    📄 EXPORT SCANS CSV
-                </button>
-            </div>
-            
-            <div class="results-info" id="processResults">
-                Ready to process JSON data
             </div>
         </div>
 
@@ -197,6 +172,32 @@
             </div>
             <div class="upload-info" id="uploadInfo">
                 <strong>Scan History:</strong> No scans yet
+            </div>
+        </div>
+
+        <!-- JSON UPLOAD SECTION - AT THE BOTTOM -->
+        <div class="card admin-section">
+            <h3>📤 UPLOAD BELLA BONA JSON DATA</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ Paste JSON to add historical data to Active sheet</small>
+            </div>
+            
+            <textarea class="json-textarea" id="jsonInput" placeholder="Paste Bella Bona JSON data here..."></textarea>
+            
+            <div class="sync-controls">
+                <button class="sync-btn upload-btn" onclick="processAndAddToActive()" id="processBtn">
+                    📥 PROCESS & ADD TO ACTIVE
+                </button>
+                <button class="sync-btn export-btn" onclick="exportColorCodedExcel()" id="exportBtn">
+                    📊 EXPORT COLOR-CODED EXCEL
+                </button>
+                <button class="sync-btn download-btn" onclick="exportScansToExcel()">
+                    📄 EXPORT SCANS EXCEL
+                </button>
+            </div>
+            
+            <div class="results-info" id="processResults">
+                Ready to process JSON data
             </div>
         </div>
     </div>
@@ -634,14 +635,17 @@
             `;
         }
 
-        // COLOR-CODED CSV EXPORT
-        function exportColorCodedCSV() {
+        // EXCEL EXPORT FUNCTIONS
+        function exportColorCodedExcel() {
             if (!window.jsonData) {
                 showMessage('❌ Please process JSON data first', 'error');
                 return;
             }
 
-            const csvData = [['VYT Code', 'Company', 'Customer', 'Dish Letter', 'Dish Name']];
+            // Create worksheet data
+            const worksheetData = [
+                ['VYT Code', 'Company', 'Customer', 'Dish Letter', 'Dish Name', 'Order Type']
+            ];
             
             window.jsonData.forEach(company => {
                 company.boxes.forEach(box => {
@@ -651,39 +655,37 @@
                             
                             // Check if multiple customers for this dish letter
                             const isMultiple = window.multiOrderMap[company.name]?.[dish.label]?.length > 1;
+                            const orderType = isMultiple ? 'MULTIPLE' : 'SINGLE';
                             
-                            // Color code the customer name
-                            const coloredCustomer = isMultiple ? 
-                                `🔴 ${customer}` :  // Red for multiple
-                                `🟢 ${customer}`;   // Green for single
-                            
-                            csvData.push([
+                            worksheetData.push([
                                 vytCode || 'NO_CODE',
                                 company.name,
-                                coloredCustomer,
+                                customer,
                                 dish.label,
-                                dish.name
+                                dish.name,
+                                orderType
                             ]);
                         });
                     });
                 });
             });
             
-            downloadCSV(csvData, `color_coded_bowls_${new Date().toISOString().split('T')[0]}.csv`);
-            showMessage('✅ Color-coded CSV exported!', 'success');
+            downloadExcel(worksheetData, `bowl_tracking_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showMessage('✅ Color-coded Excel exported!', 'success');
         }
 
-        // REGULAR CSV EXPORT
-        function exportToCSV() {
+        function exportScansToExcel() {
             if (window.appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to export", "info");
                 return;
             }
             
-            const headers = ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp'];
-            const csvData = [
-                headers,
-                ...window.appData.myScans.map(scan => [
+            const worksheetData = [
+                ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp']
+            ];
+            
+            window.appData.myScans.forEach(scan => {
+                worksheetData.push([
                     scan.type,
                     scan.code,
                     scan.dish || '',
@@ -693,27 +695,23 @@
                     scan.company,
                     scan.customer,
                     scan.timestamp
-                ])
-            ];
+                ]);
+            });
             
-            downloadCSV(csvData, `proglove_scans_${new Date().toISOString().split('T')[0]}.csv`);
-            showMessage("✅ Scans exported to CSV!", "success");
+            downloadExcel(worksheetData, `scans_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showMessage("✅ Scans exported to Excel!", "success");
         }
 
-        function downloadCSV(csvData, filename) {
-            const csvContent = csvData.map(row => 
-                row.map(field => `"${field}"`).join(',')
-            ).join('\n');
+        function downloadExcel(data, filename) {
+            // Create workbook and worksheet
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
             
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // Add worksheet to workbook
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bowl Data');
+            
+            // Generate Excel file and download
+            XLSX.writeFile(workbook, filename);
         }
 
         // USER AND MODE MANAGEMENT
