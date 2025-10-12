@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Secure Single System</title>
+    <title>ProGlove Scanner - Secure System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial; background: #1a1a1a; color: white; padding: 10px; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
         .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         
         .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
@@ -241,6 +241,65 @@
 
         // ⚠️ UPDATE THIS URL AFTER DEPLOYING GOOGLE APPS SCRIPT ⚠️
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYED_SCRIPT_ID/exec';
+
+        // Additional utilities for ProGlove Scanner
+        class ProGloveUtils {
+            static validateVYTCode(code) {
+                const vytRegex = /^(HTTP:\/\/VYT\.TO\/|VYT_)[A-Z0-9]+$/i;
+                return vytRegex.test(code);
+            }
+
+            static generateSessionId() {
+                return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            static formatTime(timestamp) {
+                return new Date(timestamp).toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+
+            static formatDate(timestamp) {
+                return new Date(timestamp).toLocaleDateString('en-GB');
+            }
+
+            static calculateStats(scans, mode) {
+                const today = this.formatDate(new Date());
+                const todayScans = scans.filter(scan => 
+                    this.formatDate(new Date(scan.timestamp)) === today
+                );
+
+                return {
+                    total: scans.length,
+                    today: todayScans.length,
+                    byType: todayScans.reduce((acc, scan) => {
+                        acc[scan.type] = (acc[scan.type] || 0) + 1;
+                        return acc;
+                    }, {}),
+                    byUser: todayScans.reduce((acc, scan) => {
+                        acc[scan.user] = (acc[scan.user] || 0) + 1;
+                        return acc;
+                    }, {})
+                };
+            }
+
+            static exportData(appData) {
+                const exportData = {
+                    timestamp: new Date().toISOString(),
+                    mode: appData.mode,
+                    user: appData.user,
+                    scans: appData.myScans,
+                    stats: this.calculateStats(appData.myScans, appData.mode)
+                };
+
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                
+                return URL.createObjectURL(dataBlob);
+            }
+        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -600,6 +659,15 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
+            // Validate VYT code format
+            if (!ProGloveUtils.validateVYTCode(fullCode)) {
+                return { 
+                    message: "❌ Invalid VYT code format: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
             // FAST LOCAL VALIDATION (no Google Sheets call needed)
             
             // Check if already scanned in this session
@@ -656,6 +724,15 @@
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
+            
+            // Validate VYT code format
+            if (!ProGloveUtils.validateVYTCode(fullCode)) {
+                return { 
+                    message: "❌ Invalid VYT code format: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
+            }
             
             // FAST LOCAL VALIDATION (no Google Sheets call needed)
             
@@ -810,4 +887,3 @@
     </script>
 </body>
 </html>
-
