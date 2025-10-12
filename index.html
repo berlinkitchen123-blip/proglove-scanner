@@ -34,7 +34,7 @@
         .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
         
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .mode-btn { flex: 1; padding: 15px; border: noe; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
         .return-btn { background: #ea4335; color: white; }
         .mode-btn.active { box-shadow: 0 0 0 3px white; }
@@ -239,66 +239,37 @@
             lastSync: null
         };
 
-        // ✅ UPDATED WITH YOUR ACTUAL GOOGLE SCRIPT URL
+        // ✅ YOUR GOOGLE SCRIPT URL
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYQCp_cK5dvNmWVJ7vDsr70l9IrCm27Kn_JLjb_sskSgQzz1-sDvwax9R72OzWJPIf/exec';
 
-        // Additional utilities for ProGlove Scanner
-        class ProGloveUtils {
-            static validateVYTCode(code) {
-                const vytRegex = /^(HTTP:\/\/VYT\.TO\/|VYT_)[A-Z0-9]+$/i;
-                return vytRegex.test(code);
-            }
+        // =============================================
+        // 🔧 USER MANAGEMENT - EXACT NAMES AS SPECIFIED
+        // =============================================
+        
+        // KITCHEN TEAM - ONLY THESE 7 NAMES
+        const KITCHEN_TEAM = [
+            "Hamid",
+            "Richa", 
+            "Marry",
+            "Jash",
+            "Joel",
+            "Rushal",
+            "Shrikant"
+        ];
 
-            static generateSessionId() {
-                return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            }
+        // RETURN TEAM - ONLY THESE 4 NAMES  
+        const RETURN_TEAM = [
+            "Sultan",
+            "Riyaz",
+            "Alan", 
+            "Aadesh"
+        ];
 
-            static formatTime(timestamp) {
-                return new Date(timestamp).toLocaleTimeString('en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-            }
-
-            static formatDate(timestamp) {
-                return new Date(timestamp).toLocaleDateString('en-GB');
-            }
-
-            static calculateStats(scans, mode) {
-                const today = this.formatDate(new Date());
-                const todayScans = scans.filter(scan => 
-                    this.formatDate(new Date(scan.timestamp)) === today
-                );
-
-                return {
-                    total: scans.length,
-                    today: todayScans.length,
-                    byType: todayScans.reduce((acc, scan) => {
-                        acc[scan.type] = (acc[scan.type] || 0) + 1;
-                        return acc;
-                    }, {}),
-                    byUser: todayScans.reduce((acc, scan) => {
-                        acc[scan.user] = (acc[scan.user] || 0) + 1;
-                        return acc;
-                    }, {})
-                };
-            }
-
-            static exportData(appData) {
-                const exportData = {
-                    timestamp: new Date().toISOString(),
-                    mode: appData.mode,
-                    user: appData.user,
-                    scans: appData.myScans,
-                    stats: this.calculateStats(appData.myScans, appData.mode)
-                };
-
-                const dataStr = JSON.stringify(exportData, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
-                
-                return URL.createObjectURL(dataBlob);
-            }
+        // ✅ GET ALL USERS FROM HARDCODED LISTS
+        function getAllUsers() {
+            const kitchenUsers = KITCHEN_TEAM.map(name => ({ name: name, role: "Kitchen" }));
+            const returnUsers = RETURN_TEAM.map(name => ({ name: name, role: "Return" }));
+            return [...kitchenUsers, ...returnUsers];
         }
 
         // Initialize
@@ -347,10 +318,8 @@
             status.textContent = "⏳ Downloading data from Google Sheets...";
             
             try {
-                // Generate unique lock ID
                 const lockId = 'lock_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 
-                // Try to acquire lock and get data
                 const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAllData&lockId=${lockId}`);
                 
                 if (!response.ok) {
@@ -368,7 +337,10 @@
                 appData.preparation = data.preparation || [];
                 appData.archive = data.archive || [];
                 appData.companyData = data.companyData || [];
-                appData.users = data.users || [];
+                
+                // ✅ USE HARDCODED USERS - EXACT NAMES AS SPECIFIED
+                appData.users = getAllUsers();
+                
                 appData.systemLocked = true;
                 appData.lockId = lockId;
                 appData.dataLoaded = true;
@@ -383,9 +355,9 @@
                 
             } catch (error) {
                 console.error('Download error:', error);
-                status.textContent = "❌ " + error.message;
+                status.textContent = "❌ Download failed: " + error.message;
                 status.className = "sync-status error";
-                showMessage("❌ " + error.message, "error");
+                showMessage("❌ Download failed: " + error.message, "error");
             } finally {
                 btn.disabled = false;
                 btn.textContent = "📥 DOWNLOAD & LOCK SYSTEM";
@@ -413,7 +385,6 @@
             status.textContent = `⏳ Uploading ${appData.myScans.length} scans...`;
             
             try {
-                // Prepare scan data for upload
                 const uploadData = {
                     scans: appData.myScans.map(scan => ({
                         type: scan.type,
@@ -429,7 +400,6 @@
                     lockId: appData.lockId
                 };
                 
-                // Send to Google Sheets
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     headers: {
@@ -448,7 +418,6 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Record successful upload
                     appData.uploadHistory.unshift({
                         user: appData.user || "Unknown",
                         timestamp: new Date().toISOString(),
@@ -457,7 +426,6 @@
                         details: result.details
                     });
                     
-                    // Clear scans and release lock
                     appData.myScans = [];
                     appData.systemLocked = false;
                     appData.lockId = null;
@@ -559,7 +527,16 @@
             const dropdown = document.getElementById('userDropdown');
             dropdown.innerHTML = '<option value="">-- Select User --</option>';
             
-            appData.users.forEach(user => {
+            let usersToShow = [];
+            if (appData.mode === 'kitchen') {
+                // ✅ SHOW ONLY KITCHEN TEAM NAMES
+                usersToShow = appData.users.filter(user => user.role === 'Kitchen');
+            } else if (appData.mode === 'return') {
+                // ✅ SHOW ONLY RETURN TEAM NAMES
+                usersToShow = appData.users.filter(user => user.role === 'Return');
+            }
+            
+            usersToShow.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.name;
                 option.textContent = user.name + (user.role ? ` (${user.role})` : '');
@@ -659,18 +636,6 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Validate VYT code format
-            if (!ProGloveUtils.validateVYTCode(fullCode)) {
-                return { 
-                    message: "❌ Invalid VYT code format: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
-            }
-            
-            // FAST LOCAL VALIDATION (no Google Sheets call needed)
-            
-            // Check if already scanned in this session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -679,7 +644,6 @@
                 };
             }
             
-            // Check if already prepared today (from preparation sheet)
             if (appData.preparation.some(bowl => bowl[0].includes(fullCode) && bowl[3] === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
@@ -688,7 +652,6 @@
                 };
             }
             
-            // Check if already in active data (from active sheet)
             if (appData.activeData.some(bowl => bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already in active data: " + fullCode, 
@@ -697,12 +660,10 @@
                 };
             }
             
-            // Get company data from JSON configuration
             const companyInfo = appData.companyData.find(item => item[0].includes(fullCode));
             const company = companyInfo ? companyInfo[1] : "Unknown";
             const customer = companyInfo ? companyInfo[2] : "Unknown";
             
-            // SUCCESS - Add to local scans for upload
             appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
@@ -725,18 +686,6 @@
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
-            // Validate VYT code format
-            if (!ProGloveUtils.validateVYTCode(fullCode)) {
-                return { 
-                    message: "❌ Invalid VYT code format: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
-            }
-            
-            // FAST LOCAL VALIDATION (no Google Sheets call needed)
-            
-            // Check if already scanned in this session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -745,7 +694,6 @@
                 };
             }
             
-            // Check against active data from Google Sheets
             const activeBowl = appData.activeData.find(bowl => bowl[0].includes(fullCode));
             if (!activeBowl) {
                 return { 
@@ -755,7 +703,6 @@
                 };
             }
             
-            // Check if already returned (in archive)
             if (appData.archive.some(bowl => bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already returned: " + fullCode, 
@@ -764,12 +711,10 @@
                 };
             }
             
-            // Get company data
             const companyInfo = appData.companyData.find(item => item[0].includes(fullCode));
             const company = companyInfo ? companyInfo[1] : "Unknown";
             const customer = companyInfo ? companyInfo[2] : "Unknown";
             
-            // SUCCESS - Add to local scans for upload
             appData.myScans.push({
                 type: 'return',
                 code: fullCode,
@@ -887,4 +832,3 @@
     </script>
 </body>
 </html>
-
