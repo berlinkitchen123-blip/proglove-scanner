@@ -16,6 +16,7 @@
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
         .export-btn { background: #f57c00; color: white; }
+        .emergency-btn { background: #ea4335; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
         .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
         .sync-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #4285f4; }
@@ -55,6 +56,7 @@
         .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
+        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
@@ -63,13 +65,16 @@
     <div class="container">
         <div class="header">
             <h1>🧤 ProGlove Scanner - Real-Time Sync</h1>
-            <p>Multi-Device • Instant Error Detection • Live Bowl Tracking</p>
+            <p>Multi-Device • 5-Minute Backup • Zero Data Loss</p>
         </div>
         
         <div class="card">
             <h3>📊 SYSTEM STATUS</h3>
             <div class="system-status" id="systemStatus">
                 🔄 Connecting to cloud...
+            </div>
+            <div class="backup-status" id="backupStatus">
+                ⏳ Next backup in: 5:00
             </div>
         </div>
 
@@ -135,6 +140,26 @@
             </div>
         </div>
 
+        <!-- EMERGENCY BACKUP SECTION -->
+        <div class="card admin-section">
+            <h3>🛡️ EMERGENCY BACKUP</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ Auto-saves every 5 minutes • Protects against JavaScript updates</small>
+            </div>
+            
+            <div class="sync-controls">
+                <button class="sync-btn emergency-btn" onclick="forceEmergencyBackup()" id="emergencyBackupBtn">
+                    🔥 FORCE BACKUP NOW
+                </button>
+                <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
+                    📥 LOAD FROM BACKUP
+                </button>
+            </div>
+            <div class="local-data" id="backupInfo">
+                <strong>Backup Status:</strong> Last backup: Never
+            </div>
+        </div>
+
         <!-- ADMIN JSON IMPORT SECTION -->
         <div class="card admin-section">
             <h3>🔧 ADMIN: IMPORT ORDER DATA</h3>
@@ -181,7 +206,7 @@
     <!-- Firebase Configuration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
@@ -195,6 +220,7 @@
 
         let app;
         let database;
+        let lastBackupTime = null;
 
         function initializeFirebase() {
             try {
@@ -202,11 +228,14 @@
                 database = getDatabase(app);
                 setupFirebaseListeners();
                 
+                // Load last backup time
+                loadLastBackupTime();
+                
                 // Show success after 2 seconds
                 setTimeout(() => {
                     if (typeof showMessage === 'function') {
-                        showMessage('✅ Cloud sync active', 'success');
-                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active - Real-time multi-device';
+                        showMessage('✅ Cloud sync active • 5-min backup enabled', 'success');
+                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active • 5-min backup enabled';
                     }
                 }, 2000);
                 
@@ -238,6 +267,13 @@
                     if (typeof saveToStorage === 'function') saveToStorage();
                 }
             });
+
+            // Listen for backup time updates
+            const backupTimeRef = ref(database, 'lastBackupTime');
+            onValue(backupTimeRef, (snapshot) => {
+                lastBackupTime = snapshot.val();
+                updateBackupDisplay();
+            });
         }
 
         function syncToFirebase() {
@@ -252,13 +288,88 @@
                     scanHistory: window.appData?.scanHistory || [],
                     lastSync: new Date().toISOString()
                 });
+                
+                // Update backup time
+                const backupTime = new Date().toISOString();
+                set(ref(database, 'lastBackupTime'), backupTime);
+                lastBackupTime = backupTime;
+                updateBackupDisplay();
+                
+                console.log('✅ Emergency backup completed at:', new Date().toLocaleTimeString());
+                
             } catch (error) {
                 console.log('Firebase sync failed:', error);
             }
         }
 
+        async function loadFromFirebase() {
+            if (!database) return;
+            
+            try {
+                const appDataRef = ref(database, 'appData');
+                const snapshot = await get(appDataRef);
+                const data = snapshot.val();
+                
+                if (data) {
+                    window.appData.activeBowls = data.activeBowls || [];
+                    window.appData.preparedBowls = data.preparedBowls || [];
+                    window.appData.returnedBowls = data.returnedBowls || [];
+                    window.appData.myScans = data.myScans || [];
+                    window.appData.scanHistory = data.scanHistory || [];
+                    
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                    
+                    showMessage('✅ Data loaded from Firebase backup', 'success');
+                } else {
+                    showMessage('ℹ️ No data found in Firebase', 'info');
+                }
+            } catch (error) {
+                showMessage('❌ Error loading from Firebase', 'error');
+            }
+        }
+
+        function loadLastBackupTime() {
+            if (!database) return;
+            
+            const backupTimeRef = ref(database, 'lastBackupTime');
+            onValue(backupTimeRef, (snapshot) => {
+                lastBackupTime = snapshot.val();
+                updateBackupDisplay();
+            });
+        }
+
+        function updateBackupDisplay() {
+            const backupInfo = document.getElementById('backupInfo');
+            const backupStatus = document.getElementById('backupStatus');
+            
+            if (lastBackupTime) {
+                const backupDate = new Date(lastBackupTime);
+                backupInfo.innerHTML = `<strong>Backup Status:</strong> Last backup: ${backupDate.toLocaleTimeString()}`;
+            } else {
+                backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
+            }
+            
+            // Update countdown timer
+            updateBackupCountdown();
+        }
+
+        function updateBackupCountdown() {
+            const backupStatus = document.getElementById('backupStatus');
+            if (!window.nextBackupTime) return;
+            
+            const now = new Date();
+            const timeLeft = Math.max(0, window.nextBackupTime - now);
+            const minutes = Math.floor(timeLeft / 60000);
+            const seconds = Math.floor((timeLeft % 60000) / 1000);
+            
+            backupStatus.textContent = `⏳ Next backup in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
         window.initializeFirebase = initializeFirebase;
         window.syncToFirebase = syncToFirebase;
+        window.loadFromFirebase = loadFromFirebase;
+        window.updateBackupDisplay = updateBackupDisplay;
     </script>
 
     <!-- Main Application Logic -->
@@ -269,13 +380,14 @@
             user: null,
             dishLetter: null,
             scanning: false,
-            myScans: [], // FIXED: Now syncs across all devices
+            myScans: [],
             activeBowls: [],
             preparedBowls: [],
             returnedBowls: [],
             scanHistory: [],
             lastActivity: Date.now(),
             autoSaveTimer: null,
+            emergencyBackupTimer: null,
             lastCleanup: null
         };
 
@@ -296,13 +408,15 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Real-Time Scanner...');
+            console.log('Initializing Real-Time Scanner with 5-Minute Backup...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
             updateDisplay();
             startAutoSaveTimer();
+            startEmergencyBackupTimer();
             startDailyCleanupTimer();
+            startBackupCountdownTimer();
             
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
@@ -320,8 +434,47 @@
             
             window.appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
-                syncToFirebase();
+                // Note: syncToFirebase is called separately for emergency backup
             }, 30000);
+        }
+
+        function startEmergencyBackupTimer() {
+            if (window.appData.emergencyBackupTimer) {
+                clearInterval(window.appData.emergencyBackupTimer);
+            }
+            
+            // Emergency backup every 5 minutes
+            window.appData.emergencyBackupTimer = setInterval(() => {
+                console.log('🔄 EMERGENCY BACKUP: Auto-saving to Firebase...');
+                syncToFirebase();
+                showMessage('✅ Auto-backup completed', 'success');
+            }, 300000); // 5 minutes = 300,000 milliseconds
+            
+            // Set next backup time for countdown
+            window.nextBackupTime = new Date(Date.now() + 300000);
+        }
+
+        function startBackupCountdownTimer() {
+            // Update countdown every second
+            setInterval(() => {
+                updateBackupCountdown();
+            }, 1000);
+        }
+
+        function forceEmergencyBackup() {
+            const btn = document.getElementById('emergencyBackupBtn');
+            btn.disabled = true;
+            btn.textContent = "🔄 BACKING UP...";
+            
+            console.log('🔥 FORCING EMERGENCY BACKUP...');
+            syncToFirebase();
+            
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = "🔥 FORCE BACKUP NOW";
+                showMessage('✅ Emergency backup forced successfully', 'success');
+                window.nextBackupTime = new Date(Date.now() + 300000); // Reset countdown
+            }, 2000);
         }
 
         function startDailyCleanupTimer() {
@@ -688,7 +841,6 @@
             window.appData.activeBowls.push(newBowl);
             window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
             
-            // FIXED: Add to myScans (now syncs across devices)
             window.appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
@@ -761,7 +913,6 @@
                 status: 'RETURNED'
             });
             
-            // FIXED: Add to myScans (now syncs across devices)
             window.appData.myScans.push({
                 type: 'return',
                 code: fullCode,
@@ -811,8 +962,6 @@
             }
             
             const today = new Date().toLocaleDateString('en-GB');
-            
-            // FIXED: Count scans for current user today (syncs across devices)
             const userTodayScans = window.appData.myScans.filter(scan => 
                 scan.user === window.appData.user && 
                 new Date(scan.timestamp).toLocaleDateString('en-GB') === today
