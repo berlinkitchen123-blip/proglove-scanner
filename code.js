@@ -1,6 +1,6 @@
 // Firebase Configuration and Utilities
 
-// Firebase Configuration - EDIT THIS IF NEEDED IN FUTURE
+// Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
     authDomain: "proglove-scanner.firebaseapp.com",
@@ -51,6 +51,41 @@ class ProGloveUtils {
         const minutes = Math.floor(timeLeft / 60000);
         const seconds = Math.floor((timeLeft % 60000) / 1000);
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    static extractDateFromJSON(jsonData) {
+        if (jsonData[0]?.boxes[0]?.uniqueIdentifier) {
+            const dateMatch = jsonData[0].boxes[0].uniqueIdentifier.match(/\d{4}-\d{2}-\d{2}/);
+            if (dateMatch) return dateMatch[0];
+        }
+        return new Date().toISOString().split('T')[0];
+    }
+
+    static buildMultiOrderMap(jsonData) {
+        const multiOrderMap = {};
+        
+        jsonData.forEach(company => {
+            if (!multiOrderMap[company.name]) {
+                multiOrderMap[company.name] = {};
+            }
+            
+            company.boxes.forEach(box => {
+                box.dishes.forEach(dish => {
+                    const dishLetter = dish.label;
+                    if (!multiOrderMap[company.name][dishLetter]) {
+                        multiOrderMap[company.name][dishLetter] = [];
+                    }
+                    
+                    dish.users.forEach(user => {
+                        if (user.username && !multiOrderMap[company.name][dishLetter].includes(user.username)) {
+                            multiOrderMap[company.name][dishLetter].push(user.username);
+                        }
+                    });
+                });
+            });
+        });
+        
+        return multiOrderMap;
     }
 }
 
