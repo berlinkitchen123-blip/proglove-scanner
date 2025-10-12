@@ -190,6 +190,14 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Initializing Fresh Start Scanner...');
+            
+            // Request persistent storage for Samsung Tab
+            if (navigator.storage && navigator.storage.persist) {
+                navigator.storage.persist().then(persisted => {
+                    console.log('Storage persisted:', persisted);
+                });
+            }
+            
             loadFromStorage();
             initializeUsers();
             updateDisplay();
@@ -197,6 +205,23 @@
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
             document.addEventListener('keydown', updateLastActivity);
+            
+            // Save data when page is about to be unloaded
+            window.addEventListener('beforeunload', saveToStorage);
+            
+            // Handle visibility changes (tab switching)
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    // Save when tab becomes hidden
+                    saveToStorage();
+                } else {
+                    // Reload data when tab becomes visible (in case of sync issues)
+                    setTimeout(() => {
+                        loadFromStorage();
+                        updateDisplay();
+                    }, 100);
+                }
+            });
         });
 
         function updateLastActivity() {
@@ -211,7 +236,41 @@
             appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
                 console.log('Auto-saved data');
-            }, 30000);
+            }, 30000); // Every 30 seconds
+        }
+
+        // Enhanced storage functions for Samsung Tab
+        function saveToStorage() {
+            try {
+                localStorage.setItem('proglove_fresh_data', JSON.stringify(appData));
+                // Also backup to sessionStorage
+                sessionStorage.setItem('proglove_backup_data', JSON.stringify(appData));
+            } catch (error) {
+                console.log('Storage save note:', error.message);
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                // Try localStorage first
+                let saved = localStorage.getItem('proglove_fresh_data');
+                
+                // If no data in localStorage, try sessionStorage backup
+                if (!saved) {
+                    saved = sessionStorage.getItem('proglove_backup_data');
+                    if (saved) {
+                        console.log('Loaded from sessionStorage backup');
+                    }
+                }
+                
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    appData = { ...appData, ...data };
+                    console.log('Data loaded successfully');
+                }
+            } catch (error) {
+                console.log('No previous data found - starting fresh');
+            }
         }
 
         // Export scans to CSV
@@ -519,7 +578,7 @@
             
             const activeBowl = appData.activeBowls[activeBowlIndex];
             
-            // NEW LOGIC: Remove from BOTH active bowls AND prepared bowls
+            // Remove from BOTH active bowls AND prepared bowls
             appData.activeBowls.splice(activeBowlIndex, 1);
             
             // Remove from prepared bowls for today
@@ -672,18 +731,6 @@
             const element = document.getElementById('feedback');
             element.textContent = text;
             element.className = 'feedback ' + type;
-        }
-
-        function saveToStorage() {
-            localStorage.setItem('proglove_fresh_data', JSON.stringify(appData));
-        }
-
-        function loadFromStorage() {
-            const saved = localStorage.getItem('proglove_fresh_data');
-            if (saved) {
-                const data = JSON.parse(saved);
-                appData = { ...appData, ...data };
-            }
         }
     </script>
 </body>
