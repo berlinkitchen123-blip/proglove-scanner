@@ -183,7 +183,8 @@
             {name: "M.Sultan", role: "Return"},
             {name: "Riyaz", role: "Return"},
             {name: "Alan", role: "Return"},
-            {name: "Aadesh", role: "Return"}
+            {name: "Aadesh", role: "Return"},
+            {name: "Kitchen Team", role: "Return"} // ADDED: Kitchen can also return bowls
         ];
 
         // Initialize
@@ -313,7 +314,8 @@
             if (appData.mode === 'kitchen') {
                 usersToShow = USERS.filter(user => user.role === 'Kitchen');
             } else if (appData.mode === 'return') {
-                usersToShow = USERS.filter(user => user.role === 'Return');
+                // Return mode shows both Return users AND Kitchen Team for returns
+                usersToShow = USERS.filter(user => user.role === 'Return' || user.name === "Kitchen Team");
             }
             
             usersToShow.forEach(user => {
@@ -422,7 +424,7 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // NEW LOGIC: Check if bowl is already in active bowls (duplicate kitchen scan)
+            // Check if bowl is already in active bowls (duplicate kitchen scan)
             if (appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
                     message: "❌ Bowl already active: " + fullCode, 
@@ -493,8 +495,9 @@
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
+            const today = new Date().toLocaleDateString('en-GB');
             
-            // NEW LOGIC: Check if bowl exists in active bowls
+            // Check if bowl exists in active bowls
             const activeBowlIndex = appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
             
             if (activeBowlIndex === -1) {
@@ -516,14 +519,22 @@
             
             const activeBowl = appData.activeBowls[activeBowlIndex];
             
-            // Move from active to returned
+            // NEW LOGIC: Remove from BOTH active bowls AND prepared bowls
             appData.activeBowls.splice(activeBowlIndex, 1);
+            
+            // Remove from prepared bowls for today
+            const preparedBowlIndex = appData.preparedBowls.findIndex(bowl => 
+                bowl.code === fullCode && bowl.date === today
+            );
+            if (preparedBowlIndex !== -1) {
+                appData.preparedBowls.splice(preparedBowlIndex, 1);
+            }
             
             // Add to returned bowls
             appData.returnedBowls.push({
                 ...activeBowl,
                 returnedBy: appData.user,
-                returnDate: new Date().toLocaleDateString('en-GB'),
+                returnDate: today,
                 returnTime: new Date().toLocaleTimeString(),
                 returnTimestamp: new Date().toISOString(),
                 status: 'RETURNED'
@@ -551,7 +562,7 @@
             
             saveToStorage();
             return { 
-                message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
+                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
