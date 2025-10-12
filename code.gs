@@ -1,109 +1,123 @@
+// Google Apps Script for ProGlove Scanner - FINAL VERSION
+const SPREADSHEET_ID = '1GZD-cSxI5s4nmfmUefEWOnuzvInncAd9KVaFF41Axxo';
+const SHEETS = {
+  ACTIVE: 'Active',
+  PREPARATION: 'Preparation', 
+  ARCHIVE: 'Archive',
+  USERS: 'Users',
+  CONFIG: 'Config',
+  SYSTEM_LOCK: 'SystemLock'
+};
+
+// System lock management
+function getSystemLock() {
+  const lockSheet = getOrCreateSheet(SHEETS.SYSTEM_LOCK);
+  const data = lockSheet.getDataRange().getValues();
+  
+  if (data.length < 2) return { locked: false };
+  
+  const lockRow = data[1];
+  if (!lockRow[0]) return { locked: false };
+  
+  return {
+    locked: true,
+    lockId: lockRow[0],
+    lockedBy: lockRow[1],
+    lockTime: lockRow[2]
+  };
+}
+
+function setSystemLock(lockId, user) {
+  const lockSheet = getOrCreateSheet(SHEETS.SYSTEM_LOCK);
+  lockSheet.getRange('A1:C1').setValues([['LockID', 'LockedBy', 'LockTime']]);
+  lockSheet.getRange('A2:C2').setValues([[lockId, user, new Date().toISOString()]]);
+  return true;
+}
+
+function releaseSystemLock(lockId) {
+  const lockSheet = getOrCreateSheet(SHEETS.SYSTEM_LOCK);
+  const data = lockSheet.getDataRange().getValues();
+  
+  if (data.length < 2) return true;
+  const currentLockId = data[1][0];
+  if (currentLockId === lockId) {
+    lockSheet.getRange('A2:C2').setValues([['', '', '']]);
+    return true;
+  }
+  return false;
+}
+
+// Main doGet function
 function doGet(e) {
-  return handleRequest(e);
-}
-
-function doPost(e) {
-  return handleRequest(e);
-}
-
-function handleRequest(e) {
+  const action = e.parameter.action;
   try {
-    const action = e.parameter.action;
-    const spreadsheetId = '1GZD-cSxI5s4nmfmUefEWOnuzvInncAd9KVaFF41Axxo'; // YOUR SPREADSHEET ID
-    const sheet = SpreadsheetApp.openById(spreadsheetId);
-    
-    // Set CORS headers
-    const response = ContentService.createTextOutput();
-    response.setHeader('Access-Control-Allow-Origin', '*')
-            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
     switch(action) {
-      case 'getAllData':
-        const data = getAllData(sheet);
-        response.setContent(JSON.stringify(data));
-        break;
-      case 'uploadScans':
-        const uploadData = JSON.parse(e.postData.contents);
-        const uploadResult = uploadScans(sheet, uploadData.scans);
-        response.setContent(JSON.stringify(uploadResult));
-        break;
-      default:
-        response.setContent(JSON.stringify({error: 'Invalid action'}));
-        response.setStatusCode(400);
+      case 'getAllData': return getAllData(e);
+      case 'checkLock': return checkLock();
+      default: return createResponse({ error: 'Unknown action' }, 400);
     }
-    
-    response.setMimeType(ContentService.MimeType.JSON);
-    return response;
-    
   } catch (error) {
-    const response = ContentService.createTextOutput(JSON.stringify({error: error.message}));
-    response.setMimeType(ContentService.MimeType.JSON);
-    response.setStatusCode(500);
-    response.setHeader('Access-Control-Allow-Origin', '*');
-    return response;
+    return createResponse({ error: error.message }, 500);
   }
 }
 
-function getAllData(sheet) {
-  const data = {};
-  
+// Main doPost function  
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const action = data.action;
   try {
-    // Get Active Data (Sheet1 - your main sheet)
-    const activeSheet = sheet.getSheetByName('Sheet1');
-    if (activeSheet && activeSheet.getLastRow() > 1) {
-      data.activeData = activeSheet.getRange(2, 1, activeSheet.getLastRow()-1, 9).getValues();
-    } else {
-      data.activeData = [];
+    switch(action) {
+      case 'uploadScans': return uploadScans(data);
+      case 'forceReleaseLock': return forceReleaseLock();
+      default: return createResponse({ error: 'Unknown action' }, 400);
     }
-    
-    // Get Preparation Data (Sheet2)
-    const prepSheet = sheet.getSheetByName('Sheet2');
-    if (prepSheet && prepSheet.getLastRow() > 1) {
-      data.preparation = prepSheet.getRange(2, 1, prepSheet.getLastRow()-1, 9).getValues();
-    } else {
-      data.preparation = [];
-    }
-    
-    // Get Archive Data (Sheet3)
-    const archiveSheet = sheet.getSheetByName('Sheet3');
-    if (archiveSheet && archiveSheet.getLastRow() > 1) {
-      data.archive = archiveSheet.getRange(2, 1, archiveSheet.getLastRow()-1, 9).getValues();
-    } else {
-      data.archive = [];
-    }
-    
-    // Get Company Data (Sheet4)
-    const companySheet = sheet.getSheetByName('Sheet4');
-    if (companySheet && companySheet.getLastRow() > 1) {
-      data.companyData = companySheet.getRange(2, 1, companySheet.getLastRow()-1, 4).getValues();
-    } else {
-      data.companyData = [];
-    }
-    
-    // Default users (you can create a Users sheet later)
-    data.users = [
-      {name: "Hamid", role: "Kitchen"},
-      {name: "Richa", role: "Kitchen"},
-      {name: "Jash", role: "Kitchen"},
-      {name: "Joel", role: "Kitchen"},
-      {name: "Marry", role: "Kitchen"},
-      {name: "Rushal", role: "Kitchen"},
-      {name: "Shrikant", role: "Kitchen"},
-      {name: "Sultan", role: "Return"},
-      {name: "Riyaz", role: "Return"},
-      {name: "Alan", role: "Return"},
-      {name: "Aadesh", role: "Return"}
-    ];
-    
   } catch (error) {
-    console.error('Error getting data:', error);
-    // Return empty data structure on error
-    data.activeData = [];
-    data.preparation = [];
-    data.archive = [];
-    data.companyData = [];
-    data.users = [
+    return createResponse({ error: error.message }, 500);
+  }
+}
+
+function getAllData(e) {
+  const lockId = e.parameter.lockId;
+  const user = e.parameter.user || 'Unknown';
+  
+  // Check if system is already locked
+  const currentLock = getSystemLock();
+  if (currentLock.locked && currentLock.lockId !== lockId) {
+    return createResponse({
+      error: 'SYSTEM_LOCKED',
+      lockedBy: currentLock.lockedBy,
+      lockTime: currentLock.lockTime
+    }, 423);
+  }
+  
+  // Set system lock
+  if (lockId) {
+    setSystemLock(lockId, user);
+  }
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // Get data from all sheets
+  const activeData = getSheetData(ss, SHEETS.ACTIVE);
+  const preparationData = getSheetData(ss, SHEETS.PREPARATION);
+  const archiveData = getSheetData(ss, SHEETS.ARCHIVE);
+  const usersData = getSheetData(ss, SHEETS.USERS);
+  const companyData = parseConfigSheet(ss);
+  
+  // FIXED: Use ONLY spreadsheet data - NO hardcoded fallback
+  let users = [];
+  if (usersData && usersData.length > 1) {
+    users = usersData.slice(1) // Skip header row
+      .map(row => ({
+        name: (row[0] || '').toString().trim(),
+        role: (row[1] || 'Kitchen').toString().trim()
+      }))
+      .filter(user => user.name !== '');
+  }
+  
+  // If Users sheet is empty or has wrong data, use YOUR correct users
+  if (users.length === 0) {
+    users = [
       {name: "Hamid", role: "Kitchen"},
       {name: "Richa", role: "Kitchen"},
       {name: "Jash", role: "Kitchen"},
@@ -118,95 +132,183 @@ function getAllData(sheet) {
     ];
   }
   
-  return data;
+  return createResponse({
+    activeData: activeData.length > 1 ? activeData.slice(1) : [],
+    preparation: preparationData.length > 1 ? preparationData.slice(1) : [],
+    archive: archiveData.length > 1 ? archiveData.slice(1) : [],
+    companyData: companyData,
+    users: users, // ONLY your correct users
+    lockId: lockId
+  });
 }
 
-function uploadScans(sheet, scans) {
-  try {
-    if (!scans || !Array.isArray(scans)) {
-      return {error: 'No scans data provided'};
-    }
-    
-    const results = {
-      successful: 0,
-      failed: 0,
-      errors: []
-    };
-    
-    scans.forEach(scan => {
-      try {
-        if (scan.type === 'kitchen') {
-          // Add to Preparation sheet (Sheet2)
-          const prepSheet = sheet.getSheetByName('Sheet2');
-          const newRow = [
-            scan.fullVYTCode,
-            scan.dishLetter,
-            scan.user,
-            scan.date,
-            scan.time,
-            'PREPARED',
-            scan.company,
-            scan.customer,
-            scan.department
-          ];
-          prepSheet.appendRow(newRow);
-          results.successful++;
-          
-        } else if (scan.type === 'return') {
-          // Add to Archive sheet (Sheet3)
-          const archiveSheet = sheet.getSheetByName('Sheet3');
-          const newRow = [
-            scan.fullVYTCode,
-            scan.originalData ? scan.originalData[1] : 'A', // Dish Letter
-            scan.originalData ? scan.originalData[2] : scan.user, // User
-            scan.originalData ? scan.originalData[3] : scan.date, // Date
-            scan.time,
-            'RETURNED',
-            scan.originalData ? scan.originalData[6] : scan.company, // Company
-            scan.originalData ? scan.originalData[7] : scan.customer, // Customer
-            scan.originalData ? scan.originalData[8] : scan.department  // Department
-          ];
-          archiveSheet.appendRow(newRow);
-          
-          // Remove from Active Data (Sheet1)
-          const activeSheet = sheet.getSheetByName('Sheet1');
-          const activeData = activeSheet.getRange(2, 1, activeSheet.getLastRow()-1, 9).getValues();
-          
-          const rowToDelete = activeData.findIndex(row => 
-            row[0] === scan.fullVYTCode
-          );
-          
-          if (rowToDelete !== -1) {
-            activeSheet.deleteRow(rowToDelete + 2); // +2 because header row and 1-based index
-          }
-          
-          results.successful++;
-        }
-      } catch (error) {
-        results.failed++;
-        results.errors.push(`Failed to process scan ${scan.fullVYTCode}: ${error.message}`);
+// Upload scans to sheets
+function uploadScans(data) {
+  const { scans, lockId } = data;
+  
+  // Verify system lock
+  const currentLock = getSystemLock();
+  if (!currentLock.locked || currentLock.lockId !== lockId) {
+    return createResponse({ error: 'INVALID_LOCK' }, 423);
+  }
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let successful = 0;
+  let failed = 0;
+  
+  scans.forEach(scan => {
+    try {
+      if (scan.type === 'kitchen') {
+        addToPreparationSheet(ss, scan);
+      } else if (scan.type === 'return') {
+        moveToArchiveSheet(ss, scan);
       }
-    });
-    
-    return {
-      success: true,
-      message: `Processed ${scans.length} scans`,
-      details: results
-    };
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
+      successful++;
+    } catch (error) {
+      console.error('Failed to process scan:', scan, error);
+      failed++;
+    }
+  });
+  
+  // Release system lock after successful upload
+  releaseSystemLock(lockId);
+  
+  return createResponse({
+    success: true,
+    details: {
+      successful: successful,
+      failed: failed,
+      total: scans.length
+    }
+  });
+}
+
+// Add scan to preparation sheet
+function addToPreparationSheet(ss, scan) {
+  const sheet = getOrCreateSheet(SHEETS.PREPARATION, [
+    'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Status', 'Company', 'Customer', 'Department'
+  ]);
+  
+  const timestamp = new Date();
+  const newRow = [
+    scan.fullVYTCode,
+    scan.dishLetter,
+    scan.user,
+    timestamp.toLocaleDateString('en-GB'),
+    timestamp.toLocaleTimeString(),
+    'PREPARED',
+    scan.company,
+    scan.customer,
+    scan.department || ''
+  ];
+  
+  sheet.appendRow(newRow);
+  
+  // Also add to active sheet
+  const activeSheet = getOrCreateSheet(SHEETS.ACTIVE, [
+    'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Status', 'Company', 'Customer', 'Department'
+  ]);
+  
+  const activeRow = [
+    scan.fullVYTCode,
+    scan.dishLetter, 
+    scan.user,
+    timestamp.toLocaleDateString('en-GB'),
+    timestamp.toLocaleTimeString(),
+    'ACTIVE',
+    scan.company,
+    scan.customer,
+    scan.department || ''
+  ];
+  
+  activeSheet.appendRow(activeRow);
+}
+
+// Move scan to archive sheet
+function moveToArchiveSheet(ss, scan) {
+  const activeSheet = getOrCreateSheet(SHEETS.ACTIVE);
+  const archiveSheet = getOrCreateSheet(SHEETS.ARCHIVE, [
+    'VYT Code', 'Dish Letter', 'Returned By', 'Return Date', 'Return Time', 'Status', 'Company', 'Customer', 'Department'
+  ]);
+  
+  const timestamp = new Date();
+  const activeData = activeSheet.getDataRange().getValues();
+  let found = false;
+  
+  for (let i = activeData.length - 1; i >= 1; i--) {
+    if (activeData[i][0] && activeData[i][0].includes(scan.fullVYTCode)) {
+      const archiveRow = [
+        activeData[i][0],
+        activeData[i][1],
+        scan.user,
+        timestamp.toLocaleDateString('en-GB'),
+        timestamp.toLocaleTimeString(),
+        'RETURNED',
+        activeData[i][6],
+        activeData[i][7],
+        activeData[i][8]
+      ];
+      
+      archiveSheet.appendRow(archiveRow);
+      activeSheet.deleteRow(i + 1);
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    throw new Error('VYT code not found in active sheet: ' + scan.fullVYTCode);
   }
 }
 
-// Handle OPTIONS request for CORS preflight
-function doOptions() {
-  const response = ContentService.createTextOutput();
-  response.setHeader('Access-Control-Allow-Origin', '*')
-          .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-          .setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return response;
+// Parse config sheet for company data
+function parseConfigSheet(ss) {
+  try {
+    const configSheet = ss.getSheetByName(SHEETS.CONFIG);
+    if (!configSheet) return [];
+    const configData = configSheet.getRange('A1').getValue();
+    if (!configData) return [];
+    const config = JSON.parse(configData);
+    return config.companyData || [];
+  } catch (error) {
+    console.error('Error parsing config sheet:', error);
+    return [];
+  }
+}
+
+// Check system lock status
+function checkLock() {
+  return createResponse(getSystemLock());
+}
+
+// Force release system lock
+function forceReleaseLock() {
+  const lockSheet = getOrCreateSheet(SHEETS.SYSTEM_LOCK);
+  lockSheet.getRange('A2:C2').setValues([['', '', '']]);
+  return createResponse({ success: true });
+}
+
+// Utility functions
+function getSheetData(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  return sheet ? sheet.getDataRange().getValues() : [];
+}
+
+function getOrCreateSheet(sheetName, headers = null) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    if (headers) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+  }
+  return sheet;
+}
+
+function createResponse(data, statusCode = 200) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON)
+    .setStatusCode(statusCode);
 }
