@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Fast Local System</title>
+    <title>ProGlove Scanner - Fresh Start System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -61,14 +61,14 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Fast Local System</h1>
-            <p>Local Data Storage • Real-time Error Detection • Export to CSV</p>
+            <h1>🧤 ProGlove Scanner - Fresh Start</h1>
+            <p>Start from Zero • Real Bowls Only • Auto Active State</p>
         </div>
         
         <div class="card">
             <h3>📊 SYSTEM STATUS</h3>
             <div class="system-status" id="systemStatus">
-                ✅ Ready to scan - All data stored locally
+                ✅ Ready to scan - Start fresh with real bowls
             </div>
         </div>
 
@@ -76,21 +76,18 @@
             <h3>💾 DATA MANAGEMENT</h3>
             <div class="sync-section">
                 <div class="sync-controls">
-                    <button class="sync-btn download-btn" onclick="loadSampleData()" id="downloadBtn">
-                        📥 LOAD SAMPLE DATA
-                    </button>
                     <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
                         📤 EXPORT TO CSV
                     </button>
                     <button class="sync-btn upload-btn" onclick="clearAllData()" id="clearBtn">
-                        🗑️ CLEAR DATA
+                        🗑️ CLEAR ALL DATA
                     </button>
                 </div>
                 <div class="sync-status" id="syncStatus">
-                    ✅ All data stored locally - Fast and reliable
+                    ✅ Fresh system - All bowls are real scans
                 </div>
                 <div class="local-data" id="localDataInfo">
-                    <strong>Local Data:</strong> Loading...
+                    <strong>Current Data:</strong> Loading...
                 </div>
                 <div class="upload-info" id="uploadInfo">
                     <strong>Scan History:</strong> No scans yet
@@ -121,9 +118,9 @@
         </div>
         
         <div class="card hidden" id="crossTeamDataSection">
-            <h3>📊 TODAY'S STATISTICS</h3>
+            <h3>📊 LIVE BOWL STATUS</h3>
             <div class="cross-team-data" id="crossTeamData">
-                Loading statistics...
+                No active bowls yet
             </div>
         </div>
         
@@ -162,37 +159,19 @@
     </div>
 
     <script>
-        // ProGlove Scanner - FAST LOCAL SYSTEM
+        // ProGlove Scanner - FRESH START SYSTEM
         let appData = {
             mode: null,
             user: null,
             dishLetter: null,
             scanning: false,
-            dataLoaded: true, // Always loaded since we're local
             myScans: [],
+            activeBowls: [], // Bowls currently in circulation
+            preparedBowls: [], // Bowls prepared today
+            returnedBowls: [], // Bowls returned today
             scanHistory: [],
             lastActivity: Date.now(),
             autoSaveTimer: null
-        };
-
-        // Sample data - you can modify this as needed
-        const SAMPLE_DATA = {
-            activeData: [
-                ['VYT_12345', 'A', 'Hamid', '01/01/2024', '10:00', 'ACTIVE', 'Company A', 'Customer X'],
-                ['VYT_12346', 'B', 'Richa', '01/01/2024', '10:05', 'ACTIVE', 'Company B', 'Customer Y']
-            ],
-            preparation: [
-                ['VYT_12347', 'C', 'Mary', '01/01/2024', '09:30', 'PREPARED', 'Company C', 'Customer Z']
-            ],
-            archive: [
-                ['VYT_12348', 'D', 'Sultan', '01/01/2024', '08:45', 'RETURNED', 'Company D', 'Customer W']
-            ],
-            companyData: [
-                ['VYT_12345', 'Company A', 'Customer X'],
-                ['VYT_12346', 'Company B', 'Customer Y'],
-                ['VYT_12347', 'Company C', 'Customer Z'],
-                ['VYT_12348', 'Company D', 'Customer W']
-            ]
         };
 
         const USERS = [
@@ -211,7 +190,7 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Fast Local Scanner...');
+            console.log('Initializing Fresh Start Scanner...');
             loadFromStorage();
             initializeUsers();
             updateDisplay();
@@ -233,33 +212,7 @@
             appData.autoSaveTimer = setInterval(() => {
                 saveToStorage();
                 console.log('Auto-saved data');
-            }, 30000); // Auto-save every 30 seconds
-        }
-
-        // Load sample data for testing
-        function loadSampleData() {
-            const btn = document.getElementById('downloadBtn');
-            const status = document.getElementById('syncStatus');
-            
-            btn.disabled = true;
-            btn.textContent = "⏳ LOADING...";
-            status.textContent = "⏳ Loading sample data...";
-            
-            setTimeout(() => {
-                // Store sample data
-                localStorage.setItem('sample_active_data', JSON.stringify(SAMPLE_DATA.activeData));
-                localStorage.setItem('sample_preparation_data', JSON.stringify(SAMPLE_DATA.preparation));
-                localStorage.setItem('sample_archive_data', JSON.stringify(SAMPLE_DATA.archive));
-                localStorage.setItem('sample_company_data', JSON.stringify(SAMPLE_DATA.companyData));
-                
-                status.textContent = "✅ Sample data loaded successfully!";
-                status.className = "sync-status success";
-                showMessage("✅ Sample data loaded! You can now test scanning.", "success");
-                
-                btn.disabled = false;
-                btn.textContent = "📥 LOAD SAMPLE DATA";
-                updateDisplay();
-            }, 1000);
+            }, 30000);
         }
 
         // Export scans to CSV
@@ -312,11 +265,14 @@
         }
 
         function clearAllData() {
-            if (confirm('Are you sure you want to clear all scan data? This cannot be undone.')) {
+            if (confirm('Are you sure you want to clear ALL data? This will remove all bowls and scans permanently.')) {
                 appData.myScans = [];
+                appData.activeBowls = [];
+                appData.preparedBowls = [];
+                appData.returnedBowls = [];
                 appData.scanHistory = [];
                 saveToStorage();
-                showMessage("✅ All scan data cleared!", "success");
+                showMessage("✅ All data cleared! Starting fresh.", "success");
                 updateDisplay();
             }
         }
@@ -471,10 +427,6 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Load sample data for validation
-            const samplePrep = JSON.parse(localStorage.getItem('sample_preparation_data') || '[]');
-            const sampleActive = JSON.parse(localStorage.getItem('sample_active_data') || '[]');
-            
             // Check for duplicates in current session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
@@ -484,8 +436,8 @@
                 };
             }
             
-            // Check if already prepared today (from sample data)
-            if (samplePrep.some(bowl => bowl[0] && bowl[0].includes(fullCode) && bowl[3] === today)) {
+            // Check if already prepared today
+            if (appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
                     type: "error",
@@ -493,28 +445,45 @@
                 };
             }
             
-            // Check if already in active data (from sample data)
-            if (sampleActive.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
+            // Check if already in active bowls
+            if (appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
-                    message: "❌ Already in active data: " + fullCode, 
+                    message: "❌ Already in active bowls: " + fullCode, 
                     type: "error",
                     responseTime: Date.now() - startTime
                 };
             }
             
-            // Get company data from sample data
-            const sampleCompany = JSON.parse(localStorage.getItem('sample_company_data') || '[]');
-            const companyInfo = sampleCompany.find(item => item[0] && item[0].includes(fullCode));
-            const company = companyInfo ? companyInfo[1] : "Unknown";
-            const customer = companyInfo ? companyInfo[2] : "Unknown";
+            // Create new bowl - automatically becomes ACTIVE
+            const newBowl = {
+                code: fullCode,
+                dish: appData.dishLetter,
+                user: appData.user,
+                company: "Unknown", // You can modify this later
+                customer: "Unknown", // You can modify this later
+                date: today,
+                time: new Date().toLocaleTimeString(),
+                timestamp: new Date().toISOString(),
+                status: 'ACTIVE'
+            };
             
+            // Add to active bowls
+            appData.activeBowls.push(newBowl);
+            
+            // Add to prepared bowls for today
+            appData.preparedBowls.push({
+                ...newBowl,
+                status: 'PREPARED'
+            });
+            
+            // Add to my scans
             appData.myScans.push({
                 type: 'kitchen',
                 code: fullCode,
                 dish: appData.dishLetter,
                 user: appData.user,
-                company: company,
-                customer: customer,
+                company: "Unknown",
+                customer: "Unknown",
                 timestamp: new Date().toISOString()
             });
             
@@ -529,7 +498,7 @@
             
             saveToStorage();
             return { 
-                message: `✅ ${appData.dishLetter} Prepared: ${fullCode} (${company})`, 
+                message: `✅ ${appData.dishLetter} Prepared: ${fullCode} - Now ACTIVE for returns`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -539,50 +508,47 @@
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
-            // Load sample data for validation
-            const sampleActive = JSON.parse(localStorage.getItem('sample_active_data') || '[]');
-            const sampleArchive = JSON.parse(localStorage.getItem('sample_archive_data') || '[]');
-            
             // Check for duplicates in current session
-            if (appData.myScans.some(scan => scan.code === fullCode)) {
+            if (appData.myScans.some(scan => scan.code === fullCode && scan.type === 'return')) {
                 return { 
-                    message: "❌ Already scanned in this session: " + fullCode, 
+                    message: "❌ Already returned in this session: " + fullCode, 
                     type: "error",
                     responseTime: Date.now() - startTime
                 };
             }
             
-            // Check against active data
-            const activeBowl = sampleActive.find(bowl => bowl[0] && bowl[0].includes(fullCode));
-            if (!activeBowl) {
+            // Check if bowl exists in active bowls
+            const activeBowlIndex = appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+            if (activeBowlIndex === -1) {
                 return { 
-                    message: "❌ Not in active data: " + fullCode, 
+                    message: "❌ Bowl not found in active bowls: " + fullCode, 
                     type: "error",
                     responseTime: Date.now() - startTime
                 };
             }
             
-            // Check if already returned
-            if (sampleArchive.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
-                return { 
-                    message: "❌ Already returned: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
-            }
+            const activeBowl = appData.activeBowls[activeBowlIndex];
             
-            // Get company data
-            const sampleCompany = JSON.parse(localStorage.getItem('sample_company_data') || '[]');
-            const companyInfo = sampleCompany.find(item => item[0] && item[0].includes(fullCode));
-            const company = companyInfo ? companyInfo[1] : "Unknown";
-            const customer = companyInfo ? companyInfo[2] : "Unknown";
+            // Move from active to returned
+            appData.activeBowls.splice(activeBowlIndex, 1);
             
+            // Add to returned bowls
+            appData.returnedBowls.push({
+                ...activeBowl,
+                returnedBy: appData.user,
+                returnDate: new Date().toLocaleDateString('en-GB'),
+                returnTime: new Date().toLocaleTimeString(),
+                returnTimestamp: new Date().toISOString(),
+                status: 'RETURNED'
+            });
+            
+            // Add to my scans
             appData.myScans.push({
                 type: 'return',
                 code: fullCode,
                 user: appData.user,
-                company: company,
-                customer: customer,
+                company: activeBowl.company,
+                customer: activeBowl.customer,
                 timestamp: new Date().toISOString(),
                 originalData: activeBowl
             });
@@ -598,7 +564,7 @@
             
             saveToStorage();
             return { 
-                message: `✅ Returned: ${fullCode} (${company})`, 
+                message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -625,19 +591,21 @@
                 input.disabled = !appData.scanning;
             }
             
-            // Load sample data for stats
-            const sampleActive = JSON.parse(localStorage.getItem('sample_active_data') || '[]');
-            const samplePrep = JSON.parse(localStorage.getItem('sample_preparation_data') || '[]');
+            // Update statistics
+            const today = new Date().toLocaleDateString('en-GB');
+            const preparedToday = appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            const returnedToday = appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
             
-            document.getElementById('activeCount').textContent = sampleActive.length;
-            document.getElementById('prepCount').textContent = samplePrep.length;
+            document.getElementById('activeCount').textContent = appData.activeBowls.length;
+            document.getElementById('prepCount').textContent = preparedToday;
             document.getElementById('myScansCount').textContent = appData.myScans.length;
             
             document.getElementById('localDataInfo').innerHTML = `
-                <strong>Local Data:</strong> 
-                ${sampleActive.length} active bowls • 
-                ${samplePrep.length} prepared today • 
-                ${appData.myScans.length} scans ready to export
+                <strong>Current Data:</strong> 
+                ${appData.activeBowls.length} active bowls • 
+                ${preparedToday} prepared today • 
+                ${returnedToday} returned today •
+                ${appData.myScans.length} total scans
             `;
             
             const uploadInfo = document.getElementById('uploadInfo');
@@ -663,24 +631,22 @@
             const element = document.getElementById('crossTeamData');
             const today = new Date().toLocaleDateString('en-GB');
             
-            const samplePrep = JSON.parse(localStorage.getItem('sample_preparation_data') || '[]');
-            const sampleArchive = JSON.parse(localStorage.getItem('sample_archive_data') || '[]');
-            const sampleActive = JSON.parse(localStorage.getItem('sample_active_data') || '[]');
-            
-            const preps = samplePrep.filter(bowl => bowl[3] === today).length;
-            const returns = sampleArchive.filter(bowl => bowl[3] === today).length;
+            const preparedToday = appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            const returnedToday = appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
             
             if (appData.mode === 'kitchen') {
                 element.innerHTML = `
-                    <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returns} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${sampleActive.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Preparations:</span><span>${appData.myScans.filter(s => s.type === 'kitchen').length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
-                    <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preps} bowls</span></div>
-                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${sampleActive.length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
+                    <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Returns:</span><span>${appData.myScans.filter(s => s.type === 'return').length} bowls</span></div>
+                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
         }
@@ -692,11 +658,11 @@
         }
 
         function saveToStorage() {
-            localStorage.setItem('proglove_app_data', JSON.stringify(appData));
+            localStorage.setItem('proglove_fresh_data', JSON.stringify(appData));
         }
 
         function loadFromStorage() {
-            const saved = localStorage.getItem('proglove_app_data');
+            const saved = localStorage.getItem('proglove_fresh_data');
             if (saved) {
                 const data = JSON.parse(saved);
                 appData = { ...appData, ...data };
