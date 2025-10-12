@@ -30,24 +30,18 @@ class ProGloveUtils {
         return new Date(timestamp).toLocaleDateString('en-GB');
     }
 
-    static calculateStats(scans, mode) {
+    static calculateUserStats(scans, user, dishLetter) {
         const today = this.formatDate(new Date());
-        const todayScans = scans.filter(scan => 
+        const userScans = scans.filter(scan => 
+            scan.user === user && 
             this.formatDate(new Date(scan.timestamp)) === today
         );
-
-        return {
-            total: scans.length,
-            today: todayScans.length,
-            byType: todayScans.reduce((acc, scan) => {
-                acc[scan.type] = (acc[scan.type] || 0) + 1;
-                return acc;
-            }, {}),
-            byUser: todayScans.reduce((acc, scan) => {
-                acc[scan.user] = (acc[scan.user] || 0) + 1;
-                return acc;
-            }, {})
-        };
+        
+        if (dishLetter) {
+            return userScans.filter(scan => scan.dish === dishLetter).length;
+        }
+        
+        return userScans.length;
     }
 }
 
@@ -71,4 +65,4 @@ class ValidationError extends ProGloveError {
 window.ProGloveUtils = ProGloveUtils;
 window.ProGloveError = ProGloveError;
 window.ValidationError = ValidationError;
-window.firebaseConfig = firebaseConfig; // So you can check it easily
+window.firebaseConfig = firebaseConfig;
