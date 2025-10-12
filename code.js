@@ -43,6 +43,15 @@ class ProGloveUtils {
         
         return userScans.length;
     }
+
+    static getTimeUntilNextBackup() {
+        if (!window.nextBackupTime) return '5:00';
+        const now = new Date();
+        const timeLeft = Math.max(0, window.nextBackupTime - now);
+        const minutes = Math.floor(timeLeft / 60000);
+        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
 }
 
 // Error handling
@@ -61,8 +70,15 @@ class ValidationError extends ProGloveError {
     }
 }
 
+class BackupError extends ProGloveError {
+    constructor(message) {
+        super(message, 'BACKUP_ERROR', 500);
+    }
+}
+
 // Make utilities globally available
 window.ProGloveUtils = ProGloveUtils;
 window.ProGloveError = ProGloveError;
 window.ValidationError = ValidationError;
+window.BackupError = BackupError;
 window.firebaseConfig = firebaseConfig;
