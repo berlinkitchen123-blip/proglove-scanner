@@ -134,16 +134,13 @@
             </div>
         </div>
 
-        <!-- MOVED DATA MANAGEMENT TO BOTTOM -->
+        <!-- DATA MANAGEMENT AT BOTTOM - REMOVED CLEAR DATA BUTTON -->
         <div class="card">
             <h3>💾 DATA MANAGEMENT</h3>
             <div class="sync-section">
                 <div class="sync-controls">
                     <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
                         📤 EXPORT TO CSV
-                    </button>
-                    <button class="sync-btn upload-btn" onclick="clearAllData()" id="clearBtn">
-                        🗑️ CLEAR ALL DATA
                     </button>
                 </div>
                 <div class="sync-status" id="syncStatus">
@@ -263,19 +260,6 @@
             
             btn.disabled = false;
             btn.textContent = "📤 EXPORT TO CSV";
-        }
-
-        function clearAllData() {
-            if (confirm('Are you sure you want to clear ALL data? This will remove all bowls and scans permanently.')) {
-                appData.myScans = [];
-                appData.activeBowls = [];
-                appData.preparedBowls = [];
-                appData.returnedBowls = [];
-                appData.scanHistory = [];
-                saveToStorage();
-                showMessage("✅ All data cleared! Starting fresh.", "success");
-                updateDisplay();
-            }
         }
 
         function initializeUsers() {
@@ -438,28 +422,19 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Check for duplicates in current session
-            if (appData.myScans.some(scan => scan.code === fullCode)) {
+            // NEW LOGIC: Check if bowl is already in active bowls (duplicate kitchen scan)
+            if (appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
-                    message: "❌ Already scanned in this session: " + fullCode, 
+                    message: "❌ Bowl already active: " + fullCode, 
                     type: "error",
                     responseTime: Date.now() - startTime
                 };
             }
             
-            // Check if already prepared today
+            // Check if already prepared today (by any user)
             if (appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
-            }
-            
-            // Check if already in active bowls
-            if (appData.activeBowls.some(bowl => bowl.code === fullCode)) {
-                return { 
-                    message: "❌ Already in active bowls: " + fullCode, 
                     type: "error",
                     responseTime: Date.now() - startTime
                 };
@@ -470,8 +445,8 @@
                 code: fullCode,
                 dish: appData.dishLetter,
                 user: appData.user,
-                company: "Unknown", // You can modify this later
-                customer: "Unknown", // You can modify this later
+                company: "Unknown",
+                customer: "Unknown",
                 date: today,
                 time: new Date().toLocaleTimeString(),
                 timestamp: new Date().toISOString(),
@@ -519,23 +494,24 @@
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
-            // Check for duplicates in current session
-            if (appData.myScans.some(scan => scan.code === fullCode && scan.type === 'return')) {
-                return { 
-                    message: "❌ Already returned in this session: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
-            }
-            
-            // Check if bowl exists in active bowls
+            // NEW LOGIC: Check if bowl exists in active bowls
             const activeBowlIndex = appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+            
             if (activeBowlIndex === -1) {
-                return { 
-                    message: "❌ Bowl not found in active bowls: " + fullCode, 
-                    type: "error",
-                    responseTime: Date.now() - startTime
-                };
+                // Bowl not in active bowls - check if already returned
+                if (appData.returnedBowls.some(bowl => bowl.code === fullCode)) {
+                    return { 
+                        message: "❌ Already returned: " + fullCode, 
+                        type: "error",
+                        responseTime: Date.now() - startTime
+                    };
+                } else {
+                    return { 
+                        message: "❌ Bowl not found in active bowls: " + fullCode, 
+                        type: "error",
+                        responseTime: Date.now() - startTime
+                    };
+                }
             }
             
             const activeBowl = appData.activeBowls[activeBowlIndex];
@@ -668,14 +644,14 @@
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
-                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${appData.myScans.filter(s => s.type === 'kitchen').length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${appData.myScans.filter(s => s.type === 'kitchen' && s.user === appData.user).length} bowls</span></div>
                     <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${appData.activeBowls.length} bowls</span></div>
-                    <div class="data-row"><span class="data-label">My Returns:</span><span>${appData.myScans.filter(s => s.type === 'return').length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">My Returns:</span><span>${appData.myScans.filter(s => s.type === 'return' && s.user === appData.user).length} bowls</span></div>
                     <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
