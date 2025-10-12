@@ -8,63 +8,38 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
         .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
-        
         .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
-        
         .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-        
         .sync-section { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
-        
-        .system-status { 
-            padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px;
-            background: #444; border-left: 4px solid #f57c00;
-        }
-        
-        .sync-status { 
-            padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px;
-            background: #444; border-left: 4px solid #4285f4;
-        }
+        .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
+        .sync-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #4285f4; }
         .sync-status.success { border-left-color: #34a853; background: #2a2a2a; }
         .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
-        
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
         .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
         .return-btn { background: #ea4335; color: white; }
         .mode-btn.active { box-shadow: 0 0 0 3px white; }
-        
         .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
-        
         .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
         .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .start-btn { background: #34a853; color: white; }
         .stop-btn { background: #ea4335; color: white; }
         .scan-btn:disabled { background: #666; cursor: not-allowed; }
-        
-        .proglove-input { 
-            width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; 
-            margin-bottom: 15px; text-align: center;
-        }
+        .proglove-input { width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
         .proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
-        
         .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
-        
-        .feedback { 
-            padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; 
-            display: flex; align-items: center; justify-content: center;
-        }
+        .feedback { padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; display: flex; align-items: center; justify-content: center; }
         .success { background: #34a853; }
         .error { background: #ea4335; }
         .warning { background: #f57c00; }
         .info { background: #4285f4; }
-        
         .hidden { display: none; }
-        
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
         .stat-value { font-size: 24px; font-weight: bold; }
@@ -72,47 +47,14 @@
         .return-stat { color: #ea4335; }
         .active-stat { color: #4285f4; }
         .prep-stat { color: #f57c00; }
-        
         .response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
-        
-        .local-data { 
-            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
-            border-left: 4px solid #f57c00;
-        }
-        
-        .upload-info { 
-            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
-            border-left: 4px solid #4285f4;
-        }
-        
-        .cross-team-data { 
-            background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;
-            border-left: 4px solid #f57c00;
-        }
-        
+        .local-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
+        .upload-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #4285f4; }
+        .cross-team-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
         .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .data-label { font-weight: bold; }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); }
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-
-        .debug-info {
-            background: #333;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 10px;
-            color: #888;
-            margin-top: 5px;
-        }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
 </head>
 <body>
@@ -122,7 +64,6 @@
             <p>Download Data First • Real-time Error Detection • Auto Upload</p>
         </div>
         
-        <!-- System Status -->
         <div class="card">
             <h3>📊 SYSTEM STATUS</h3>
             <div class="system-status" id="systemStatus">
@@ -130,7 +71,6 @@
             </div>
         </div>
 
-        <!-- Sync Section -->
         <div class="card">
             <h3>🔄 SYNC WITH GOOGLE SHEETS</h3>
             <div class="sync-section">
@@ -154,7 +94,6 @@
             </div>
         </div>
 
-        <!-- Mode Selection -->
         <div class="card">
             <h3>📱 SELECT MODE</h3>
             <div class="mode-buttons">
@@ -163,7 +102,6 @@
             </div>
         </div>
         
-        <!-- User Selection -->
         <div class="card">
             <h3>👤 SELECT USER</h3>
             <select class="dropdown" id="userDropdown" onchange="selectUser()" disabled>
@@ -171,7 +109,6 @@
             </select>
         </div>
         
-        <!-- Dish Selection -->
         <div class="card hidden" id="dishSection">
             <h3>📝 SELECT DISH LETTER</h3>
             <select class="dropdown" id="dishDropdown" onchange="selectDishLetter()" disabled>
@@ -179,7 +116,6 @@
             </select>
         </div>
         
-        <!-- Cross-Team Data Section -->
         <div class="card hidden" id="crossTeamDataSection">
             <h3>📊 CROSS-TEAM DATA</h3>
             <div class="cross-team-data" id="crossTeamData">
@@ -187,7 +123,6 @@
             </div>
         </div>
         
-        <!-- Scan Section -->
         <div class="card" id="scanSection">
             <h3>🔍 SCANNING</h3>
             <div class="scan-controls">
@@ -197,12 +132,10 @@
             
             <input type="text" class="proglove-input" id="progloveInput" placeholder="Download data first to enable scanning..." disabled>
             
-            <!-- Response Time -->
             <div class="response-time">
                 Response time: <span id="responseTimeValue">0</span>ms
             </div>
             
-            <!-- Statistics -->
             <div class="stats-grid">
                 <div class="stat-item">
                     <div class="stat-label">Active Bowls</div>
@@ -225,7 +158,7 @@
     </div>
 
     <script>
-        // ProGlove Scanner - SIMPLE SYSTEM
+        // ProGlove Scanner - SIMPLE SYSTEM WITH JSONP
         let appData = {
             mode: null,
             user: null,
@@ -239,7 +172,6 @@
             autoUploadTimer: null
         };
 
-        // Google Script URL
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz-HGep7FTPfo9kciMrB9XG5bfYzymxMalgn3pS_Ot9ExDMkHWhqjxis31H1Feezu_T/exec';
 
         // Initialize
@@ -249,40 +181,33 @@
             updateDisplay();
             startAutoUploadTimer();
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
-            
-            // Track user activity
             document.addEventListener('click', updateLastActivity);
             document.addEventListener('keydown', updateLastActivity);
         });
 
-        // Update last activity time
         function updateLastActivity() {
             appData.lastActivity = Date.now();
-            console.log('Activity detected, reset auto-upload timer');
         }
 
-        // Auto upload after 5 minutes of inactivity
         function startAutoUploadTimer() {
-            // Clear existing timer
             if (appData.autoUploadTimer) {
                 clearInterval(appData.autoUploadTimer);
             }
             
-            // Check every 30 seconds for inactivity
             appData.autoUploadTimer = setInterval(() => {
                 const inactiveTime = Date.now() - appData.lastActivity;
-                const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+                const fiveMinutes = 5 * 60 * 1000;
                 
                 if (appData.dataLoaded && appData.myScans.length > 0 && inactiveTime >= fiveMinutes) {
                     console.log('Auto-upload triggered due to inactivity');
                     showMessage('🔄 Auto-uploading scans due to inactivity...', 'warning');
                     uploadToSheets();
                 }
-            }, 30000); // Check every 30 seconds
+            }, 30000);
         }
 
-        // SIMPLE DOWNLOAD FROM GOOGLE SHEETS
-        async function downloadFromSheets() {
+        // JSONP DOWNLOAD - BYPASSES CORS
+        function downloadFromSheets() {
             const btn = document.getElementById('downloadBtn');
             const status = document.getElementById('syncStatus');
             
@@ -290,28 +215,41 @@
             btn.textContent = "⏳ DOWNLOADING...";
             status.textContent = "⏳ Downloading latest data from Google Sheets...";
             
-            try {
-                console.log('Starting download from:', GOOGLE_SCRIPT_URL);
+            console.log('Starting JSONP download...');
+            
+            // Create unique callback function name
+            const callbackName = 'jsonp_callback_' + Date.now();
+            
+            // Create script tag for JSONP
+            const script = document.createElement('script');
+            script.src = `${GOOGLE_SCRIPT_URL}?action=getAllData&callback=${callbackName}&timestamp=${Date.now()}`;
+            
+            // Define the callback function
+            window[callbackName] = function(data) {
+                // Clean up
+                document.head.removeChild(script);
+                delete window[callbackName];
                 
-                // Simple GET request to download data
-                const url = `${GOOGLE_SCRIPT_URL}?action=getAllData&timestamp=${Date.now()}`;
-                console.log('Download URL:', url);
-                
-                const response = await fetch(url);
-                console.log('Response status:', response.status, 'ok:', response.ok);
-                
-                if (!response.ok) {
-                    // Try to get more detailed error info
-                    let errorText = await response.text();
-                    console.error('Response text:', errorText);
-                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                processDownloadResponse(data, btn, status);
+            };
+            
+            // Set timeout
+            const timeout = setTimeout(() => {
+                if (window[callbackName]) {
+                    document.head.removeChild(script);
+                    delete window[callbackName];
+                    processDownloadError('Download timeout - server not responding', btn, status);
                 }
-                
-                const data = await response.json();
-                console.log('Download successful, data received:', data);
-                
+            }, 15000);
+            
+            // Add script to page
+            document.head.appendChild(script);
+        }
+
+        function processDownloadResponse(data, btn, status) {
+            try {
                 if (data.error) {
-                    throw new Error('Google Script Error: ' + data.error);
+                    throw new Error(data.error);
                 }
                 
                 // Update app data
@@ -340,33 +278,32 @@
                 
                 saveToStorage();
                 
-                status.textContent = `✅ Data loaded! ${appData.activeData.length} active bowls, ${appData.preparation.length} prepared today`;
+                status.textContent = `✅ Data loaded! ${appData.activeData.length} active bowls`;
                 status.className = "sync-status success";
                 document.getElementById('systemStatus').textContent = "✅ Data loaded - Ready to scan";
                 showMessage("✅ Latest data loaded! You can start scanning.", "success");
                 
             } catch (error) {
-                console.error('Download failed:', error);
-                status.textContent = "❌ Download failed: " + error.message;
-                status.className = "sync-status error";
-                showMessage("❌ Download failed: " + error.message, "error");
-                
-                // Show more detailed error in console
-                console.error('Full error details:', {
-                    message: error.message,
-                    stack: error.stack,
-                    scriptUrl: GOOGLE_SCRIPT_URL
-                });
+                processDownloadError(error.message, btn, status);
             } finally {
                 btn.disabled = false;
                 btn.textContent = "📥 DOWNLOAD DATA";
                 updateDisplay();
-                updateLastActivity(); // Reset inactivity timer
+                updateLastActivity();
             }
         }
 
-        // UPLOAD TO GOOGLE SHEETS
-        async function uploadToSheets() {
+        function processDownloadError(errorMessage, btn, status) {
+            console.error('Download failed:', errorMessage);
+            status.textContent = "❌ Download failed: " + errorMessage;
+            status.className = "sync-status error";
+            showMessage("❌ Download failed: " + errorMessage, "error");
+            btn.disabled = false;
+            btn.textContent = "📥 DOWNLOAD DATA";
+        }
+
+        // SIMPLE UPLOAD - Use basic form submission
+        function uploadToSheets() {
             if (appData.myScans.length === 0) {
                 showMessage("ℹ️ No scans to upload", "info");
                 return;
@@ -379,73 +316,84 @@
             btn.textContent = "⏳ UPLOADING...";
             status.textContent = `⏳ Uploading ${appData.myScans.length} scans...`;
             
-            try {
-                const uploadData = {
-                    scans: appData.myScans.map(scan => ({
-                        type: scan.type,
-                        fullVYTCode: scan.code,
-                        dishLetter: scan.dish,
-                        user: scan.user,
-                        date: new Date().toLocaleDateString('en-GB'),
-                        time: new Date().toLocaleTimeString(),
-                        company: scan.company || "Unknown",
-                        customer: scan.customer || "Unknown",
-                        department: scan.department || "Unknown"
-                    }))
-                };
-                
-                console.log('Uploading data:', uploadData);
-                
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        action: 'uploadScans',
-                        ...uploadData
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to upload to Google Sheets');
+            const uploadData = {
+                scans: appData.myScans.map(scan => ({
+                    type: scan.type,
+                    fullVYTCode: scan.code,
+                    dishLetter: scan.dish,
+                    user: scan.user,
+                    date: new Date().toLocaleDateString('en-GB'),
+                    time: new Date().toLocaleTimeString(),
+                    company: scan.company || "Unknown",
+                    customer: scan.customer || "Unknown",
+                    department: scan.department || "Unknown"
+                }))
+            };
+            
+            // Create hidden iframe for upload
+            const iframe = document.createElement('iframe');
+            iframe.name = 'uploadFrame';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            // Create form
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GOOGLE_SCRIPT_URL;
+            form.target = 'uploadFrame';
+            form.style.display = 'none';
+            
+            const input = document.createElement('input');
+            input.name = 'data';
+            input.value = JSON.stringify({
+                action: 'uploadScans',
+                ...uploadData
+            });
+            form.appendChild(input);
+            
+            // Handle response
+            iframe.onload = function() {
+                try {
+                    const response = JSON.parse(iframe.contentDocument.body.textContent || '{}');
+                    
+                    if (response.success) {
+                        appData.uploadHistory.unshift({
+                            user: appData.user || "Unknown",
+                            timestamp: new Date().toISOString(),
+                            scanCount: appData.myScans.length,
+                            mode: appData.mode,
+                            details: response.details
+                        });
+                        
+                        appData.myScans = [];
+                        saveToStorage();
+                        
+                        status.textContent = `✅ Uploaded! ${response.details.successful} successful`;
+                        status.className = "sync-status success";
+                        showMessage("✅ Scans uploaded successfully!", "success");
+                        
+                    } else {
+                        throw new Error(response.error || 'Upload failed');
+                    }
+                } catch (error) {
+                    status.textContent = "❌ Upload failed - scans saved locally";
+                    status.className = "sync-status error";
+                    showMessage("❌ Upload failed - scans saved locally", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = "📤 UPLOAD SCANS";
+                    updateDisplay();
+                    updateLastActivity();
+                    document.body.removeChild(iframe);
+                    document.body.removeChild(form);
                 }
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    appData.uploadHistory.unshift({
-                        user: appData.user || "Unknown",
-                        timestamp: new Date().toISOString(),
-                        scanCount: appData.myScans.length,
-                        mode: appData.mode,
-                        details: result.details
-                    });
-                    
-                    appData.myScans = [];
-                    saveToStorage();
-                    
-                    status.textContent = `✅ Uploaded! ${result.details.successful} successful`;
-                    status.className = "sync-status success";
-                    showMessage("✅ Scans uploaded successfully!", "success");
-                    
-                } else {
-                    throw new Error(result.error || 'Upload failed');
-                }
-                
-            } catch (error) {
-                console.error('Upload error:', error);
-                status.textContent = "❌ Upload failed - scans saved locally";
-                status.className = "sync-status error";
-                showMessage("❌ Upload failed - scans saved locally", "error");
-            } finally {
-                btn.disabled = false;
-                btn.textContent = "📤 UPLOAD SCANS";
-                updateDisplay();
-                updateLastActivity(); // Reset inactivity timer
-            }
+            };
+            
+            document.body.appendChild(form);
+            form.submit();
         }
 
+        // Rest of your functions remain the same...
         function setMode(mode) {
             if (!appData.dataLoaded) {
                 showMessage("❌ Please download data first", "error");
@@ -589,7 +537,6 @@
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString('en-GB');
             
-            // Check for duplicates in current session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -598,7 +545,6 @@
                 };
             }
             
-            // Check if already prepared today
             if (appData.preparation.some(bowl => bowl[0] && bowl[0].includes(fullCode) && bowl[3] === today)) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
@@ -607,7 +553,6 @@
                 };
             }
             
-            // Check if already in active data
             if (appData.activeData.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already in active data: " + fullCode, 
@@ -642,7 +587,6 @@
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             
-            // Check for duplicates in current session
             if (appData.myScans.some(scan => scan.code === fullCode)) {
                 return { 
                     message: "❌ Already scanned in this session: " + fullCode, 
@@ -651,7 +595,6 @@
                 };
             }
             
-            // Check against active data
             const activeBowl = appData.activeData.find(bowl => bowl[0] && bowl[0].includes(fullCode));
             if (!activeBowl) {
                 return { 
@@ -661,7 +604,6 @@
                 };
             }
             
-            // Check if already returned
             if (appData.archive.some(bowl => bowl[0] && bowl[0].includes(fullCode))) {
                 return { 
                     message: "❌ Already returned: " + fullCode, 
