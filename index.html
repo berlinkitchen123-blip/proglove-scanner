@@ -73,29 +73,6 @@
         </div>
 
         <div class="card">
-            <h3>💾 DATA MANAGEMENT</h3>
-            <div class="sync-section">
-                <div class="sync-controls">
-                    <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
-                        📤 EXPORT TO CSV
-                    </button>
-                    <button class="sync-btn upload-btn" onclick="clearAllData()" id="clearBtn">
-                        🗑️ CLEAR ALL DATA
-                    </button>
-                </div>
-                <div class="sync-status" id="syncStatus">
-                    ✅ Fresh system - All bowls are real scans
-                </div>
-                <div class="local-data" id="localDataInfo">
-                    <strong>Current Data:</strong> Loading...
-                </div>
-                <div class="upload-info" id="uploadInfo">
-                    <strong>Scan History:</strong> No scans yet
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
             <h3>📱 SELECT MODE</h3>
             <div class="mode-buttons">
                 <button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
@@ -143,7 +120,7 @@
                     <div class="stat-value active-stat" id="activeCount">0</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-label">Prepared Today</div>
+                    <div class="stat-label" id="prepLabel">Prepared Today</div>
                     <div class="stat-value prep-stat" id="prepCount">0</div>
                 </div>
                 <div class="stat-item">
@@ -154,6 +131,30 @@
             
             <div class="feedback info" id="feedback">
                 ✅ System ready - Select mode and user to start
+            </div>
+        </div>
+
+        <!-- MOVED DATA MANAGEMENT TO BOTTOM -->
+        <div class="card">
+            <h3>💾 DATA MANAGEMENT</h3>
+            <div class="sync-section">
+                <div class="sync-controls">
+                    <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
+                        📤 EXPORT TO CSV
+                    </button>
+                    <button class="sync-btn upload-btn" onclick="clearAllData()" id="clearBtn">
+                        🗑️ CLEAR ALL DATA
+                    </button>
+                </div>
+                <div class="sync-status" id="syncStatus">
+                    ✅ Fresh system - All bowls are real scans
+                </div>
+                <div class="local-data" id="localDataInfo">
+                    <strong>Current Data:</strong> Loading...
+                </div>
+                <div class="upload-info" id="uploadInfo">
+                    <strong>Scan History:</strong> No scans yet
+                </div>
             </div>
         </div>
     </div>
@@ -305,9 +306,19 @@
             document.getElementById('progloveInput').value = '';
             
             loadUsers();
+            updateStatsLabels();
             updateDisplay();
             updateLastActivity();
             showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
+        }
+
+        function updateStatsLabels() {
+            const prepLabel = document.getElementById('prepLabel');
+            if (appData.mode === 'kitchen') {
+                prepLabel.textContent = 'Prepared Today';
+            } else {
+                prepLabel.textContent = 'Returned Today';
+            }
         }
 
         function loadUsers() {
@@ -591,15 +602,33 @@
                 input.disabled = !appData.scanning;
             }
             
-            // Update statistics
+            // Update statistics based on mode
             const today = new Date().toLocaleDateString('en-GB');
+            
+            // Count today's scans for current user
+            const userTodayScans = appData.myScans.filter(scan => 
+                scan.user === appData.user && 
+                new Date(scan.timestamp).toLocaleDateString('en-GB') === today
+            ).length;
+            
+            // Count prepared today
             const preparedToday = appData.preparedBowls.filter(bowl => bowl.date === today).length;
+            
+            // Count returned today
             const returnedToday = appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
             
+            // Update stats display
             document.getElementById('activeCount').textContent = appData.activeBowls.length;
-            document.getElementById('prepCount').textContent = preparedToday;
-            document.getElementById('myScansCount').textContent = appData.myScans.length;
             
+            if (appData.mode === 'kitchen') {
+                document.getElementById('prepCount').textContent = preparedToday;
+                document.getElementById('myScansCount').textContent = userTodayScans;
+            } else {
+                document.getElementById('prepCount').textContent = returnedToday;
+                document.getElementById('myScansCount').textContent = userTodayScans;
+            }
+            
+            // Update data info
             document.getElementById('localDataInfo').innerHTML = `
                 <strong>Current Data:</strong> 
                 ${appData.activeBowls.length} active bowls • 
@@ -608,6 +637,7 @@
                 ${appData.myScans.length} total scans
             `;
             
+            // Update scan history
             const uploadInfo = document.getElementById('uploadInfo');
             if (appData.scanHistory.length === 0) {
                 uploadInfo.innerHTML = '<strong>Scan History:</strong> No scans yet';
