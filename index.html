@@ -168,7 +168,7 @@
             <h3>🔍 SCANNING</h3>
             <div class="scan-controls">
                 <button class="scan-btn start-btn" id="startBtn" onclick="requestScanningAccess()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()">⏹ STOP SCANNING</button>
             </div>
             
             <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
@@ -500,12 +500,6 @@
             return today === scanDate;
         }
 
-        // Check if it's before 9AM today
-        function isBefore9AM() {
-            const now = new Date();
-            return now.getHours() < 9;
-        }
-
         // AUTO TIMEOUT SYSTEM
         function startTimeoutTimer() {
             let timeLeft = 120; // 2 minutes
@@ -727,28 +721,25 @@
             showMessage(`🎯 SCANNING ACTIVE - You have 2 minutes`, 'success');
         }
 
+        // FIXED: Stop Scanning button now always works and instantly uploads data
         async function stopScanning() {
+            if (!window.appData.scanning) {
+                showMessage('ℹ️ Scanning is not active', 'info');
+                return;
+            }
+            
+            console.log('🛑 Manual stop scanning requested');
             window.appData.scanning = false;
             await deviceLock.releaseLock();
             stopTimeoutTimer();
             updateDisplay();
             syncToFirebase();
-            showMessage(`⏹ Scanning stopped • Data saved`, 'info');
+            showMessage(`⏹ Scanning stopped • Data saved to cloud`, 'success');
         }
 
         function forceReleaseLock() {
             deviceLock.forceReleaseLock();
         }
-
-        // Rest of the functions remain the same (updateStatsLabels, loadUsers, loadDishLetters, selectUser, selectDishLetter, handleScanInput, processScan, kitchenScan, returnScan, updateDisplay, updateDishStatistics, showMessage, etc.)
-
-        // [Include all the remaining functions from previous version - they remain the same]
-        // updateStatsLabels, loadUsers, loadDishLetters, selectUser, selectDishLetter, 
-        // handleScanInput, processScan, kitchenScan, returnScan, syncToFirebase, 
-        // updateDisplay, updateDishStatistics, updateCrossTeamData, showMessage, 
-        // exportToExcel functions go here...
-
-        // For brevity, I'm including the essential ones - you can copy the rest from previous version
 
         function updateStatsLabels() {
             const prepLabel = document.getElementById('prepLabel');
@@ -1025,7 +1016,7 @@
                 document.getElementById('scanSection').classList.remove('scanning-active');
                 input.placeholder = "Click START SCANNING...";
                 input.disabled = true;
-                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false; // Stop button always enabled
             }
             
             // Count TODAY'S data
@@ -1102,7 +1093,7 @@
             showMessage("📤 Exporting to Excel...", "info");
         }
 
-        // Dish Statistics function (same as before)
+        // Dish Statistics function
         function updateDishStatistics() {
             const statsBody = document.getElementById('dishStatsBody');
             const updateTime = document.getElementById('statsUpdateTime');
