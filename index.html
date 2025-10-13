@@ -63,17 +63,17 @@
             width: 100%; 
             border-collapse: collapse; 
             margin-top: 10px;
-            font-size: 12px;
+            font-size: 11px;
         }
         .dish-stats-table th {
             background: #4285f4;
             color: white;
-            padding: 8px;
+            padding: 6px;
             text-align: center;
             border: 1px solid #555;
         }
         .dish-stats-table td {
-            padding: 8px;
+            padding: 6px;
             text-align: center;
             border: 1px solid #555;
             background: #333;
@@ -101,34 +101,15 @@
             color: white;
             font-weight: bold;
         }
+        .dish-stats-table .time-info {
+            font-size: 9px;
+            color: #ccc;
+        }
+        .dish-stats-table .prepared-by {
+            font-size: 9px;
+            color: #88ff88;
+        }
 
-        /* User Assignment Table Styles */
-        .user-assignment-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 11px;
-        }
-        .user-assignment-table th {
-            background: #34a853;
-            color: white;
-            padding: 6px;
-            text-align: center;
-            border: 1px solid #555;
-        }
-        .user-assignment-table td {
-            padding: 6px;
-            text-align: center;
-            border: 1px solid #555;
-            background: #333;
-        }
-        .user-assignment-table .user-cell {
-            max-width: 80px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
@@ -215,51 +196,23 @@
             </div>
         </div>
 
-        <!-- USER ASSIGNMENT DISPLAY -->
+        <!-- ENHANCED DISH SCANNING STATISTICS TABLE -->
         <div class="card">
-            <h3>👨‍🍳 DISH PREPARATION ASSIGNMENTS</h3>
+            <h3>📈 DISH SCANNING STATISTICS & ASSIGNMENTS</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Manager View - Who prepared each dish letter today</small>
-            </div>
-            <div id="userAssignment">
-                <table class="user-assignment-table">
-                    <thead>
-                        <tr>
-                            <th>Dish</th>
-                            <th>Prepared By</th>
-                            <th>Count</th>
-                            <th>Dish</th>
-                            <th>Prepared By</th>
-                            <th>Count</th>
-                            <th>Dish</th>
-                            <th>Prepared By</th>
-                            <th>Count</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userAssignmentBody">
-                        <!-- User assignments will be populated here -->
-                    </tbody>
-                </table>
-            </div>
-            <div class="local-data" style="margin-top: 10px;">
-                <strong>Last Updated:</strong> <span id="assignmentUpdateTime">Never</span>
-            </div>
-        </div>
-
-        <!-- DISH SCANNING STATISTICS TABLE -->
-        <div class="card">
-            <h3>📈 DISH SCANNING STATISTICS</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Real-time tracking of scanned dishes - verify counts for accuracy</small>
+                <small>ℹ️ Real-time tracking with kitchen assignments and batch timing</small>
             </div>
             <div id="dishStatistics">
                 <table class="dish-stats-table">
                     <thead>
                         <tr>
                             <th>Dish</th>
+                            <th>Prepared By</th>
                             <th>Scanned</th>
                             <th>Expected</th>
                             <th>Difference</th>
+                            <th>First Scan Time</th>
+                            <th>Last Scan Time</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -496,6 +449,7 @@
                         returnedBowls: [...window.appData.returnedBowls],
                         myScans: [...window.appData.myScans],
                         scanHistory: [...window.appData.scanHistory],
+                        dishBatchTiming: {...window.appData.dishBatchTiming},
                         lastSync: new Date().toISOString(),
                         lastUpdatedBy: window.appData.user || 'System',
                         backupType: 'full',
@@ -670,10 +624,10 @@
                     window.appData.returnedBowls = mergeBowls(window.appData.returnedBowls, firebaseAppData.returnedBowls || []);
                     window.appData.myScans = mergeScans(window.appData.myScans, firebaseAppData.myScans || []);
                     window.appData.scanHistory = mergeScans(window.appData.scanHistory, firebaseAppData.scanHistory || []);
+                    window.appData.dishBatchTiming = {...window.appData.dishBatchTiming, ...(firebaseAppData.dishBatchTiming || {})};
                     
                     updateDisplay();
                     updateDishStatistics();
-                    updateUserAssignments();
                     saveToStorage();
                     
                     console.log('✅ SYNC: Data merged successfully');
@@ -754,7 +708,6 @@
                 saveToStorage();
                 updateDisplay();
                 updateDishStatistics();
-                updateUserAssignments();
                 
                 showMessage(`✅ 7:00 PM Cleanup: Cleared ${backupData.returnedCount} returned bowls • Active bowls preserved`, 'success');
                 
@@ -784,10 +737,10 @@
                     window.appData.returnedBowls = data.returnedBowls || [];
                     window.appData.myScans = data.myScans || [];
                     window.appData.scanHistory = data.scanHistory || [];
+                    window.appData.dishBatchTiming = data.dishBatchTiming || {};
                     
                     updateDisplay();
                     updateDishStatistics();
-                    updateUserAssignments();
                     saveToStorage();
                     
                     showMessage('✅ Data loaded from Firebase backup', 'success');
@@ -875,7 +828,8 @@
             lastActivity: Date.now(),
             autoSaveTimer: null,
             lastCleanup: null,
-            expectedCounts: {} // Store expected dish counts
+            expectedCounts: {}, // Store expected dish counts
+            dishBatchTiming: {} // Store first/last scan times for each dish
         };
 
         const USERS = [
@@ -893,13 +847,21 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
-        // 10 PM DAY START HELPER
+        // UNIVERSAL DATE FORMAT FUNCTION - FIXES JSON IMPORT ISSUES
+        function getStandardizedDate(dateInput) {
+            const date = new Date(dateInput);
+            // Return in YYYY-MM-DD format for consistent comparison
+            return date.toISOString().split('T')[0];
+        }
+
+        // 10 PM DAY START HELPER - UPDATED FOR CONSISTENCY
         function getEffectiveDate(date) {
             const effectiveDate = new Date(date);
             if (date.getHours() >= 22) {
                 effectiveDate.setDate(effectiveDate.getDate() + 1);
             }
-            return effectiveDate.toLocaleDateString('en-GB');
+            // Use standardized format for all date comparisons
+            return getStandardizedDate(effectiveDate);
         }
 
         // BUSINESS DAY CALCULATION (Exclude weekends)
@@ -922,92 +884,51 @@
             return Math.max(0, businessDays - 1);
         }
 
-        // USER ASSIGNMENT FUNCTION - Shows which kitchen person made which dish
-        function updateUserAssignments() {
-            const today = getEffectiveDate(new Date());
-            const assignmentBody = document.getElementById('userAssignmentBody');
-            const updateTime = document.getElementById('assignmentUpdateTime');
-            
-            // Group by dish letter and user
-            const dishAssignments = {};
-            
-            window.appData.preparedBowls.forEach(bowl => {
-                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
-                    const dish = bowl.dish || 'Unknown';
-                    const user = bowl.user || 'Unknown';
-                    
-                    if (!dishAssignments[dish]) {
-                        dishAssignments[dish] = {};
-                    }
-                    
-                    if (!dishAssignments[dish][user]) {
-                        dishAssignments[dish][user] = 0;
-                    }
-                    
-                    dishAssignments[dish][user]++;
-                }
-            });
-            
-            // Create table rows
-            const allDishes = Object.keys(dishAssignments).sort();
-            let html = '';
-            let rowCount = 0;
-            
-            // Group dishes into rows of 3
-            for (let i = 0; i < allDishes.length; i += 3) {
-                const rowDishes = allDishes.slice(i, i + 3);
-                html += '<tr>';
-                
-                // Create 3 columns per row
-                for (let j = 0; j < 3; j++) {
-                    if (j < rowDishes.length) {
-                        const dish = rowDishes[j];
-                        const users = dishAssignments[dish];
-                        const topUser = Object.entries(users).sort((a, b) => b[1] - a[1])[0];
-                        
-                        html += `
-                            <td class="dish-header">${dish}</td>
-                            <td class="user-cell">${topUser[0]}</td>
-                            <td>${topUser[1]}</td>
-                        `;
-                    } else {
-                        // Empty cells for alignment
-                        html += '<td></td><td></td><td></td>';
-                    }
-                }
-                
-                html += '</tr>';
-                rowCount++;
-            }
-            
-            // If no data, show message
-            if (allDishes.length === 0) {
-                html = '<tr><td colspan="9" style="text-align: center; padding: 20px;">No dish preparations today</td></tr>';
-            }
-            
-            assignmentBody.innerHTML = html;
-            updateTime.textContent = new Date().toLocaleTimeString();
-        }
-
-        // DISH STATISTICS FUNCTION
+        // ENHANCED DISH STATISTICS FUNCTION WITH KITCHEN ASSIGNMENTS
         function updateDishStatistics() {
             const today = getEffectiveDate(new Date());
             const statsBody = document.getElementById('dishStatsBody');
             const updateTime = document.getElementById('statsUpdateTime');
             
-            // Count scanned dishes for today
-            const scannedCounts = {};
+            // Count scanned dishes for today and track kitchen assignments
+            const dishData = {};
             const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
             
             // Initialize all dishes
             allDishes.forEach(dish => {
-                scannedCounts[dish] = 0;
+                dishData[dish] = {
+                    scanned: 0,
+                    preparedBy: {},
+                    firstScanTime: null,
+                    lastScanTime: null
+                };
             });
             
-            // Count actual scans for today
+            // Process all prepared bowls for today - USING STANDARDIZED DATE COMPARISON
             window.appData.preparedBowls.forEach(bowl => {
-                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
-                    scannedCounts[bowl.dish] = (scannedCounts[bowl.dish] || 0) + 1;
+                const bowlDate = getEffectiveDate(new Date(bowl.timestamp));
+                if (bowlDate === today) {
+                    const dish = bowl.dish;
+                    const user = bowl.user;
+                    const scanTime = new Date(bowl.timestamp);
+                    
+                    if (!dishData[dish]) dishData[dish] = { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                    
+                    dishData[dish].scanned++;
+                    
+                    // Track who prepared this dish
+                    if (!dishData[dish].preparedBy[user]) {
+                        dishData[dish].preparedBy[user] = 0;
+                    }
+                    dishData[dish].preparedBy[user]++;
+                    
+                    // Track first and last scan times
+                    if (!dishData[dish].firstScanTime || scanTime < new Date(dishData[dish].firstScanTime)) {
+                        dishData[dish].firstScanTime = bowl.timestamp;
+                    }
+                    if (!dishData[dish].lastScanTime || scanTime > new Date(dishData[dish].lastScanTime)) {
+                        dishData[dish].lastScanTime = bowl.timestamp;
+                    }
                 }
             });
             
@@ -1019,12 +940,25 @@
             let html = '';
             
             allDishes.forEach(dish => {
-                const scanned = scannedCounts[dish] || 0;
+                const data = dishData[dish] || { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                const scanned = data.scanned;
                 const expected = window.appData.expectedCounts[dish] || 0;
                 const difference = scanned - expected;
                 
                 totalScanned += scanned;
                 totalExpected += expected;
+                
+                // Get top preparer
+                const preparers = Object.entries(data.preparedBy);
+                const topPreparer = preparers.length > 0 ? 
+                    preparers.sort((a, b) => b[1] - a[1])[0] : 
+                    null;
+                
+                // Format times
+                const firstTime = data.firstScanTime ? 
+                    new Date(data.firstScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                const lastTime = data.lastScanTime ? 
+                    new Date(data.lastScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
                 
                 let status = '✅ OK';
                 let statusClass = '';
@@ -1044,9 +978,12 @@
                 html += `
                     <tr>
                         <td class="dish-header">${dish}</td>
+                        <td class="prepared-by">${topPreparer ? `${topPreparer[0]} (${topPreparer[1]})` : '-'}</td>
                         <td>${scanned}</td>
                         <td class="${expected > 0 ? 'expected-highlight' : ''}">${expected > 0 ? expected : '-'}</td>
                         <td>${expected > 0 ? (difference >= 0 ? `+${difference}` : difference) : '-'}</td>
+                        <td class="time-info">${firstTime}</td>
+                        <td class="time-info">${lastTime}</td>
                         <td class="${statusClass}">${status}</td>
                     </tr>
                 `;
@@ -1057,9 +994,12 @@
             html += `
                 <tr class="total-row">
                     <td><strong>TOTAL</strong></td>
+                    <td><strong>-</strong></td>
                     <td><strong>${totalScanned}</strong></td>
                     <td><strong>${totalExpected}</strong></td>
                     <td><strong>${totalExpected > 0 ? (totalDifference >= 0 ? `+${totalDifference}` : totalDifference) : '-'}</strong></td>
+                    <td><strong>-</strong></td>
+                    <td><strong>-</strong></td>
                     <td><strong>${totalExpected > 0 ? (totalDifference === 0 ? '✅ Perfect' : (totalDifference > 0 ? `⚠️ Extra ${totalDifference}` : `❌ Missing ${Math.abs(totalDifference)}`)) : 'No orders set'}</strong></td>
                 </tr>
             `;
@@ -1084,7 +1024,6 @@
             initializeUsers();
             updateDisplay();
             updateDishStatistics();
-            updateUserAssignments();
             startAutoSaveTimer();
             
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
@@ -1128,7 +1067,7 @@
             }
         }
 
-        // JSON Import Functions
+        // FIXED JSON IMPORT FUNCTION - HANDLES DATE FORMAT ISSUES
         function processBellaBonaJSON() {
             const jsonText = document.getElementById('jsonInput').value.trim();
             if (!jsonText) {
@@ -1154,7 +1093,7 @@
 
                     const code = vytCode.toUpperCase();
                     const dish = (dishLetter || 'X').toUpperCase();
-                    const today = new Date().toLocaleDateString('en-GB');
+                    const today = getStandardizedDate(new Date()); // Use standardized date
 
                     // Count dishes for expected counts
                     dishCounts[dish] = (dishCounts[dish] || 0) + 1;
@@ -1162,13 +1101,15 @@
                     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
                     
                     if (activeBowlIndex !== -1) {
+                        // Update existing bowl with imported data
                         window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
                         window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
                         window.appData.activeBowls[activeBowlIndex].dish = dish || window.appData.activeBowls[activeBowlIndex].dish;
                         enrichedCount++;
 
+                        // Remove from prepared bowls if it exists there (clean up duplicates)
                         const prepBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
-                            bowl.code === code && bowl.date === today
+                            bowl.code === code && getStandardizedDate(new Date(bowl.timestamp)) === today
                         );
                         
                         if (prepBowlIndex !== -1) {
@@ -1177,13 +1118,14 @@
                         }
                         
                     } else {
+                        // Create new bowl with imported data
                         const newBowl = {
                             code: code,
                             dish: dish,
                             user: 'System Import',
                             company: company || 'Unknown Company',
                             customer: customer || 'Unknown Customer',
-                            date: today,
+                            date: today, // Use standardized date format
                             time: new Date().toLocaleTimeString(),
                             timestamp: new Date().toISOString(),
                             status: 'ACTIVE',
@@ -1209,7 +1151,6 @@
                 syncToFirebase();
                 updateDisplay();
                 updateDishStatistics();
-                updateUserAssignments();
 
                 let resultMessage = `✅ Import completed: `;
                 if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
@@ -1226,6 +1167,7 @@
 
             } catch (error) {
                 showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+                console.error('JSON Parse Error:', error);
             }
         }
 
@@ -1254,7 +1196,6 @@
                 createPreparedSheet(wb);
                 createReturnedSheet(wb);
                 createStatisticsSheet(wb);
-                createUserAssignmentSheet(wb);
                 
                 XLSX.writeFile(wb, `proglove_data_${new Date().toISOString().split('T')[0]}.xlsx`);
                 
@@ -1383,23 +1324,58 @@
 
         function createStatisticsSheet(wb) {
             const today = getEffectiveDate(new Date());
-            const scannedCounts = {};
+            const dishData = {};
             const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
             
             allDishes.forEach(dish => {
-                scannedCounts[dish] = 0;
+                dishData[dish] = {
+                    scanned: 0,
+                    preparedBy: {},
+                    firstScanTime: null,
+                    lastScanTime: null
+                };
             });
             
             window.appData.preparedBowls.forEach(bowl => {
-                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
-                    scannedCounts[bowl.dish] = (scannedCounts[bowl.dish] || 0) + 1;
+                const bowlDate = getEffectiveDate(new Date(bowl.timestamp));
+                if (bowlDate === today) {
+                    const dish = bowl.dish;
+                    const user = bowl.user;
+                    const scanTime = new Date(bowl.timestamp);
+                    
+                    if (!dishData[dish]) dishData[dish] = { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                    
+                    dishData[dish].scanned++;
+                    
+                    if (!dishData[dish].preparedBy[user]) {
+                        dishData[dish].preparedBy[user] = 0;
+                    }
+                    dishData[dish].preparedBy[user]++;
+                    
+                    if (!dishData[dish].firstScanTime || scanTime < new Date(dishData[dish].firstScanTime)) {
+                        dishData[dish].firstScanTime = bowl.timestamp;
+                    }
+                    if (!dishData[dish].lastScanTime || scanTime > new Date(dishData[dish].lastScanTime)) {
+                        dishData[dish].lastScanTime = bowl.timestamp;
+                    }
                 }
             });
             
             const statsData = allDishes.map(dish => {
-                const scanned = scannedCounts[dish] || 0;
+                const data = dishData[dish] || { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                const scanned = data.scanned;
                 const expected = window.appData.expectedCounts[dish] || 0;
                 const difference = scanned - expected;
+                
+                const preparers = Object.entries(data.preparedBy);
+                const topPreparer = preparers.length > 0 ? 
+                    preparers.sort((a, b) => b[1] - a[1])[0] : 
+                    null;
+                
+                const firstTime = data.firstScanTime ? 
+                    new Date(data.firstScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                const lastTime = data.lastScanTime ? 
+                    new Date(data.lastScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
                 
                 let status = 'OK';
                 if (expected > 0) {
@@ -1411,51 +1387,18 @@
                 
                 return {
                     'Dish': dish,
+                    'Prepared By': topPreparer ? `${topPreparer[0]} (${topPreparer[1]})` : '-',
                     'Scanned': scanned,
                     'Expected': expected > 0 ? expected : '-',
                     'Difference': expected > 0 ? (difference >= 0 ? `+${difference}` : difference) : '-',
+                    'First Scan Time': firstTime,
+                    'Last Scan Time': lastTime,
                     'Status': status
                 };
             });
 
             const ws = XLSX.utils.json_to_sheet(statsData);
             XLSX.utils.book_append_sheet(wb, ws, "Dish Statistics");
-        }
-
-        function createUserAssignmentSheet(wb) {
-            const today = getEffectiveDate(new Date());
-            const dishAssignments = {};
-            
-            window.appData.preparedBowls.forEach(bowl => {
-                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
-                    const dish = bowl.dish || 'Unknown';
-                    const user = bowl.user || 'Unknown';
-                    
-                    if (!dishAssignments[dish]) {
-                        dishAssignments[dish] = {};
-                    }
-                    
-                    if (!dishAssignments[dish][user]) {
-                        dishAssignments[dish][user] = 0;
-                    }
-                    
-                    dishAssignments[dish][user]++;
-                }
-            });
-            
-            const assignmentData = [];
-            Object.keys(dishAssignments).sort().forEach(dish => {
-                Object.entries(dishAssignments[dish]).forEach(([user, count]) => {
-                    assignmentData.push({
-                        'Dish': dish,
-                        'Prepared By': user,
-                        'Count': count
-                    });
-                });
-            });
-
-            const ws = XLSX.utils.json_to_sheet(assignmentData);
-            XLSX.utils.book_append_sheet(wb, ws, "User Assignments");
         }
 
         // User and Mode Management
@@ -1626,14 +1569,13 @@
             
             updateDisplay();
             updateDishStatistics();
-            updateUserAssignments();
             updateLastActivity();
         }
 
         function kitchenScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = new Date().toLocaleDateString('en-GB');
+            const today = getStandardizedDate(new Date()); // Use standardized date
             
             if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
@@ -1643,7 +1585,12 @@
                 };
             }
             
-            if (window.appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
+            // Check if already prepared today using standardized date comparison
+            const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
+                bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
+            );
+            
+            if (alreadyPrepared) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
                     type: "error",
@@ -1657,7 +1604,7 @@
                 user: window.appData.user,
                 company: "Unknown",
                 customer: "Unknown",
-                date: today,
+                date: today, // Use standardized date
                 time: new Date().toLocaleTimeString(),
                 timestamp: new Date().toISOString(),
                 status: 'ACTIVE'
@@ -1697,40 +1644,91 @@
             };
         }
 
+        // FIXED RETURN SCAN FUNCTION - Uses standardized date format
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = new Date().toLocaleDateString('en-GB');
+            const today = getStandardizedDate(new Date()); // Use standardized date
             
+            // Check if already returned today using standardized date comparison
+            const alreadyReturned = window.appData.returnedBowls.some(bowl => 
+                bowl.code === fullCode && getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
+            );
+            
+            if (alreadyReturned) {
+                return { 
+                    message: "✅ Already returned today: " + fullCode, 
+                    type: "success",
+                    responseTime: Date.now() - startTime
+                };
+            }
+            
+            // Find in active bowls
             const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
             
             if (activeBowlIndex === -1) {
-                if (window.appData.returnedBowls.some(bowl => bowl.code === fullCode)) {
+                // Bowl not found in active bowls - check if it exists in prepared bowls but not active
+                const preparedBowl = window.appData.preparedBowls.find(bowl => 
+                    bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
+                );
+                
+                if (preparedBowl) {
+                    // Bowl was prepared today but not in active bowls - mark as returned
+                    const returnBowl = {
+                        ...preparedBowl,
+                        returnedBy: window.appData.user,
+                        returnDate: today,
+                        returnTime: new Date().toLocaleTimeString(),
+                        returnTimestamp: new Date().toISOString(),
+                        status: 'RETURNED'
+                    };
+                    
+                    window.appData.returnedBowls.push(returnBowl);
+                    
+                    const scanRecord = {
+                        type: 'return',
+                        code: fullCode,
+                        user: window.appData.user,
+                        company: preparedBowl.company,
+                        customer: preparedBowl.customer,
+                        timestamp: new Date().toISOString(),
+                        originalData: preparedBowl
+                    };
+                    
+                    window.appData.myScans.push(scanRecord);
+                    
+                    window.appData.scanHistory.unshift({
+                        type: 'return',
+                        code: fullCode,
+                        user: window.appData.user,
+                        timestamp: new Date().toISOString(),
+                        message: `Returned: ${fullCode}`
+                    });
+                    
+                    saveToStorage();
+                    backupSystem.syncScanInstantly(scanRecord);
+                    
                     return { 
-                        message: "❌ Already returned: " + fullCode, 
-                        type: "error",
+                        message: `✅ Returned: ${fullCode} (was not in active bowls)`, 
+                        type: "success",
                         responseTime: Date.now() - startTime
                     };
                 } else {
                     return { 
-                        message: "❌ Bowl not found in active bowls: " + fullCode, 
+                        message: "❌ Bowl not found in system: " + fullCode, 
                         type: "error",
                         responseTime: Date.now() - startTime
                     };
                 }
             }
             
+            // Process normal return from active bowls
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
+            // Remove from active bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
             
-            const preparedBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
-                bowl.code === fullCode && bowl.date === today
-            );
-            if (preparedBowlIndex !== -1) {
-                window.appData.preparedBowls.splice(preparedBowlIndex, 1);
-            }
-            
+            // Add to returned bowls
             window.appData.returnedBowls.push({
                 ...activeBowl,
                 returnedBy: window.appData.user,
@@ -1761,11 +1759,10 @@
             });
             
             saveToStorage();
-            
             backupSystem.syncScanInstantly(scanRecord);
             
             return { 
-                message: `✅ Returned: ${fullCode} - Removed from active & prepared bowls`, 
+                message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
                 type: "success",
                 responseTime: Date.now() - startTime
             };
@@ -1793,7 +1790,7 @@
             }
             
             const now = new Date();
-            const today = getEffectiveDate(now);
+            const today = getStandardizedDate(now); // Use standardized date
             
             // MY SCANS TODAY - ONLY WHEN USER SELECTED
             let userTodayScans = 0;
@@ -1802,25 +1799,25 @@
                     userTodayScans = window.appData.myScans.filter(scan => 
                         scan.user === window.appData.user && 
                         scan.dish === window.appData.dishLetter &&
-                        getEffectiveDate(new Date(scan.timestamp)) === today
+                        getStandardizedDate(new Date(scan.timestamp)) === today
                     ).length;
                 } else if (window.appData.mode === 'return') {
                     userTodayScans = window.appData.myScans.filter(scan => 
                         scan.user === window.appData.user && 
                         scan.type === 'return' &&
-                        getEffectiveDate(new Date(scan.timestamp)) === today
+                        getStandardizedDate(new Date(scan.timestamp)) === today
                     ).length;
                 }
             }
             
-            // PREPARED TODAY - Using 10PM day logic
+            // PREPARED TODAY - Using standardized date logic
             const preparedToday = window.appData.preparedBowls.filter(bowl => 
-                getEffectiveDate(new Date(bowl.timestamp)) === today
+                getStandardizedDate(new Date(bowl.timestamp)) === today
             ).length;
             
-            // RETURNED TODAY - Using 10PM day logic  
+            // RETURNED TODAY - Using standardized date logic  
             const returnedToday = window.appData.returnedBowls.filter(bowl => 
-                getEffectiveDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
+                getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
             ).length;
             
             document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
@@ -1862,10 +1859,15 @@
 
         function updateCrossTeamData() {
             const element = document.getElementById('crossTeamData');
-            const today = new Date().toLocaleDateString('en-GB');
+            const today = getStandardizedDate(new Date()); // Use standardized date
             
-            const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
-            const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+            const preparedToday = window.appData.preparedBowls.filter(bowl => 
+                getStandardizedDate(new Date(bowl.timestamp)) === today
+            ).length;
+            
+            const returnedToday = window.appData.returnedBowls.filter(bowl => 
+                getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
+            ).length;
             
             if (window.appData.mode === 'kitchen') {
                 element.innerHTML = `
