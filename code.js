@@ -14,29 +14,28 @@ window.appData = {
     lastCleanup: null
 };
 
+// CORRECTED USER LIST
 const USERS = [
     {name: "Hamid", role: "Kitchen"},
     {name: "Richa", role: "Kitchen"},
-    {name: "Mary", role: "Kitchen"},
     {name: "Jash", role: "Kitchen"},
-    {name: "Joel", role: "Kitchen"},
+    {name: "Joes", role: "Kitchen"},
+    {name: "Mary", role: "Kitchen"},
     {name: "Rushal", role: "Kitchen"},
     {name: "Sreekanth", role: "Kitchen"},
-    {name: "M.Sultan", role: "Return"},
+    {name: "Sultan", role: "Return"},
     {name: "Riyaz", role: "Return"},
     {name: "Alan", role: "Return"},
-    {name: "Aadesh", role: "Return"},
-    {name: "Kitchen Team", role: "Return"}
+    {name: "Adesh", role: "Return"}
 ];
 
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Initializing Complete Scanner System...');
+    console.log('🚀 Initializing Scanner System...');
     initializeFirebase();
     loadFromStorage();
     initializeUsers();
     updateDisplay();
-    updateSheets();
     updateOvernightStats();
     startDailyCleanupTimer();
     
@@ -49,31 +48,19 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// JSON Upload and Customer Data Processing
-function processJSONFile() {
-    const fileInput = document.getElementById('jsonFile');
-    const file = fileInput.files[0];
+// JSON Data Processing (PASTE instead of upload)
+function processJSONData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    const jsonText = jsonTextarea.value.trim();
     
-    if (!file) {
-        showMessage('❌ Please select a JSON file first', 'error');
+    if (!jsonText) {
+        showMessage('❌ Please paste JSON data first', 'error');
         return;
     }
     
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const jsonData = JSON.parse(e.target.result);
-            processCustomerData(jsonData);
-        } catch (error) {
-            showMessage('❌ Invalid JSON file format', 'error');
-            console.error('JSON parse error:', error);
-        }
-    };
-    reader.readAsText(file);
-}
-
-function processCustomerData(jsonData) {
     try {
+        const jsonData = JSON.parse(jsonText);
+        
         // Expected JSON format: [{ "vyt_code": "VYT123", "company": "Company A", "customer": "Customer X", "dish": "A" }]
         if (!Array.isArray(jsonData)) {
             throw new Error('JSON should be an array of objects');
@@ -109,58 +96,20 @@ function matchCustomerDataWithBowls() {
         }
     });
     
-    updateSheets();
+    updateDisplay();
 }
 
-// Color Coding System for Overdue Returns
-function getOverdueColor(deliveryDate) {
-    const delivery = new Date(deliveryDate);
-    const today = new Date();
-    const diffDays = Math.floor((today - delivery) / (1000 * 60 * 60 * 24));
-    
-    // Skip weekends in calculation
-    let businessDays = 0;
-    let currentDate = new Date(delivery);
-    
-    while (currentDate <= today) {
-        const dayOfWeek = currentDate.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
-            businessDays++;
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    // Wednesday delivery color coding
-    if (businessDays === 1) return 'yellow-bg';    // Thursday
-    if (businessDays === 2) return 'pink-bg';      // Friday
-    if (businessDays === 3) return 'orange-bg';    // Monday
-    if (businessDays >= 4) return 'red-bg';        // Tuesday+
-    
-    return ''; // Not overdue
-}
-
-function getCustomerNameColor(dish, customer) {
-    const dishCustomers = window.appData.customerData.filter(c => c.dish === dish);
-    if (dishCustomers.length === 1) {
-        return 'green-text';
-    } else if (dishCustomers.length > 1) {
-        return 'red-text';
-    }
-    return '';
-}
-
-// Daily Cleanup Timer (7PM Return Sheet Clear)
+// Daily Cleanup Timer (7PM Return Data Clear)
 function startDailyCleanupTimer() {
-    // Check every minute if it's 7PM
     setInterval(() => {
         const now = new Date();
         if (now.getHours() === 19 && now.getMinutes() === 0) {
-            clearReturnSheet();
+            clearReturnData();
         }
     }, 60000);
 }
 
-function clearReturnSheet() {
+function clearReturnData() {
     const today = new Date().toLocaleDateString('en-GB');
     if (window.appData.lastCleanup === today) return;
     
@@ -174,8 +123,8 @@ function clearReturnSheet() {
         });
     }
     
-    showMessage('✅ Return sheet cleared for new day - reusable bowls ready', 'success');
-    updateSheets();
+    showMessage('✅ Return data cleared for new day', 'success');
+    updateDisplay();
 }
 
 // Storage Functions
@@ -251,13 +200,13 @@ function loadUsers() {
     if (window.appData.mode === 'kitchen') {
         usersToShow = USERS.filter(user => user.role === 'Kitchen');
     } else if (window.appData.mode === 'return') {
-        usersToShow = USERS.filter(user => user.role === 'Return' || user.name === "Kitchen Team");
+        usersToShow = USERS.filter(user => user.role === 'Return');
     }
     
     usersToShow.forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
-        option.textContent = user.name + (user.role ? ` (${user.role})` : '');
+        option.textContent = user.name;
         dropdown.appendChild(option);
     });
 }
@@ -353,7 +302,6 @@ function processScan(code) {
     }
     
     updateDisplay();
-    updateSheets();
     updateOvernightStats();
     updateLastActivity();
 }
@@ -392,8 +340,7 @@ function kitchenScan(code) {
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
-        status: 'ACTIVE',
-        deliveryDate: today // Track delivery date for overdue calculation
+        status: 'ACTIVE'
     };
     
     window.appData.activeBowls.push(newBowl);
@@ -427,7 +374,7 @@ function kitchenScan(code) {
     }
     
     return { 
-        message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode} - Now ACTIVE for returns`, 
+        message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
         type: "success",
         responseTime: Date.now() - startTime
     };
@@ -459,13 +406,6 @@ function returnScan(code) {
     const activeBowl = window.appData.activeBowls[activeBowlIndex];
     
     window.appData.activeBowls.splice(activeBowlIndex, 1);
-    
-    const preparedBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
-        bowl.code === fullCode && bowl.date === today
-    );
-    if (preparedBowlIndex !== -1) {
-        window.appData.preparedBowls.splice(preparedBowlIndex, 1);
-    }
     
     window.appData.returnedBowls.push({
         ...activeBowl,
@@ -504,7 +444,7 @@ function returnScan(code) {
     }
     
     return { 
-        message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
+        message: `✅ Returned: ${fullCode}`, 
         type: "success",
         responseTime: Date.now() - startTime
     };
@@ -593,71 +533,48 @@ function updateOvernightStats() {
     statsBody.innerHTML = html;
 }
 
-// Sheet Management
-function updateSheets() {
-    updateActiveSheet();
-    updateReturnSheet();
-}
-
-function updateActiveSheet() {
-    const activeBody = document.getElementById('activeSheetBody');
-    const activeCount = document.getElementById('activeBowlsCount');
-    
-    activeCount.textContent = window.appData.activeBowls.length;
-    
+// Data Export Functions
+function exportActiveBowls() {
     if (window.appData.activeBowls.length === 0) {
-        activeBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No active bowls</td></tr>';
+        showMessage('❌ No active bowls to export', 'error');
         return;
     }
     
-    let html = '';
-    window.appData.activeBowls.forEach(bowl => {
-        const overdueColor = getOverdueColor(bowl.deliveryDate || bowl.date);
-        const customerColor = getCustomerNameColor(bowl.dish, bowl.customer);
-        
-        html += `
-            <tr class="${overdueColor}">
-                <td>${bowl.code}</td>
-                <td>${bowl.dish}</td>
-                <td>${bowl.company}</td>
-                <td class="${customerColor}">${bowl.customer}</td>
-                <td>${bowl.user}</td>
-                <td>${bowl.status}</td>
-            </tr>
-        `;
-    });
-    
-    activeBody.innerHTML = html;
+    const csvData = convertToCSV(window.appData.activeBowls, ['code', 'dish', 'company', 'customer', 'user', 'date', 'time']);
+    downloadCSV(csvData, 'active_bowls.csv');
+    showMessage('✅ Active bowls exported as CSV', 'success');
 }
 
-function updateReturnSheet() {
-    const returnBody = document.getElementById('returnSheetBody');
-    const returnsCount = document.getElementById('returnsCount');
+function exportReturnData() {
     const today = new Date().toLocaleDateString('en-GB');
-    
     const todayReturns = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today);
-    returnsCount.textContent = todayReturns.length;
     
     if (todayReturns.length === 0) {
-        returnBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No returns today</td></tr>';
+        showMessage('❌ No return data to export today', 'error');
         return;
     }
     
-    let html = '';
-    todayReturns.forEach(bowl => {
-        html += `
-            <tr>
-                <td>${bowl.code}</td>
-                <td>${bowl.dish}</td>
-                <td>${bowl.company}</td>
-                <td>${bowl.customer}</td>
-                <td>${bowl.returnedBy}</td>
-                <td>${bowl.returnTime}</td>
-            </tr>
-        `;
+    const csvData = convertToCSV(todayReturns, ['code', 'dish', 'company', 'customer', 'returnedBy', 'returnDate', 'returnTime']);
+    downloadCSV(csvData, 'return_data.csv');
+    showMessage('✅ Return data exported as CSV', 'success');
+}
+
+function convertToCSV(data, fields) {
+    const headers = fields.join(',');
+    const rows = data.map(item => {
+        return fields.map(field => `"${item[field] || ''}"`).join(',');
     });
-    
-    returnBody.innerHTML = html;
+    return [headers, ...rows].join('\n');
+}
+
+function downloadCSV(csvData, filename) {
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
 }
 
 // Display Functions
@@ -700,12 +617,8 @@ function updateDisplay() {
         document.getElementById('myScansCount').textContent = userTodayScans;
     }
     
-    document.getElementById('localDataInfo').innerHTML = `
-        <strong>Current Data:</strong> 
-        ${window.appData.activeBowls.length} active bowls • 
-        ${preparedToday} prepared today • 
-        ${returnedToday} returned today •
-        ${window.appData.myScans.length} total scans
+    document.getElementById('exportInfo').innerHTML = `
+        <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
     `;
 }
 
@@ -715,29 +628,13 @@ function showMessage(text, type) {
     element.className = 'feedback ' + type;
 }
 
-// Backup Functions
-async function forceBackupNow() {
-    const btn = document.getElementById('forceBackupBtn');
-    btn.disabled = true;
-    btn.textContent = "🔄 BACKING UP...";
-    
-    try {
-        await syncToFirebase();
-        showMessage('✅ Manual backup completed successfully!', 'success');
-    } catch (error) {
-        showMessage('❌ Manual backup failed', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "🔥 BACKUP NOW";
-    }
-}
-
 // Make functions globally available
 window.setMode = setMode;
 window.selectUser = selectUser;
 window.selectDishLetter = selectDishLetter;
 window.startScanning = startScanning;
 window.stopScanning = stopScanning;
-window.processJSONFile = processJSONFile;
-window.forceBackupNow = forceBackupNow;
+window.processJSONData = processJSONData;
+window.exportActiveBowls = exportActiveBowls;
+window.exportReturnData = exportReturnData;
 window.loadFromFirebase = loadFromFirebase;
