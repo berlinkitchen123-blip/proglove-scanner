@@ -35,6 +35,59 @@ function getStandardizedDate(dateString = null) {
     return date.toISOString().split('T')[0]; // Returns "2025-10-13"
 }
 
+// Enhanced URL NORMALIZATION function for VYT and VYTAL
+function normalizeVYTURL(url) {
+    if (!url) return null;
+    
+    let normalized = url.toString().toUpperCase().trim();
+    
+    // Remove protocol variations
+    normalized = normalized.replace(/^HTTPS?:\/\//, '');
+    
+    // Handle both VYT.TO and VYTAL domains
+    normalized = normalized.replace(/VYT\.TO\/?/i, 'VYT.TO/');
+    normalized = normalized.replace(/VYTAL\./i, 'VYTAL.');
+    normalized = normalized.replace(/\/$/, ''); // Remove trailing slash
+    
+    return normalized;
+}
+
+// Enhanced VYT CODE EXTRACTION for both VYT and VYTAL
+function extractVYTInfo(input) {
+    if (!input) return null;
+    
+    const str = input.toString().toUpperCase().trim();
+    
+    // Check for VYT.TO URLs
+    if (str.includes('VYT.TO/')) {
+        const urlParts = str.split('/');
+        const code = urlParts[urlParts.length - 1];
+        return {
+            type: 'VYT.TO',
+            code: code,
+            fullUrl: str
+        };
+    }
+    
+    // Check for VYTAL URLs  
+    if (str.includes('VYTAL.')) {
+        const urlParts = str.split('/');
+        const code = urlParts[urlParts.length - 1];
+        return {
+            type: 'VYTAL',
+            code: code,
+            fullUrl: str
+        };
+    }
+    
+    // It's already a direct code
+    return {
+        type: 'DIRECT',
+        code: str,
+        fullUrl: str
+    };
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -54,7 +107,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// COMPLEX JSON Data Processing - Matches FULL URLs exactly
+// COMPLEX JSON Data Processing - Handles VYT/VYTAL URLs
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -67,18 +120,16 @@ function processJSONData() {
     try {
         const jsonData = JSON.parse(jsonText);
         
-        console.log('🔍 Starting JSON patch process with FULL URL matching...');
-        console.log('Full JSON structure:', jsonData);
+        console.log('🔍 Starting JSON patch process with VYT/VYTAL support...');
         
         const patchResults = {
             matched: 0,
             failed: []
         };
 
-        // STEP 1: Extract all VYT codes from the nested structure
+        // STEP 1: Extract all bowl codes from the nested structure
         const extractedData = [];
         
-        // Check if it's a single delivery object or array of deliveries
         const deliveries = Array.isArray(jsonData) ? jsonData : [jsonData];
         
         deliveries.forEach((delivery, deliveryIndex) => {
@@ -94,26 +145,32 @@ function processJSONData() {
                             
                             if (dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0) {
                                 dish.bowlCodes.forEach((bowlCode, codeIndex) => {
-                                    // Keep the ORIGINAL FULL URL for exact matching
-                                    const fullVytUrl = bowlCode.toUpperCase().trim();
+                                    // Extract VYT info (handles both VYT.TO and VYTAL)
+                                    const vytInfo = extractVYTInfo(bowlCode);
                                     
-                                    // Get customer name from dish users
-                                    let customerName = "Unknown";
-                                    if (dish.users && dish.users.length > 0) {
-                                        customerName = dish.users.map(user => user.username).join(', ');
+                                    if (vytInfo && vytInfo.code) {
+                                        // Get customer name from dish users
+                                        let customerName = "Unknown";
+                                        if (dish.users && dish.users.length > 0) {
+                                            customerName = dish.users.map(user => user.username).join(', ');
+                                        }
+                                        
+                                        extractedData.push({
+                                            vyt_code: vytInfo.code,
+                                            full_url: vytInfo.fullUrl,
+                                            original_code: bowlCode,
+                                            company: delivery.name || "Unknown Company",
+                                            customer: customerName,
+                                            dish: dish.label || "Unknown",
+                                            delivery: delivery.name,
+                                            box: box.uniqueIdentifier,
+                                            type: vytInfo.type
+                                        });
+                                        
+                                        console.log(`      ✅ Extracted: ${bowlCode} → ${vytInfo.code} (${vytInfo.type}) for ${customerName}`);
+                                    } else {
+                                        console.log(`      ❌ Could not extract VYT code from: ${bowlCode}`);
                                     }
-                                    
-                                    extractedData.push({
-                                        vyt_code: fullVytUrl, // FULL URL for exact matching
-                                        original_code: bowlCode,
-                                        company: delivery.name || "Unknown Company",
-                                        customer: customerName,
-                                        dish: dish.label || "Unknown",
-                                        delivery: delivery.name,
-                                        box: box.uniqueIdentifier
-                                    });
-                                    
-                                    console.log(`      ✅ Keeping FULL URL: ${fullVytUrl} for ${customerName}`);
                                 });
                             } else {
                                 console.log(`      ⚠️ No bowlCodes in dish: ${dish.name}`);
@@ -124,22 +181,23 @@ function processJSONData() {
             }
         });
 
-        console.log('📋 Extracted VYT URLs:', extractedData);
+        console.log('📋 Extracted bowl codes:', extractedData);
         console.log('🔍 Current Active Bowls:', window.appData.activeBowls.map(b => b.code));
 
-        // STEP 2: Process each extracted VYT URL - EXACT MATCHING
+        // STEP 2: Process each extracted bowl code - Use NORMALIZED matching
         extractedData.forEach((item, index) => {
-            const fullVytUrl = item.vyt_code; // FULL URL like "HTTP://VYT.TO/ABCDEF"
+            const normalizedVytUrl = normalizeVYTURL(item.full_url);
             
-            console.log(`Looking for active bowl matching FULL URL: ${fullVytUrl}`);
+            console.log(`Looking for active bowl: ${item.original_code} → Normalized: ${normalizedVytUrl}`);
             
-            // Find ALL active bowls with this EXACT FULL URL
+            // Find ALL active bowls with NORMALIZED URL matching
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
-                return bowl.code.toUpperCase() === fullVytUrl.toUpperCase();
+                const bowlCode = normalizeVYTURL(bowl.code) || bowl.code;
+                return bowlCode === normalizedVytUrl;
             });
             
             if (matchingBowls.length > 0) {
-                console.log(`✅ Found ${matchingBowls.length} matches for ${fullVytUrl}`);
+                console.log(`✅ Found ${matchingBowls.length} matches for ${normalizedVytUrl}`);
                 
                 // Patch company and customer name to all matching bowls
                 matchingBowls.forEach(bowl => {
@@ -157,12 +215,13 @@ function processJSONData() {
                 
                 patchResults.matched += matchingBowls.length;
             } else {
-                console.log(`❌ No active bowl found for VYT URL: ${fullVytUrl}`);
+                console.log(`❌ No active bowl found for: ${normalizedVytUrl}`);
                 patchResults.failed.push({
-                    vyt_code: fullVytUrl,
+                    vyt_code: normalizedVytUrl,
+                    original_code: item.original_code,
                     company: item.company,
                     customer: item.customer,
-                    reason: 'No active bowl found with this VYT URL',
+                    reason: 'No active bowl found with this VYT/VYTAL URL',
                     record: index + 1
                 });
             }
@@ -490,41 +549,45 @@ function processScan(code) {
     updateLastActivity();
 }
 
-// UPDATED: kitchenScan - Stores EXACT scanned code (FULL URL)
+// UPDATED: kitchenScan - Handles VYT/VYTAL URLs with normalization
 function kitchenScan(code) {
     const startTime = Date.now();
     
-    // Store the EXACT scanned code (FULL URL)
-    const fullCode = code.toUpperCase().trim();
+    // Normalize the scanned code to handle URL variations
+    const normalizedCode = normalizeVYTURL(code) || code.toUpperCase().trim();
     
     const today = getStandardizedDate();
     
-    // Error Detection: Duplicate scan (check exact FULL URL)
-    if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
+    // Error Detection: Duplicate scan (check normalized URL)
+    if (window.appData.activeBowls.some(bowl => {
+        const bowlCode = normalizeVYTURL(bowl.code) || bowl.code;
+        return bowlCode === normalizedCode;
+    })) {
         return { 
-            message: "❌ Bowl already active: " + fullCode, 
+            message: "❌ Bowl already active: " + normalizedCode, 
             type: "error",
             responseTime: Date.now() - startTime
         };
     }
     
-    if (window.appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
+    if (window.appData.preparedBowls.some(bowl => {
+        const bowlCode = normalizeVYTURL(bowl.code) || bowl.code;
+        return bowlCode === normalizedCode && bowl.date === today;
+    })) {
         return { 
-            message: "❌ Already prepared today: " + fullCode, 
+            message: "❌ Already prepared today: " + normalizedCode, 
             type: "error",
             responseTime: Date.now() - startTime
         };
     }
     
-    // Find customer data from JSON
-    const customerInfo = window.appData.customerData.find(c => c.vyt_code === fullCode);
-    
+    // Store the ORIGINAL code, but use normalized for matching
     const newBowl = {
-        code: fullCode, // Store EXACT scanned code (FULL URL)
+        code: code.toUpperCase().trim(), // Store original
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: customerInfo ? customerInfo.company : "Unknown",
-        customer: customerInfo ? customerInfo.customer : "Unknown",
+        company: "Unknown",
+        customer: "Unknown",
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
@@ -537,7 +600,7 @@ function kitchenScan(code) {
     
     window.appData.myScans.push({
         type: 'kitchen',
-        code: fullCode,
+        code: normalizedCode, // Use normalized for tracking
         dish: window.appData.dishLetter,
         user: window.appData.user,
         company: newBowl.company,
@@ -547,15 +610,14 @@ function kitchenScan(code) {
     
     window.appData.scanHistory.unshift({
         type: 'kitchen',
-        code: fullCode,
+        code: normalizedCode,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `${window.appData.dishLetter} Prepared: ${fullCode}`
+        message: `${window.appData.dishLetter} Prepared: ${normalizedCode}`
     });
     
     saveToStorage();
     
-    // REAL-TIME FIREBASE SYNC
     if (typeof syncToFirebase === 'function') {
         syncToFirebase().catch(() => {
             console.log('Firebase sync failed, but data saved locally');
@@ -563,34 +625,40 @@ function kitchenScan(code) {
     }
     
     return { 
-        message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
+        message: `✅ ${window.appData.dishLetter} Prepared: ${normalizedCode}`, 
         type: "success",
         responseTime: Date.now() - startTime
     };
 }
 
-// UPDATED: returnScan - Uses EXACT scanned code (FULL URL)
+// UPDATED: returnScan - Handles VYT/VYTAL URLs with normalization
 function returnScan(code) {
     const startTime = Date.now();
     
-    // Use the EXACT scanned code (FULL URL)
-    const fullCode = code.toUpperCase().trim();
+    // Normalize the scanned code
+    const normalizedCode = normalizeVYTURL(code) || code.toUpperCase().trim();
     
     const today = getStandardizedDate();
     
-    // Find active bowl by EXACT FULL URL
-    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+    // Find active bowl by normalized URL
+    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => {
+        const bowlCode = normalizeVYTURL(bowl.code) || bowl.code;
+        return bowlCode === normalizedCode;
+    });
     
     if (activeBowlIndex === -1) {
-        if (window.appData.returnedBowls.some(bowl => bowl.code === fullCode && bowl.returnDate === today)) {
+        if (window.appData.returnedBowls.some(bowl => {
+            const bowlCode = normalizeVYTURL(bowl.code) || bowl.code;
+            return bowlCode === normalizedCode && bowl.returnDate === today;
+        })) {
             return { 
-                message: "❌ Already returned today: " + fullCode, 
+                message: "❌ Already returned today: " + normalizedCode, 
                 type: "error",
                 responseTime: Date.now() - startTime
             };
         } else {
             return { 
-                message: "❌ Bowl not found in active bowls: " + fullCode, 
+                message: "❌ Bowl not found in active bowls: " + normalizedCode, 
                 type: "error",
                 responseTime: Date.now() - startTime
             };
@@ -612,7 +680,7 @@ function returnScan(code) {
     
     window.appData.myScans.push({
         type: 'return',
-        code: fullCode,
+        code: normalizedCode,
         user: window.appData.user,
         company: activeBowl.company,
         customer: activeBowl.customer,
@@ -622,15 +690,14 @@ function returnScan(code) {
     
     window.appData.scanHistory.unshift({
         type: 'return',
-        code: fullCode,
+        code: normalizedCode,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `Returned: ${fullCode}`
+        message: `Returned: ${normalizedCode}`
     });
     
     saveToStorage();
     
-    // REAL-TIME FIREBASE SYNC
     if (typeof syncToFirebase === 'function') {
         syncToFirebase().catch(() => {
             console.log('Firebase sync failed, but data saved locally');
@@ -638,38 +705,63 @@ function returnScan(code) {
     }
     
     return { 
-        message: `✅ Returned: ${fullCode}`, 
+        message: `✅ Returned: ${normalizedCode}`, 
         type: "success",
         responseTime: Date.now() - startTime
     };
 }
 
-// Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
+// Overnight Statistics Table - Resets at 10PM for new shift
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
     const cycleInfo = document.getElementById('cycleInfo');
     
-    // Calculate overnight cycle (10PM previous day to 10AM current day)
     const now = new Date();
-    const today10AM = new Date(now);
-    today10AM.setHours(10, 0, 0, 0);
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
     
-    const yesterday10PM = new Date(now);
-    yesterday10PM.setDate(yesterday10PM.getDate() - 1);
-    yesterday10PM.setHours(22, 0, 0, 0);
+    // Calculate overnight cycle (10PM today to 10AM tomorrow)
+    const today10PM = new Date(now);
+    today10PM.setHours(22, 0, 0, 0);
     
-    const isOvernightCycle = now >= yesterday10PM && now <= today10AM;
-    cycleInfo.textContent = isOvernightCycle ? 
-        `Yesterday 10PM - Today 10AM` : 
-        `Today 10PM - Tomorrow 10AM`;
+    const tomorrow10AM = new Date(now);
+    tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
+    tomorrow10AM.setHours(10, 0, 0, 0);
     
-    // Filter scans for overnight cycle
+    // If it's after 10PM, show today 10PM to tomorrow 10AM
+    // If it's before 10AM, show yesterday 10PM to today 10AM
+    let cycleStart, cycleEnd, cycleText;
+    
+    if (currentHour >= 22 || currentHour < 10) {
+        // Overnight shift (10PM to 10AM)
+        cycleStart = today10PM;
+        cycleEnd = tomorrow10AM;
+        cycleText = `Tonight 10PM - Tomorrow 10AM`;
+    } else {
+        // Day shift - show previous overnight stats
+        const yesterday10PM = new Date(now);
+        yesterday10PM.setDate(yesterday10PM.getDate() - 1);
+        yesterday10PM.setHours(22, 0, 0, 0);
+        
+        const today10AM = new Date(now);
+        today10AM.setHours(10, 0, 0, 0);
+        
+        cycleStart = yesterday10PM;
+        cycleEnd = today10AM;
+        cycleText = `Last Night 10PM - Today 10AM`;
+    }
+    
+    cycleInfo.textContent = cycleText;
+    
+    // Filter scans for the current overnight cycle
     const overnightScans = window.appData.myScans.filter(scan => {
         const scanTime = new Date(scan.timestamp);
-        return scanTime >= yesterday10PM && scanTime <= today10AM;
+        return scanTime >= cycleStart && scanTime <= cycleEnd;
     });
     
-    // Group by dish and user - INCLUDES DISHES 1-4
+    console.log(`📊 Overnight stats: ${overnightScans.length} scans in ${cycleText}`);
+    
+    // Group by dish and user
     const dishStats = {};
     overnightScans.forEach(scan => {
         const key = `${scan.dish}-${scan.user}`;
@@ -696,24 +788,23 @@ function updateOvernightStats() {
         }
     });
     
-    // Convert to array and sort - INCLUDES DISHES 1-4
+    // Convert to array and sort
     const statsArray = Object.values(dishStats).sort((a, b) => {
-        // Sort dishes: A-Z then 1-4
         if (a.dish !== b.dish) {
             const aIsNumber = !isNaN(a.dish);
             const bIsNumber = !isNaN(b.dish);
             
-            if (aIsNumber && !bIsNumber) return 1; // Numbers after letters
-            if (!aIsNumber && bIsNumber) return -1; // Letters before numbers
-            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish); // Numeric sort for numbers
-            return a.dish.localeCompare(b.dish); // Alphabetic sort for letters
+            if (aIsNumber && !bIsNumber) return 1;
+            if (!aIsNumber && bIsNumber) return -1;
+            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
+            return a.dish.localeCompare(b.dish);
         }
         return new Date(a.startTime) - new Date(b.startTime);
     });
     
     // Update table
     if (statsArray.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans in current cycle</td></tr>';
+        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No scans in current overnight cycle</td></tr>';
         return;
     }
     
