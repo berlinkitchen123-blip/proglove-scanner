@@ -71,7 +71,7 @@ function processJSONData() {
             throw new Error('JSON should be an array of objects');
         }
         
-        console.log('🔍 Starting JSON patch process...');
+        console.log('🔍 Starting JSON patch with CORRECT field names...');
         console.log('JSON records to process:', jsonData.length);
         console.log('Active bowls before patch:', window.appData.activeBowls.length);
         
@@ -88,8 +88,8 @@ function processJSONData() {
             if (!vytCode) {
                 patchResults.failed.push({
                     vyt_code: 'MISSING_CODE',
-                    customer: customer.customer || 'Unknown',
-                    company: customer.company || 'Unknown',
+                    company: customer.uniqueidentifier || 'No company',
+                    customer: customer.username || 'No customer',
                     reason: 'No VYT code found in JSON record'
                 });
                 return;
@@ -112,12 +112,14 @@ function processJSONData() {
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
                     
-                    // Patch the data from JSON
-                    bowl.company = customer.company || "Unknown";
-                    bowl.customer = customer.customer || "Unknown";
+                    // PATCH WITH CORRECT FIELD NAMES:
+                    bowl.company = customer.uniqueidentifier || "Unknown";  // ← Company name
+                    bowl.customer = customer.username || "Unknown";         // ← Customer name
                     bowl.dish = customer.dish || bowl.dish; // Update dish if provided
                     
-                    console.log(`🔄 Patched bowl ${bowl.code}: Company "${oldCompany}" → "${bowl.company}" | Customer "${oldCustomer}" → "${bowl.customer}"`);
+                    console.log(`🔄 Patched bowl ${bowl.code}:`);
+                    console.log(`   Company: "${oldCompany}" → "${bowl.company}"`);
+                    console.log(`   Customer: "${oldCustomer}" → "${bowl.customer}"`);
                 });
                 
                 patchResults.matched += matchingBowls.length;
@@ -126,12 +128,57 @@ function processJSONData() {
                 console.log(`❌ No active bowl found for VYT code: ${cleanVytCode}`);
                 patchResults.failed.push({
                     vyt_code: cleanVytCode,
-                    customer: customer.customer || 'Unknown',
-                    company: customer.company || 'Unknown',
+                    company: customer.uniqueidentifier || 'No company',
+                    customer: customer.username || 'No customer',
                     reason: 'No active bowl found with this VYT code'
                 });
             }
         });
+        
+        // STEP 4: After individual patching, combine customer names for same dish
+        if (patchResults.matched > 0) {
+            combineCustomerNamesByDish();
+        }
+        
+        // Update display and save
+        updateDisplay();
+        saveToStorage();
+        
+        // Sync to Firebase
+        if (typeof syncToFirebase === 'function') {
+            syncToFirebase().catch(() => {
+                console.log('Firebase sync failed, but data saved locally');
+            });
+        }
+        
+        // Show results
+        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed matches`, 'success');
+        
+        // Show detailed results
+        document.getElementById('patchResults').style.display = 'block';
+        document.getElementById('patchSummary').textContent = 
+            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} VYT codes`;
+        
+        const failedDiv = document.getElementById('failedMatches');
+        if (patchResults.failed.length > 0) {
+            let failedHtml = '<strong>Failed matches:</strong><br>';
+            patchResults.failed.forEach(failed => {
+                failedHtml += `• ${failed.vyt_code} - ${failed.customer} (${failed.reason})<br>`;
+            });
+            failedDiv.innerHTML = failedHtml;
+        } else {
+            failedDiv.innerHTML = '<em>All VYT codes matched successfully!</em>';
+        }
+        
+        document.getElementById('jsonStatus').innerHTML = 
+            `<strong>JSON Status:</strong> ${jsonData.length} customer records processed, ${patchResults.matched} bowls patched`;
+        
+        console.log('📊 Final patch results:', patchResults);
+        
+    } catch (error) {
+        showMessage('❌ Error processing JSON data: ' + error.message, 'error');
+    }
+});
         
         // STEP 4: After individual patching, combine customer names for same dish
         if (patchResults.matched > 0) {
