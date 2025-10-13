@@ -220,7 +220,7 @@
         <div class="card">
             <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
             <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here:
+                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
 [
   {
     "vyt_code": "VYT12345",
@@ -228,7 +228,9 @@
     "customer": "Customer Name",
     "dish": "A"
   }
-]'></textarea>
+]
+
+Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
                 <div class="sync-controls">
                     <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
                     <button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
