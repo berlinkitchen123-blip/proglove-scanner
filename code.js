@@ -110,32 +110,63 @@ function matchCustomerDataWithBowlsDetailed(jsonData) {
         failed: []
     };
     
+    console.log('🔍 Starting JSON patch process...');
+    console.log('Active bowls:', window.appData.activeBowls.length);
+    console.log('JSON records:', jsonData.length);
+    
     // Step 1: First patch individual bowls
     jsonData.forEach(customer => {
-        const matchingBowls = window.appData.activeBowls.filter(bowl => bowl.code === customer.vyt_code);
+        // Try different possible field names for VYT code
+        const vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code;
+        
+        if (!vytCode) {
+            results.failed.push({
+                vyt_code: 'MISSING_CODE',
+                customer: customer.customer || 'Unknown',
+                company: customer.company || 'Unknown'
+            });
+            return;
+        }
+        
+        console.log(`Looking for bowl: ${vytCode}`);
+        
+        // Find matching bowls (case insensitive)
+        const matchingBowls = window.appData.activeBowls.filter(bowl => {
+            const bowlCode = bowl.code.toUpperCase();
+            const customerCode = vytCode.toUpperCase();
+            return bowlCode === customerCode;
+        });
         
         if (matchingBowls.length > 0) {
+            console.log(`✅ Found ${matchingBowls.length} matches for ${vytCode}`);
+            
             // Update all matching bowls with individual customer data
             matchingBowls.forEach(bowl => {
-                bowl.company = customer.company;
-                bowl.customer = customer.customer;  // Individual customer name
+                bowl.company = customer.company || "Unknown";
+                bowl.customer = customer.customer || "Unknown";
                 bowl.dish = customer.dish || bowl.dish;
+                console.log(`Updated bowl ${bowl.code}: ${customer.company} - ${customer.customer}`);
             });
             results.matched += matchingBowls.length;
         } else {
             // No active bowl found for this customer
+            console.log(`❌ No match found for ${vytCode}`);
             results.failed.push({
-                vyt_code: customer.vyt_code,
-                customer: customer.customer,
-                company: customer.company
+                vyt_code: vytCode,
+                customer: customer.customer || 'Unknown',
+                company: customer.company || 'Unknown'
             });
         }
     });
     
     // Step 2: Group by dish and combine customer names
-    combineCustomerNamesByDish();
+    if (results.matched > 0) {
+        combineCustomerNamesByDish();
+    }
     
     updateDisplay();
+    
+    console.log('📊 Patch results:', results);
     return results;
 }
 
@@ -324,10 +355,20 @@ function selectUser() {
 function loadDishLetters() {
     const dropdown = document.getElementById('dishDropdown');
     dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
+    
+    // Add letters A-Z
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
         const option = document.createElement('option');
         option.value = letter;
         option.textContent = letter;
+        dropdown.appendChild(option);
+    });
+    
+    // Add numbers 1-4
+    '1234'.split('').forEach(number => {
+        const option = document.createElement('option');
+        option.value = number;
+        option.textContent = number;
         dropdown.appendChild(option);
     });
 }
