@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Hybrid Backup System</title>
+    <title>ProGlove Scanner - Complete System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -57,81 +57,15 @@
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
         .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
-        
-        /* Backup Popup Styles */
-        .popup-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        .popup-content {
-            background: #2a2a2a;
-            padding: 20px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 400px;
-            border: 3px solid #4285f4;
-            text-align: center;
-        }
-        .popup-header h3 {
-            color: #4285f4;
-            margin-bottom: 15px;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            background: #333;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 15px 0;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #34a853, #4285f4);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        .progress-text {
-            font-size: 14px;
-            color: #fff;
-            margin-bottom: 10px;
-        }
-        .backup-stats {
-            background: #333;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            text-align: left;
-            margin: 10px 0;
-        }
-        .popup-footer small {
-            color: #888;
-        }
-        
-        @keyframes pulse { 
-            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
-            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
-            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
-        }
-        @keyframes shake { 
-            0%, 100% { transform: translateX(0); } 
-            25% { transform: translateX(-5px); } 
-            75% { transform: translateX(5px); } 
-        }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Hybrid Backup</h1>
-            <p>Multi-Device • Smart Backup • Zero Data Loss</p>
+            <h1>🧤 ProGlove Scanner - Complete System</h1>
+            <p>Multi-Device • Smart Backup • Excel Export</p>
         </div>
         
         <div class="card">
@@ -247,17 +181,17 @@
             <div id="importResult" style="margin-top:10px; font-size:12px;"></div>
         </div>
 
-        <!-- DATA EXPORT SECTION -->
+        <!-- EXCEL EXPORT SECTION -->
         <div class="card">
-            <h3>📤 DATA EXPORT</h3>
+            <h3>📊 EXCEL EXPORT</h3>
             <div class="sync-section">
                 <div class="sync-controls">
-                    <button class="sync-btn export-btn" onclick="exportToCSV()" id="exportBtn">
-                        📤 EXPORT TO CSV
+                    <button class="sync-btn export-btn" onclick="exportToExcel()" id="exportBtn">
+                        📤 EXPORT TO EXCEL
                     </button>
                 </div>
                 <div class="sync-status" id="syncStatus">
-                    ✅ Data export ready
+                    ✅ Excel export ready
                 </div>
                 <div class="local-data" id="localDataInfo">
                     <strong>Current Data:</strong> Loading...
@@ -299,7 +233,6 @@
                 this.backupTimer = null;
             }
 
-            // 1. INSTANT SYNC: Real-time per scan
             async syncScanInstantly(scanData) {
                 if (!database) {
                     this.queueScanForBackup(scanData);
@@ -307,7 +240,6 @@
                 }
                 
                 try {
-                    // Quick sync for this scan
                     await this.syncSingleScan(scanData);
                     console.log('✅ Instant scan sync completed');
                 } catch (error) {
@@ -316,7 +248,6 @@
                 }
             }
 
-            // Quick sync for single scan
             async syncSingleScan(scanData) {
                 const appDataRef = ref(database, 'appData');
                 const snapshot = await get(appDataRef);
@@ -354,7 +285,6 @@
                 return merged;
             }
 
-            // 2. QUEUE: Add scan to pending backup queue
             queueScanForBackup(scanData) {
                 this.pendingScans.push({
                     ...scanData,
@@ -364,7 +294,6 @@
                 this.updateBackupStatus();
             }
 
-            // 3. INCREMENTAL BACKUP: Lightweight, frequent
             async runIncrementalBackup() {
                 if (this.isBackupRunning || this.pendingScans.length === 0 || window.appData.scanning) {
                     return;
@@ -397,7 +326,6 @@
                 }
             }
 
-            // 4. FULL BACKUP: Complete data backup (when safe)
             async runFullBackup() {
                 if (window.appData.scanning) {
                     console.log('⏸️ Full backup deferred - scanning in progress');
@@ -442,7 +370,6 @@
                 }
             }
 
-            // 5. SMART TIMER: Manages backup timing
             startSmartTimer() {
                 if (this.backupTimer) {
                     clearInterval(this.backupTimer);
@@ -456,12 +383,10 @@
                     ];
 
                     if (conditions.every(Boolean)) {
-                        // First clear pending scans
                         if (this.pendingScans.length > 0) {
                             this.runIncrementalBackup();
                         }
                         
-                        // Then run full backup if needed (every 5 minutes when safe)
                         if (Date.now() - this.lastFullBackup > 300000) {
                             this.runFullBackup();
                         }
@@ -469,16 +394,13 @@
                 }, 60000);
             }
 
-            // 6. MANUAL BACKUP: When user stops scanning
             async onStopScanning() {
                 console.log('🔄 Manual backup triggered by stop scanning');
                 
-                // First, run incremental to clear pending scans
                 if (this.pendingScans.length > 0) {
                     await this.runIncrementalBackup();
                 }
                 
-                // Then run full backup
                 const result = await this.runFullBackup();
                 
                 if (result) {
@@ -486,7 +408,6 @@
                 }
             }
 
-            // Update backup status display
             updateBackupStatus() {
                 const backupStatus = document.getElementById('backupStatus');
                 if (this.pendingScans.length > 0) {
@@ -497,7 +418,6 @@
             }
         }
 
-        // Initialize backup system
         const backupSystem = new SmartBackupSystem();
 
         function initializeFirebase() {
@@ -552,9 +472,8 @@
             });
         }
 
-        // DAILY CLEANUP SYSTEM - CLEARS RETURNED BOWLS AT 7:00 PM
+        // DAILY CLEANUP SYSTEM
         function startDailyCleanupTimer() {
-            // Check immediately and then every minute
             checkAndRunCleanup();
             
             setInterval(() => {
@@ -566,10 +485,9 @@
             const now = new Date();
             const today = now.toLocaleDateString('en-GB');
             
-            // Check if we should run cleanup (7:00 PM or after)
             const shouldCleanup = (
-                (now.getHours() === 19 && now.getMinutes() === 0) || // Exactly 7:00 PM
-                (now.getHours() >= 19 && window.appData.lastCleanup !== today) // After 7PM if not cleaned today
+                (now.getHours() === 19 && now.getMinutes() === 0) ||
+                (now.getHours() >= 19 && window.appData.lastCleanup !== today)
             );
             
             if (shouldCleanup) {
@@ -588,12 +506,10 @@
             try {
                 console.log('🧹 RUNNING FIREBASE CLEANUP AT 7:00 PM...');
                 
-                // Get current data from Firebase
                 const appDataRef = ref(database, 'appData');
                 const snapshot = await get(appDataRef);
                 const currentData = snapshot.val() || {};
                 
-                // Create backup of returned bowls before clearing
                 const backupData = {
                     returnedBowls: currentData.returnedBowls || [],
                     cleanupDate: today,
@@ -601,14 +517,12 @@
                     returnedCount: currentData.returnedBowls ? currentData.returnedBowls.length : 0
                 };
                 
-                // Save backup
                 const backupRef = ref(database, `cleanupBackups/${today}`);
                 await set(backupRef, backupData);
                 
-                // Update Firebase - clear returnedBowls only, keep everything else
                 const updatedData = {
                     ...currentData,
-                    returnedBowls: [], // CLEAR RETURNED BOWLS ONLY
+                    returnedBowls: [],
                     lastCleanup: today,
                     lastCleanupTime: new Date().toISOString()
                 };
@@ -617,7 +531,6 @@
                 
                 console.log('✅ Firebase cleanup completed - returned bowls cleared');
                 
-                // Update local data
                 window.appData.returnedBowls = [];
                 window.appData.lastCleanup = today;
                 saveToStorage();
@@ -686,7 +599,7 @@
         }
 
         function isUserActive() {
-            return (Date.now() - window.appData.lastActivity) < 300000; // 5 minutes
+            return (Date.now() - window.appData.lastActivity) < 300000;
         }
 
         window.initializeFirebase = initializeFirebase;
@@ -697,7 +610,7 @@
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - HYBRID BACKUP SYSTEM
+        // ProGlove Scanner - COMPLETE SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -728,9 +641,40 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
+        // 10 PM DAY START HELPER
+        function getEffectiveDate(date) {
+            const effectiveDate = new Date(date);
+            if (date.getHours() >= 22) {
+                effectiveDate.setDate(effectiveDate.getDate() + 1);
+            }
+            return effectiveDate.toLocaleDateString('en-GB');
+        }
+
+        // BUSINESS DAY CALCULATION (Exclude weekends)
+        function getBusinessDaysSince(startDate) {
+            let current = new Date(startDate);
+            let today = new Date();
+            let businessDays = 0;
+            
+            while (current <= today) {
+                // Exclude Saturdays (6) and Sundays (0)
+                if (current.getDay() !== 0 && current.getDay() !== 6) {
+                    businessDays++;
+                }
+                current.setDate(current.getDate() + 1);
+                
+                // Stop if we reach today (excluding time comparison)
+                if (current.toDateString() === today.toDateString()) {
+                    break;
+                }
+            }
+            
+            return Math.max(0, businessDays - 1); // Subtract 1 to start coloring from day 3
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Hybrid Backup Scanner...');
+            console.log('Initializing Complete Scanner System...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
@@ -804,17 +748,14 @@
                     const code = vytCode.toUpperCase();
                     const today = new Date().toLocaleDateString('en-GB');
 
-                    // Check if bowl exists in active bowls
                     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
                     
                     if (activeBowlIndex !== -1) {
-                        // Update existing active bowl
                         window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
                         window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
                         window.appData.activeBowls[activeBowlIndex].dish = dishLetter || window.appData.activeBowls[activeBowlIndex].dish;
                         enrichedCount++;
 
-                        // REMOVE FROM PREPARATION SHEET (preparedBowls)
                         const prepBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
                             bowl.code === code && bowl.date === today
                         );
@@ -822,11 +763,9 @@
                         if (prepBowlIndex !== -1) {
                             window.appData.preparedBowls.splice(prepBowlIndex, 1);
                             removedFromPrepCount++;
-                            console.log(`✅ Removed ${code} from preparation sheet`);
                         }
                         
                     } else {
-                        // Create new bowl
                         const newBowl = {
                             code: code,
                             dish: dishLetter || 'X',
@@ -879,10 +818,10 @@
             document.getElementById('importResult').innerHTML = '';
         }
 
-        // Export to CSV
-        function exportToCSV() {
-            if (window.appData.myScans.length === 0) {
-                showMessage("ℹ️ No scans to export", "info");
+        // EXCEL EXPORT WITH MULTI-SHEETS & COLORS
+        async function exportToExcel() {
+            if (window.appData.myScans.length === 0 && window.appData.activeBowls.length === 0) {
+                showMessage("ℹ️ No data to export", "info");
                 return;
             }
             
@@ -890,40 +829,149 @@
             btn.disabled = true;
             btn.textContent = "⏳ EXPORTING...";
             
-            const headers = ['Type', 'VYT Code', 'Dish Letter', 'User', 'Date', 'Time', 'Company', 'Customer', 'Timestamp'];
-            const csvData = [
-                headers,
-                ...window.appData.myScans.map(scan => [
-                    scan.type,
-                    scan.code,
-                    scan.dish || '',
-                    scan.user,
-                    new Date(scan.timestamp).toLocaleDateString('en-GB'),
-                    new Date(scan.timestamp).toLocaleTimeString(),
-                    scan.company,
-                    scan.customer,
-                    scan.timestamp
-                ])
-            ];
+            try {
+                // Load SheetJS library dynamically
+                await loadSheetJS();
+                
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                
+                // Create sheets
+                createActiveSheet(wb);
+                createPreparedSheet(wb);
+                createReturnedSheet(wb);
+                
+                // Generate and download Excel file
+                XLSX.writeFile(wb, `proglove_data_${new Date().toISOString().split('T')[0]}.xlsx`);
+                
+                showMessage("✅ Data exported to Excel with colors!", "success");
+                
+            } catch (error) {
+                console.error('Excel export failed:', error);
+                showMessage('❌ Excel export failed', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "📤 EXPORT TO EXCEL";
+            }
+        }
+
+        function loadSheetJS() {
+            return new Promise((resolve, reject) => {
+                if (window.XLSX) {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        function createActiveSheet(wb) {
+            // Count dishes for font colors
+            const dishCounts = {};
+            window.appData.activeBowls.forEach(bowl => {
+                dishCounts[bowl.dish] = (dishCounts[bowl.dish] || 0) + 1;
+            });
+
+            // Prepare data with colors
+            const activeData = window.appData.activeBowls.map(bowl => {
+                const businessDays = getBusinessDaysSince(new Date(bowl.timestamp));
+                
+                // Determine font color based on dish count
+                let fontColor = '000000'; // Black default
+                const dishCount = dishCounts[bowl.dish] || 0;
+                if (dishCount === 1) fontColor = '00FF00'; // Green
+                else if (dishCount === 2) fontColor = 'FFFF00'; // Yellow
+                else if (dishCount >= 3) fontColor = 'FF0000'; // Red
+
+                // Determine cell fill color based on business days
+                let fillColor = 'FFFFFF'; // White
+                if (businessDays >= 3) fillColor = 'FFFFCC'; // Light Yellow
+                if (businessDays >= 4) fillColor = 'FFCCFF'; // Light Pink
+                if (businessDays >= 5) fillColor = 'FFE5CC'; // Light Orange
+                if (businessDays >= 6) fillColor = 'FFCCCC'; // Light Red
+
+                return {
+                    'VYT Code': bowl.code,
+                    'Dish': bowl.dish,
+                    'Customer': bowl.customer,
+                    'Company': bowl.company,
+                    'Prepared Date': bowl.date,
+                    'Prepared Time': bowl.time,
+                    'Days Not Returned': businessDays,
+                    '_fontColor': fontColor,
+                    '_fillColor': fillColor
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(activeData.map(({_fontColor, _fillColor, ...rest}) => rest));
             
-            const csvContent = csvData.map(row => 
-                row.map(field => `"${field}"`).join(',')
-            ).join('\n');
-            
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `proglove_scans_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showMessage("✅ Scans exported to CSV file!", "success");
-            
-            btn.disabled = false;
-            btn.textContent = "📤 EXPORT TO CSV";
+            // Apply styling
+            if (ws['!ref']) {
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = range.s.r + 1; R <= range.e.r; R++) {
+                    const row = activeData[R - 1];
+                    if (row) {
+                        // Apply font color to Customer column (column C)
+                        const customerCell = ws[XLSX.utils.encode_cell({r: R, c: 2})];
+                        if (customerCell) {
+                            customerCell.s = {
+                                font: { color: { rgb: row._fontColor } },
+                                fill: { fgColor: { rgb: row._fillColor } }
+                            };
+                        }
+                        
+                        // Apply fill color to entire row
+                        for (let C = range.s.c; C <= range.e.c; C++) {
+                            const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
+                            if (cell && !cell.s) {
+                                cell.s = { fill: { fgColor: { rgb: row._fillColor } } };
+                            } else if (cell && cell.s) {
+                                cell.s.fill = { fgColor: { rgb: row._fillColor } };
+                            }
+                        }
+                    }
+                }
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, "Active Bowls");
+        }
+
+        function createPreparedSheet(wb) {
+            const preparedData = window.appData.preparedBowls.map(bowl => ({
+                'VYT Code': bowl.code,
+                'Dish': bowl.dish,
+                'Customer': bowl.customer,
+                'Company': bowl.company,
+                'User': bowl.user,
+                'Date': bowl.date,
+                'Time': bowl.time,
+                'Timestamp': bowl.timestamp
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(preparedData);
+            XLSX.utils.book_append_sheet(wb, ws, "Prepared Bowls");
+        }
+
+        function createReturnedSheet(wb) {
+            const returnedData = window.appData.returnedBowls.map(bowl => ({
+                'VYT Code': bowl.code,
+                'Dish': bowl.dish,
+                'Customer': bowl.customer,
+                'Company': bowl.company,
+                'Prepared By': bowl.user,
+                'Returned By': bowl.returnedBy,
+                'Prepared Date': bowl.date,
+                'Return Date': bowl.returnDate,
+                'Return Time': bowl.returnTime
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(returnedData);
+            XLSX.utils.book_append_sheet(wb, ws, "Returned Bowls");
         }
 
         // User and Mode Management
@@ -1049,7 +1097,6 @@
             updateDisplay();
             updateLastActivity();
             
-            // Trigger smart backup when scanning stops
             backupSystem.onStopScanning();
             
             showMessage(`⏹ Scanning stopped • Backup started`, 'info');
@@ -1145,7 +1192,6 @@
             
             saveToStorage();
             
-            // USE HYBRID BACKUP SYSTEM
             backupSystem.syncScanInstantly(scanRecord);
             
             return { 
@@ -1220,7 +1266,6 @@
             
             saveToStorage();
             
-            // USE HYBRID BACKUP SYSTEM
             backupSystem.syncScanInstantly(scanRecord);
             
             return { 
@@ -1233,7 +1278,7 @@
         function updateDisplay() {
             document.getElementById('userDropdown').disabled = false;
             document.getElementById('dishDropdown').disabled = false;
-            document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0;
+            document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0 && window.appData.activeBowls.length === 0;
             
             let canScan = window.appData.user && !window.appData.scanning;
             if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
@@ -1251,14 +1296,36 @@
                 input.disabled = !window.appData.scanning;
             }
             
-            const today = new Date().toLocaleDateString('en-GB');
-            const userTodayScans = window.appData.myScans.filter(scan => 
-                scan.user === window.appData.user && 
-                new Date(scan.timestamp).toLocaleDateString('en-GB') === today
+            const now = new Date();
+            const today = getEffectiveDate(now);
+            
+            // MY SCANS TODAY - ONLY WHEN USER SELECTED
+            let userTodayScans = 0;
+            if (window.appData.user) {
+                if (window.appData.mode === 'kitchen' && window.appData.dishLetter) {
+                    userTodayScans = window.appData.myScans.filter(scan => 
+                        scan.user === window.appData.user && 
+                        scan.dish === window.appData.dishLetter &&
+                        getEffectiveDate(new Date(scan.timestamp)) === today
+                    ).length;
+                } else if (window.appData.mode === 'return') {
+                    userTodayScans = window.appData.myScans.filter(scan => 
+                        scan.user === window.appData.user && 
+                        scan.type === 'return' &&
+                        getEffectiveDate(new Date(scan.timestamp)) === today
+                    ).length;
+                }
+            }
+            
+            // PREPARED TODAY - Using 10PM day logic
+            const preparedToday = window.appData.preparedBowls.filter(bowl => 
+                getEffectiveDate(new Date(bowl.timestamp)) === today
             ).length;
             
-            const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
-            const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+            // RETURNED TODAY - Using 10PM day logic  
+            const returnedToday = window.appData.returnedBowls.filter(bowl => 
+                getEffectiveDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
+            ).length;
             
             document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
             
@@ -1308,7 +1375,7 @@
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
-                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user).length} bowls</span></div>
+                    <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user && s.dish === window.appData.dishLetter).length} bowls</span></div>
                     <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
@@ -1327,7 +1394,6 @@
             element.className = 'feedback ' + type;
         }
 
-        // Smart backup function
         function forceSmartBackup() {
             const btn = document.getElementById('smartBackupBtn');
             btn.disabled = true;
@@ -1341,31 +1407,6 @@
                 btn.textContent = "🔥 SMART BACKUP NOW";
             }, 3000);
         }
-
-        // Backup popup functions
-        function showBackupPopup() {
-            const popup = document.getElementById('backupPopup');
-            const stats = document.getElementById('backupStats');
-            
-            stats.innerHTML = `
-                <div>📊 Active Bowls: ${window.appData.activeBowls.length}</div>
-                <div>🍳 Prepared Today: ${window.appData.preparedBowls.filter(b => b.date === new Date().toLocaleDateString('en-GB')).length}</div>
-                <div>🔄 My Scans: ${window.appData.myScans.length}</div>
-            `;
-            
-            popup.classList.remove('hidden');
-        }
-
-        function hideBackupPopup() {
-            const popup = document.getElementById('backupPopup');
-            popup.classList.add('hidden');
-        }
-
-        function updateBackupProgress(percent, message) {
-            document.getElementById('progressFill').style.width = percent + '%';
-            document.getElementById('progressText').textContent = message;
-        }
     </script>
 </body>
 </html>
-
