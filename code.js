@@ -73,7 +73,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// CORRECTED JSON Data Processing - With VYT URL support
+// COMPLEX JSON Data Processing - Handles nested delivery structure
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -86,54 +86,76 @@ function processJSONData() {
     try {
         const jsonData = JSON.parse(jsonText);
         
-        if (!Array.isArray(jsonData)) {
-            throw new Error('JSON should be an array of objects');
-        }
-        
-        console.log('🔍 Starting JSON patch process with VYT URL support...');
-        console.log('JSON records to process:', jsonData.length);
-        console.log('Active bowls before patch:', window.appData.activeBowls.length);
-        console.log('Active bowl codes:', window.appData.activeBowls.map(b => b.code));
+        console.log('🔍 Starting JSON patch process with NESTED structure...');
+        console.log('Full JSON structure:', jsonData);
         
         const patchResults = {
             matched: 0,
             failed: []
         };
+
+        // STEP 1: Extract all VYT codes from the nested structure
+        const extractedData = [];
         
-        // STEP 1: Process each VYT code from JSON data
-        jsonData.forEach((customer, index) => {
-            // Extract VYT code from multiple possible field names
-            let vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code || customer.VYTCODE || customer.url || customer.URL;
+        // Check if it's a single delivery object or array of deliveries
+        const deliveries = Array.isArray(jsonData) ? jsonData : [jsonData];
+        
+        deliveries.forEach((delivery, deliveryIndex) => {
+            console.log(`Processing delivery ${deliveryIndex + 1}: ${delivery.name || 'Unnamed'}`);
             
-            if (!vytCode) {
-                patchResults.failed.push({
-                    vyt_code: 'MISSING_CODE',
-                    company: customer.uniqueidentifier || 'No company',
-                    customer: customer.username || 'No customer',
-                    reason: 'No VYT code field found in JSON record',
-                    record: index + 1
+            if (delivery.boxes && Array.isArray(delivery.boxes)) {
+                delivery.boxes.forEach((box, boxIndex) => {
+                    console.log(`  Processing box ${boxIndex + 1}: ${box.uniqueIdentifier || 'No ID'}`);
+                    
+                    if (box.dishes && Array.isArray(box.dishes)) {
+                        box.dishes.forEach((dish, dishIndex) => {
+                            console.log(`    Processing dish ${dishIndex + 1}: ${dish.name || 'No name'} (Label: ${dish.label || 'No label'})`);
+                            
+                            if (dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0) {
+                                dish.bowlCodes.forEach((bowlCode, codeIndex) => {
+                                    // Extract VYT code from URL
+                                    const cleanVytCode = extractVYTCode(bowlCode);
+                                    
+                                    if (cleanVytCode) {
+                                        // Get customer name from dish users
+                                        let customerName = "Unknown";
+                                        if (dish.users && dish.users.length > 0) {
+                                            customerName = dish.users.map(user => user.username).join(', ');
+                                        }
+                                        
+                                        extractedData.push({
+                                            vyt_code: cleanVytCode,
+                                            original_code: bowlCode,
+                                            company: delivery.name || "Unknown Company",
+                                            customer: customerName,
+                                            dish: dish.label || "Unknown",
+                                            delivery: delivery.name,
+                                            box: box.uniqueIdentifier
+                                        });
+                                        
+                                        console.log(`      ✅ Extracted: ${bowlCode} → ${cleanVytCode} for ${customerName}`);
+                                    } else {
+                                        console.log(`      ❌ Could not extract VYT code from: ${bowlCode}`);
+                                    }
+                                });
+                            } else {
+                                console.log(`      ⚠️ No bowlCodes in dish: ${dish.name}`);
+                            }
+                        });
+                    }
                 });
-                return;
             }
+        });
+
+        console.log('📋 Extracted VYT codes:', extractedData);
+
+        // STEP 2: Process each extracted VYT code
+        extractedData.forEach((item, index) => {
+            const cleanVytCode = item.vyt_code;
             
-            // Extract clean VYT code from URL or direct code
-            const cleanVytCode = extractVYTCode(vytCode);
+            console.log(`Looking for active bowl matching: ${cleanVytCode}`);
             
-            if (!cleanVytCode) {
-                patchResults.failed.push({
-                    vyt_code: 'INVALID_FORMAT',
-                    original_code: vytCode,
-                    company: customer.uniqueidentifier || 'No company',
-                    customer: customer.username || 'No customer',
-                    reason: 'Could not extract VYT code from format',
-                    record: index + 1
-                });
-                return;
-            }
-            
-            console.log(`Processing record ${index + 1}: ${vytCode} → ${cleanVytCode}`);
-            
-            // STEP 2: Find ALL active bowls with this VYT code
+            // Find ALL active bowls with this VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
                 return bowl.code.toUpperCase() === cleanVytCode;
             });
@@ -141,16 +163,14 @@ function processJSONData() {
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${cleanVytCode}`);
                 
-                // STEP 3: Patch company and customer name to all matching bowls
+                // Patch company and customer name to all matching bowls
                 matchingBowls.forEach(bowl => {
-                    // Store original values for logging
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
                     
-                    // PATCH WITH CORRECT FIELD NAMES:
-                    bowl.company = customer.uniqueidentifier || "Unknown";  // Company name
-                    bowl.customer = customer.username || "Unknown";         // Customer name
-                    bowl.dish = customer.dish || bowl.dish; // Update dish if provided
+                    bowl.company = item.company;
+                    bowl.customer = item.customer;
+                    bowl.dish = item.dish || bowl.dish;
                     
                     console.log(`🔄 Patched bowl ${bowl.code}:`);
                     console.log(`   Company: "${oldCompany}" → "${bowl.company}"`);
@@ -159,20 +179,19 @@ function processJSONData() {
                 
                 patchResults.matched += matchingBowls.length;
             } else {
-                // No active bowl found for this VYT code
                 console.log(`❌ No active bowl found for VYT code: ${cleanVytCode}`);
                 patchResults.failed.push({
                     vyt_code: cleanVytCode,
-                    original_code: vytCode,
-                    company: customer.uniqueidentifier || 'No company',
-                    customer: customer.username || 'No customer',
+                    original_code: item.original_code,
+                    company: item.company,
+                    customer: item.customer,
                     reason: 'No active bowl found with this VYT code',
                     record: index + 1
                 });
             }
         });
-        
-        // STEP 4: After individual patching, combine customer names for same dish
+
+        // STEP 3: After individual patching, combine customer names for same dish
         if (patchResults.matched > 0) {
             combineCustomerNamesByDish();
         }
@@ -189,18 +208,23 @@ function processJSONData() {
         }
         
         // Show results
-        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed matches`, 'success');
+        const resultMessage = `✅ JSON patch completed:\n` +
+                             `• Total VYT codes found: ${extractedData.length}\n` +
+                             `• Bowls updated: ${patchResults.matched}\n` +
+                             `• Failed matches: ${patchResults.failed.length}`;
+        
+        showMessage(resultMessage, 'success');
         
         // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
-            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} VYT codes`;
+            `Found: ${extractedData.length} VYT codes | Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length}`;
         
         const failedDiv = document.getElementById('failedMatches');
         if (patchResults.failed.length > 0) {
             let failedHtml = '<strong>Failed matches:</strong><br>';
             patchResults.failed.forEach(failed => {
-                failedHtml += `• Record ${failed.record}: ${failed.vyt_code} (from: ${failed.original_code}) - ${failed.customer} - ${failed.reason}<br>`;
+                failedHtml += `• ${failed.vyt_code} - ${failed.customer} (${failed.reason})<br>`;
             });
             failedDiv.innerHTML = failedHtml;
         } else {
@@ -208,7 +232,7 @@ function processJSONData() {
         }
         
         document.getElementById('jsonStatus').innerHTML = 
-            `<strong>JSON Status:</strong> ${jsonData.length} customer records processed, ${patchResults.matched} bowls patched`;
+            `<strong>JSON Status:</strong> ${extractedData.length} VYT codes extracted, ${patchResults.matched} bowls patched`;
         
         console.log('📊 Final patch results:', patchResults);
         
@@ -523,15 +547,15 @@ function kitchenScan(code) {
         };
     }
     
-    // Find customer data from JSON - UPDATED FIELD NAMES
+    // Find customer data from JSON
     const customerInfo = window.appData.customerData.find(c => c.vyt_code === fullCode);
     
     const newBowl = {
         code: fullCode,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: customerInfo ? customerInfo.uniqueidentifier : "Unknown",  // Updated field
-        customer: customerInfo ? customerInfo.username : "Unknown",         // Updated field
+        company: customerInfo ? customerInfo.company : "Unknown",
+        customer: customerInfo ? customerInfo.customer : "Unknown",
         date: today, // "2025-10-13" format
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
@@ -829,7 +853,7 @@ function convertAllDataToCSV(allData) {
     csvContent += "CUSTOMER DATA\n";
     csvContent += "VYT Code,Company,Customer,Dish\n";
     allData.customerData.forEach(customer => {
-        csvContent += `"${customer.vyt_code}","${customer.uniqueidentifier}","${customer.username}","${customer.dish}"\n`;
+        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
     });
     csvContent += "\n";
     
