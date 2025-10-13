@@ -287,19 +287,41 @@
                 console.log('📡 Firebase Data Received:', firebaseAppData);
                 
                 if (firebaseAppData) {
-                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
-                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
-                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
-                    window.appData.myScans = firebaseAppData.myScans || [];
-                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
+                    // IMPORTANT: Merge data instead of replacing to preserve local scans
+                    window.appData.activeBowls = mergeArrays(window.appData.activeBowls, firebaseAppData.activeBowls || []);
+                    window.appData.preparedBowls = mergeArrays(window.appData.preparedBowls, firebaseAppData.preparedBowls || []);
+                    window.appData.returnedBowls = mergeArrays(window.appData.returnedBowls, firebaseAppData.returnedBowls || []);
+                    window.appData.myScans = mergeArrays(window.appData.myScans, firebaseAppData.myScans || []);
+                    window.appData.scanHistory = mergeArrays(window.appData.scanHistory, firebaseAppData.scanHistory || []);
                     
                     updateDisplay();
                     updateDishStatistics();
                     saveToStorage();
                     
-                    console.log('✅ Data loaded from Firebase');
+                    console.log('✅ Data merged from Firebase');
+                    console.log('Active bowls:', window.appData.activeBowls.length);
+                    console.log('Prepared bowls:', window.appData.preparedBowls.length);
                 }
             });
+        }
+
+        // Smart merge to avoid duplicates
+        function mergeArrays(localArray, firebaseArray) {
+            const merged = [...localArray];
+            const firebaseKeys = new Set(firebaseArray.map(item => `${item.code}-${item.timestamp}`));
+            
+            // Add Firebase items that don't exist locally
+            firebaseArray.forEach(fbItem => {
+                const key = `${fbItem.code}-${fbItem.timestamp}`;
+                const exists = localArray.some(localItem => 
+                    `${localItem.code}-${localItem.timestamp}` === key
+                );
+                if (!exists) {
+                    merged.push(fbItem);
+                }
+            });
+            
+            return merged;
         }
 
         window.initializeFirebase = initializeFirebase;
@@ -307,7 +329,7 @@
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - SIMPLE WORKING SYSTEM
+        // ProGlove Scanner - WORKING SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -336,14 +358,14 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
-        // SIMPLE DATE FUNCTION - NO COMPLEX LOGIC
+        // SIMPLE DATE FUNCTION
         function isToday(timestamp) {
             const today = new Date().toDateString();
             const scanDate = new Date(timestamp).toDateString();
             return today === scanDate;
         }
 
-        // SIMPLE DISH STATISTICS FUNCTION
+        // DISH STATISTICS FUNCTION
         function updateDishStatistics() {
             const statsBody = document.getElementById('dishStatsBody');
             const updateTime = document.getElementById('statsUpdateTime');
@@ -464,9 +486,6 @@
             
             statsBody.innerHTML = html;
             updateTime.textContent = new Date().toLocaleTimeString();
-            
-            console.log('Dish statistics updated successfully');
-            console.log('Total scanned today:', totalScanned);
         }
 
         // Initialize
@@ -728,25 +747,94 @@
             };
         }
 
+        // FIXED RETURN SCAN FUNCTION - Properly finds bowls from Firebase data
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
             const today = new Date().toLocaleDateString();
             
-            const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+            console.log('🔍 Looking for bowl:', fullCode);
+            console.log('Active bowls:', window.appData.activeBowls);
             
-            if (activeBowlIndex === -1) {
+            // Check if already returned today
+            const alreadyReturned = window.appData.returnedBowls.some(bowl => 
+                bowl.code === fullCode && isToday(bowl.returnTimestamp || bowl.timestamp)
+            );
+            
+            if (alreadyReturned) {
                 return { 
-                    message: "❌ Bowl not found in active bowls: " + fullCode, 
-                    type: "error",
+                    message: "✅ Already returned today: " + fullCode, 
+                    type: "success",
                     responseTime: Date.now() - startTime
                 };
             }
             
+            // Find in active bowls (this includes bowls from Firebase)
+            const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
+            
+            if (activeBowlIndex === -1) {
+                // Bowl not found in active bowls - check if it exists in prepared bowls but not active
+                const preparedBowl = window.appData.preparedBowls.find(bowl => 
+                    bowl.code === fullCode && isToday(bowl.timestamp)
+                );
+                
+                if (preparedBowl) {
+                    // Bowl was prepared today but not in active bowls - mark as returned
+                    const returnBowl = {
+                        ...preparedBowl,
+                        returnedBy: window.appData.user,
+                        returnDate: today,
+                        returnTime: new Date().toLocaleTimeString(),
+                        returnTimestamp: new Date().toISOString(),
+                        status: 'RETURNED'
+                    };
+                    
+                    window.appData.returnedBowls.push(returnBowl);
+                    
+                    const scanRecord = {
+                        type: 'return',
+                        code: fullCode,
+                        user: window.appData.user,
+                        company: preparedBowl.company,
+                        customer: preparedBowl.customer,
+                        timestamp: new Date().toISOString(),
+                        originalData: preparedBowl
+                    };
+                    
+                    window.appData.myScans.push(scanRecord);
+                    
+                    window.appData.scanHistory.unshift({
+                        type: 'return',
+                        code: fullCode,
+                        user: window.appData.user,
+                        timestamp: new Date().toISOString(),
+                        message: `Returned: ${fullCode}`
+                    });
+                    
+                    saveToStorage();
+                    syncToFirebase();
+                    
+                    return { 
+                        message: `✅ Returned: ${fullCode} (was not in active bowls)`, 
+                        type: "success",
+                        responseTime: Date.now() - startTime
+                    };
+                } else {
+                    return { 
+                        message: "❌ Bowl not found in system: " + fullCode, 
+                        type: "error",
+                        responseTime: Date.now() - startTime
+                    };
+                }
+            }
+            
+            // Process normal return from active bowls
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
+            // Remove from active bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
             
+            // Add to returned bowls
             window.appData.returnedBowls.push({
                 ...activeBowl,
                 returnedBy: window.appData.user,
@@ -797,6 +885,10 @@
                 myScans: window.appData.myScans,
                 scanHistory: window.appData.scanHistory,
                 lastSync: new Date().toISOString()
+            }).then(() => {
+                console.log('✅ Data synced to Firebase');
+            }).catch(error => {
+                console.error('❌ Firebase sync failed:', error);
             });
         }
 
@@ -890,7 +982,6 @@
 
         // Simple Excel Export
         async function exportToExcel() {
-            // Simplified export function
             showMessage("📤 Exporting to Excel...", "info");
         }
     </script>
