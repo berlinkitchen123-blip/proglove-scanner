@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Complete Bowl Tracking</title>
+    <title>ProGlove Scanner - Complete System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
@@ -75,19 +75,10 @@
             background: #333;
         }
         .dish-header { background: #34a853; font-weight: bold; }
-        .total-row { background: #f57c00; font-weight: bold; }
-        
-        /* Color Coding */
-        .yellow-bg { background: #ffeb3b !important; color: #000 !important; }
-        .pink-bg { background: #e91e63 !important; color: white !important; }
-        .orange-bg { background: #ff9800 !important; color: white !important; }
-        .red-bg { background: #f44336 !important; color: white !important; }
-        .green-text { color: #4caf50 !important; font-weight: bold; }
-        .red-text { color: #f44336 !important; font-weight: bold; }
         
         /* JSON Upload */
         .json-upload { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
-        .file-input { width: 100%; padding: 8px; margin: 5px 0; }
+        .json-textarea { width: 100%; height: 120px; background: #444; color: white; border: 1px solid #666; border-radius: 5px; padding: 8px; font-family: monospace; font-size: 12px; }
         
         @keyframes pulse { 
             0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
@@ -105,7 +96,7 @@
     <div class="container">
         <div class="header">
             <h1>🧤 ProGlove Scanner - Complete System</h1>
-            <p>Real-time Tracking • JSON Import • Color Coding • Daily Reset</p>
+            <p>Real-time Tracking • Data Export • Daily Reset</p>
         </div>
         
         <div class="card">
@@ -115,18 +106,6 @@
             </div>
             <div class="backup-status" id="backupStatus">
                 💾 Real-time sync active
-            </div>
-        </div>
-
-        <!-- JSON UPLOAD SECTION -->
-        <div class="card">
-            <h3>📁 UPLOAD CUSTOMER DATA (JSON)</h3>
-            <div class="json-upload">
-                <input type="file" id="jsonFile" class="file-input" accept=".json">
-                <button class="sync-btn upload-btn" onclick="processJSONFile()">📤 PROCESS JSON DATA</button>
-            </div>
-            <div class="local-data" id="jsonStatus">
-                <strong>JSON Status:</strong> No file loaded
             </div>
         </div>
 
@@ -210,69 +189,42 @@
             </div>
         </div>
 
-        <!-- ACTIVE BOWLS SHEET -->
-        <div class="card">
-            <h3>📋 ACTIVE BOWLS SHEET</h3>
-            <div class="local-data">
-                <strong>Active Bowls:</strong> <span id="activeBowlsCount">0</span> bowls waiting for return
-            </div>
-            <div id="activeSheet">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>VYT Code</th>
-                            <th>Dish</th>
-                            <th>Company</th>
-                            <th>Customer</th>
-                            <th>Prepared By</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="activeSheetBody">
-                        <tr><td colspan="6" style="text-align: center;">No active bowls</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- RETURN SHEET -->
-        <div class="card">
-            <h3>🔄 RETURN SHEET (Clears daily at 7PM)</h3>
-            <div class="local-data">
-                <strong>Today's Returns:</strong> <span id="returnsCount">0</span> bowls • Auto-clear at 7PM
-            </div>
-            <div id="returnSheet">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>VYT Code</th>
-                            <th>Dish</th>
-                            <th>Company</th>
-                            <th>Customer</th>
-                            <th>Returned By</th>
-                            <th>Return Time</th>
-                        </tr>
-                    </thead>
-                    <tbody id="returnSheetBody">
-                        <tr><td colspan="6" style="text-align: center;">No returns today</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- BACKUP SYSTEM -->
+        <!-- DATA EXPORT SECTION -->
         <div class="card admin-section">
-            <h3>💾 BACKUP & RECOVERY</h3>
+            <h3>📤 DATA EXPORT</h3>
             <div class="sync-controls">
-                <button class="sync-btn backup-btn" onclick="forceBackupNow()" id="forceBackupBtn">
-                    🔥 BACKUP NOW
+                <button class="sync-btn export-btn" onclick="exportActiveBowls()" id="exportActiveBtn">
+                    📥 EXPORT ACTIVE BOWLS
+                </button>
+                <button class="sync-btn export-btn" onclick="exportReturnData()" id="exportReturnBtn">
+                    📥 EXPORT RETURN DATA
                 </button>
                 <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
-                    📥 LOAD FROM BACKUP
+                    🔄 LOAD FROM CLOUD
                 </button>
             </div>
-            <div class="local-data" id="backupInfo">
-                <strong>Backup Status:</strong> Last backup: Never
+            <div class="local-data" id="exportInfo">
+                <strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
+            </div>
+        </div>
+
+        <!-- JSON DATA PASTE SECTION -->
+        <div class="card">
+            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+            <div class="json-upload">
+                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here:
+[
+  {
+    "vyt_code": "VYT12345",
+    "company": "Company Name", 
+    "customer": "Customer Name",
+    "dish": "A"
+  }
+]'></textarea>
+                <button class="sync-btn upload-btn" onclick="processJSONData()">📤 PROCESS JSON DATA</button>
+            </div>
+            <div class="local-data" id="jsonStatus">
+                <strong>JSON Status:</strong> No data loaded
             </div>
         </div>
     </div>
@@ -294,7 +246,6 @@
 
         let app;
         let database;
-        let lastBackupTime = null;
 
         function initializeFirebase() {
             try {
@@ -302,21 +253,13 @@
                 database = getDatabase(app);
                 setupFirebaseListeners();
                 
-                loadLastBackupTime();
-                
-                setTimeout(() => {
-                    if (typeof showMessage === 'function') {
-                        showMessage('✅ Cloud sync active • Real-time tracking', 'success');
-                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active • Real-time tracking';
-                    }
-                }, 2000);
+                showMessage('✅ Cloud connected • Real-time sync active', 'success');
+                document.getElementById('systemStatus').textContent = '✅ Cloud connected • Real-time sync active';
                 
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
-                if (typeof showMessage === 'function') {
-                    showMessage('⚠️ Offline mode - scanning works locally', 'warning');
-                    document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
-                }
+                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
             }
         }
 
@@ -326,7 +269,8 @@
             const appDataRef = ref(database, 'appData');
             onValue(appDataRef, (snapshot) => {
                 const firebaseAppData = snapshot.val();
-                if (firebaseAppData && window.appData) {
+                if (firebaseAppData) {
+                    // IMPORTANT: Load ALL data from Firebase
                     window.appData.activeBowls = firebaseAppData.activeBowls || [];
                     window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
                     window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
@@ -334,17 +278,16 @@
                     window.appData.scanHistory = firebaseAppData.scanHistory || [];
                     window.appData.customerData = firebaseAppData.customerData || [];
                     
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof updateSheets === 'function') updateSheets();
-                    if (typeof updateOvernightStats === 'function') updateOvernightStats();
-                    if (typeof saveToStorage === 'function') saveToStorage();
+                    updateDisplay();
+                    updateOvernightStats();
+                    saveToStorage();
+                    
+                    console.log('✅ Data loaded from Firebase:', {
+                        activeBowls: window.appData.activeBowls.length,
+                        preparedBowls: window.appData.preparedBowls.length,
+                        returnedBowls: window.appData.returnedBowls.length
+                    });
                 }
-            });
-
-            const backupTimeRef = ref(database, 'lastBackupTime');
-            onValue(backupTimeRef, (snapshot) => {
-                lastBackupTime = snapshot.val();
-                updateBackupDisplay();
             });
         }
 
@@ -364,14 +307,7 @@
                     lastSync: new Date().toISOString()
                 };
                 
-                await Promise.all([
-                    set(ref(database, 'appData'), backupData),
-                    set(ref(database, 'lastBackupTime'), new Date().toISOString())
-                ]);
-                
-                lastBackupTime = new Date().toISOString();
-                updateBackupDisplay();
-                
+                await set(ref(database, 'appData'), backupData);
                 return true;
             } catch (error) {
                 console.log('Firebase sync failed:', error);
@@ -398,38 +334,16 @@
                     window.appData.scanHistory = data.scanHistory || [];
                     window.appData.customerData = data.customerData || [];
                     
-                    if (typeof updateDisplay === 'function') updateDisplay();
-                    if (typeof updateSheets === 'function') updateSheets();
-                    if (typeof updateOvernightStats === 'function') updateOvernightStats();
-                    if (typeof saveToStorage === 'function') saveToStorage();
+                    updateDisplay();
+                    updateOvernightStats();
+                    saveToStorage();
                     
-                    showMessage('✅ Data loaded from Firebase backup', 'success');
+                    showMessage('✅ Data loaded from cloud', 'success');
                 } else {
-                    showMessage('ℹ️ No data found in Firebase', 'info');
+                    showMessage('ℹ️ No data found in cloud', 'info');
                 }
             } catch (error) {
-                showMessage('❌ Error loading from Firebase', 'error');
-            }
-        }
-
-        function loadLastBackupTime() {
-            if (!database) return;
-            
-            const backupTimeRef = ref(database, 'lastBackupTime');
-            onValue(backupTimeRef, (snapshot) => {
-                lastBackupTime = snapshot.val();
-                updateBackupDisplay();
-            });
-        }
-
-        function updateBackupDisplay() {
-            const backupInfo = document.getElementById('backupInfo');
-            
-            if (lastBackupTime) {
-                const backupDate = new Date(lastBackupTime);
-                backupInfo.innerHTML = `<strong>Backup Status:</strong> Last backup: ${backupDate.toLocaleTimeString()}`;
-            } else {
-                backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
+                showMessage('❌ Error loading from cloud', 'error');
             }
         }
 
