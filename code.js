@@ -35,25 +35,6 @@ function getStandardizedDate(dateString = null) {
     return date.toISOString().split('T')[0]; // Returns "2025-10-13"
 }
 
-// VYT CODE EXTRACTION FUNCTION - Handles all URL formats
-function extractVYTCode(input) {
-    if (!input) return null;
-    
-    const str = input.toString().toUpperCase().trim();
-    
-    // Check for VYT URL patterns
-    if (str.includes('VYT.TO/') || str.includes('VYT/') || str.includes('HTTP://VYT') || str.includes('HTTPS://VYT')) {
-        // Extract code from URL like "HTTP://VYT.TO/ABCDEF" or "HTTP://VYT/ABCDEF"
-        const urlParts = str.split('/');
-        const code = urlParts[urlParts.length - 1];
-        console.log(`🔗 Extracted VYT code from URL: ${input} → ${code}`);
-        return code;
-    } else {
-        // It's already a direct code
-        return str;
-    }
-}
-
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -73,7 +54,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// COMPLEX JSON Data Processing - Handles nested delivery structure
+// COMPLEX JSON Data Processing - Matches FULL URLs exactly
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -86,7 +67,7 @@ function processJSONData() {
     try {
         const jsonData = JSON.parse(jsonText);
         
-        console.log('🔍 Starting JSON patch process with NESTED structure...');
+        console.log('🔍 Starting JSON patch process with FULL URL matching...');
         console.log('Full JSON structure:', jsonData);
         
         const patchResults = {
@@ -113,30 +94,26 @@ function processJSONData() {
                             
                             if (dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0) {
                                 dish.bowlCodes.forEach((bowlCode, codeIndex) => {
-                                    // Extract VYT code from URL
-                                    const cleanVytCode = extractVYTCode(bowlCode);
+                                    // Keep the ORIGINAL FULL URL for exact matching
+                                    const fullVytUrl = bowlCode.toUpperCase().trim();
                                     
-                                    if (cleanVytCode) {
-                                        // Get customer name from dish users
-                                        let customerName = "Unknown";
-                                        if (dish.users && dish.users.length > 0) {
-                                            customerName = dish.users.map(user => user.username).join(', ');
-                                        }
-                                        
-                                        extractedData.push({
-                                            vyt_code: cleanVytCode,
-                                            original_code: bowlCode,
-                                            company: delivery.name || "Unknown Company",
-                                            customer: customerName,
-                                            dish: dish.label || "Unknown",
-                                            delivery: delivery.name,
-                                            box: box.uniqueIdentifier
-                                        });
-                                        
-                                        console.log(`      ✅ Extracted: ${bowlCode} → ${cleanVytCode} for ${customerName}`);
-                                    } else {
-                                        console.log(`      ❌ Could not extract VYT code from: ${bowlCode}`);
+                                    // Get customer name from dish users
+                                    let customerName = "Unknown";
+                                    if (dish.users && dish.users.length > 0) {
+                                        customerName = dish.users.map(user => user.username).join(', ');
                                     }
+                                    
+                                    extractedData.push({
+                                        vyt_code: fullVytUrl, // FULL URL for exact matching
+                                        original_code: bowlCode,
+                                        company: delivery.name || "Unknown Company",
+                                        customer: customerName,
+                                        dish: dish.label || "Unknown",
+                                        delivery: delivery.name,
+                                        box: box.uniqueIdentifier
+                                    });
+                                    
+                                    console.log(`      ✅ Keeping FULL URL: ${fullVytUrl} for ${customerName}`);
                                 });
                             } else {
                                 console.log(`      ⚠️ No bowlCodes in dish: ${dish.name}`);
@@ -147,21 +124,22 @@ function processJSONData() {
             }
         });
 
-        console.log('📋 Extracted VYT codes:', extractedData);
+        console.log('📋 Extracted VYT URLs:', extractedData);
+        console.log('🔍 Current Active Bowls:', window.appData.activeBowls.map(b => b.code));
 
-        // STEP 2: Process each extracted VYT code
+        // STEP 2: Process each extracted VYT URL - EXACT MATCHING
         extractedData.forEach((item, index) => {
-            const cleanVytCode = item.vyt_code;
+            const fullVytUrl = item.vyt_code; // FULL URL like "HTTP://VYT.TO/ABCDEF"
             
-            console.log(`Looking for active bowl matching: ${cleanVytCode}`);
+            console.log(`Looking for active bowl matching FULL URL: ${fullVytUrl}`);
             
-            // Find ALL active bowls with this VYT code
+            // Find ALL active bowls with this EXACT FULL URL
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
-                return bowl.code.toUpperCase() === cleanVytCode;
+                return bowl.code.toUpperCase() === fullVytUrl.toUpperCase();
             });
             
             if (matchingBowls.length > 0) {
-                console.log(`✅ Found ${matchingBowls.length} matches for ${cleanVytCode}`);
+                console.log(`✅ Found ${matchingBowls.length} matches for ${fullVytUrl}`);
                 
                 // Patch company and customer name to all matching bowls
                 matchingBowls.forEach(bowl => {
@@ -179,13 +157,12 @@ function processJSONData() {
                 
                 patchResults.matched += matchingBowls.length;
             } else {
-                console.log(`❌ No active bowl found for VYT code: ${cleanVytCode}`);
+                console.log(`❌ No active bowl found for VYT URL: ${fullVytUrl}`);
                 patchResults.failed.push({
-                    vyt_code: cleanVytCode,
-                    original_code: item.original_code,
+                    vyt_code: fullVytUrl,
                     company: item.company,
                     customer: item.customer,
-                    reason: 'No active bowl found with this VYT code',
+                    reason: 'No active bowl found with this VYT URL',
                     record: index + 1
                 });
             }
@@ -209,7 +186,7 @@ function processJSONData() {
         
         // Show results
         const resultMessage = `✅ JSON patch completed:\n` +
-                             `• Total VYT codes found: ${extractedData.length}\n` +
+                             `• Total VYT URLs found: ${extractedData.length}\n` +
                              `• Bowls updated: ${patchResults.matched}\n` +
                              `• Failed matches: ${patchResults.failed.length}`;
         
@@ -218,7 +195,7 @@ function processJSONData() {
         // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
-            `Found: ${extractedData.length} VYT codes | Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length}`;
+            `Found: ${extractedData.length} VYT URLs | Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length}`;
         
         const failedDiv = document.getElementById('failedMatches');
         if (patchResults.failed.length > 0) {
@@ -228,11 +205,11 @@ function processJSONData() {
             });
             failedDiv.innerHTML = failedHtml;
         } else {
-            failedDiv.innerHTML = '<em>All VYT codes matched successfully!</em>';
+            failedDiv.innerHTML = '<em>All VYT URLs matched successfully!</em>';
         }
         
         document.getElementById('jsonStatus').innerHTML = 
-            `<strong>JSON Status:</strong> ${extractedData.length} VYT codes extracted, ${patchResults.matched} bowls patched`;
+            `<strong>JSON Status:</strong> ${extractedData.length} VYT URLs extracted, ${patchResults.matched} bowls patched`;
         
         console.log('📊 Final patch results:', patchResults);
         
@@ -513,24 +490,16 @@ function processScan(code) {
     updateLastActivity();
 }
 
-// UPDATED: kitchenScan with VYT URL support
+// UPDATED: kitchenScan - Stores EXACT scanned code (FULL URL)
 function kitchenScan(code) {
     const startTime = Date.now();
     
-    // Handle both direct codes and VYT URLs
-    let fullCode = extractVYTCode(code);
+    // Store the EXACT scanned code (FULL URL)
+    const fullCode = code.toUpperCase().trim();
     
-    if (!fullCode) {
-        return { 
-            message: "❌ Invalid VYT code format: " + code, 
-            type: "error",
-            responseTime: Date.now() - startTime
-        };
-    }
+    const today = getStandardizedDate();
     
-    const today = getStandardizedDate(); // "2025-10-13"
-    
-    // Error Detection: Duplicate scan
+    // Error Detection: Duplicate scan (check exact FULL URL)
     if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
         return { 
             message: "❌ Bowl already active: " + fullCode, 
@@ -551,12 +520,12 @@ function kitchenScan(code) {
     const customerInfo = window.appData.customerData.find(c => c.vyt_code === fullCode);
     
     const newBowl = {
-        code: fullCode,
+        code: fullCode, // Store EXACT scanned code (FULL URL)
         dish: window.appData.dishLetter,
         user: window.appData.user,
         company: customerInfo ? customerInfo.company : "Unknown",
         customer: customerInfo ? customerInfo.customer : "Unknown",
-        date: today, // "2025-10-13" format
+        date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
         status: 'ACTIVE',
@@ -600,23 +569,16 @@ function kitchenScan(code) {
     };
 }
 
-// UPDATED: returnScan with VYT URL support
+// UPDATED: returnScan - Uses EXACT scanned code (FULL URL)
 function returnScan(code) {
     const startTime = Date.now();
     
-    // Handle both direct codes and VYT URLs
-    let fullCode = extractVYTCode(code);
+    // Use the EXACT scanned code (FULL URL)
+    const fullCode = code.toUpperCase().trim();
     
-    if (!fullCode) {
-        return { 
-            message: "❌ Invalid VYT code format: " + code, 
-            type: "error",
-            responseTime: Date.now() - startTime
-        };
-    }
+    const today = getStandardizedDate();
     
-    const today = getStandardizedDate(); // "2025-10-13"
-    
+    // Find active bowl by EXACT FULL URL
     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
     
     if (activeBowlIndex === -1) {
@@ -642,7 +604,7 @@ function returnScan(code) {
     window.appData.returnedBowls.push({
         ...activeBowl,
         returnedBy: window.appData.user,
-        returnDate: today, // "2025-10-13" format
+        returnDate: today,
         returnTime: new Date().toLocaleTimeString(),
         returnTimestamp: new Date().toISOString(),
         status: 'RETURNED'
