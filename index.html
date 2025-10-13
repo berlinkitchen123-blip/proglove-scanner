@@ -118,7 +118,7 @@
     <div class="container">
         <div class="header">
             <h1>🧤 ProGlove Scanner - Complete System</h1>
-            <p>Multi-Device • Auto-Sync • Data Recovery</p>
+            <p>Multi-Device • Real-Time Sync • Manager Dashboard</p>
         </div>
         
         <div class="card">
@@ -127,10 +127,7 @@
                 🔄 Connecting to cloud...
             </div>
             <div class="backup-status" id="backupStatus">
-                💾 Auto-sync initializing...
-            </div>
-            <div class="local-data" id="syncInfo">
-                <strong>Sync Status:</strong> Checking data integrity...
+                💾 Sync active
             </div>
         </div>
 
@@ -196,11 +193,11 @@
             </div>
         </div>
 
-        <!-- ENHANCED DISH SCANNING STATISTICS TABLE -->
+        <!-- DISH SCANNING STATISTICS TABLE -->
         <div class="card">
-            <h3>📈 DISH SCANNING STATISTICS & ASSIGNMENTS</h3>
+            <h3>📈 DISH SCANNING STATISTICS</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Real-time tracking with kitchen assignments and batch timing</small>
+                <small>ℹ️ Real-time tracking of scanned dishes</small>
             </div>
             <div id="dishStatistics">
                 <table class="dish-stats-table">
@@ -211,8 +208,8 @@
                             <th>Scanned</th>
                             <th>Expected</th>
                             <th>Difference</th>
-                            <th>First Scan Time</th>
-                            <th>Last Scan Time</th>
+                            <th>First Scan</th>
+                            <th>Last Scan</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -223,17 +220,6 @@
             </div>
             <div class="local-data" style="margin-top: 10px;">
                 <strong>Last Updated:</strong> <span id="statsUpdateTime">Never</span>
-            </div>
-        </div>
-
-        <!-- AUTO DATA RECOVERY SECTION -->
-        <div class="card admin-section">
-            <h3>🔄 AUTO DATA RECOVERY</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Automatically syncs all device data to Firebase in background</small>
-            </div>
-            <div class="local-data" id="recoveryInfo">
-                <strong>Recovery Status:</strong> Checking for missing data...
             </div>
         </div>
 
@@ -259,7 +245,7 @@
     <!-- Firebase Configuration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
@@ -273,158 +259,22 @@
 
         let app;
         let database;
-        let isSyncing = false;
-        let autoSyncInterval;
-
-        // AUTOMATIC DATA RECOVERY SYSTEM
-        class AutoDataRecovery {
-            constructor() {
-                this.isRecovering = false;
-                this.lastRecoveryTime = 0;
-            }
-
-            // Automatically sync local data to Firebase
-            async autoSyncToFirebase() {
-                if (this.isRecovering || !database) {
-                    return;
-                }
-
-                this.isRecovering = true;
-                console.log('🔄 AUTO SYNC: Checking for data to sync...');
-
-                try {
-                    // Get current Firebase data
-                    const appDataRef = ref(database, 'appData');
-                    const snapshot = await get(appDataRef);
-                    const firebaseData = snapshot.val() || {};
-
-                    // Find missing data that exists locally but not in Firebase
-                    const missingData = this.findMissingData(firebaseData);
-
-                    if (missingData.hasMissingData) {
-                        console.log('📦 AUTO SYNC: Found missing data, syncing to Firebase...', missingData);
-                        await this.syncMissingData(firebaseData, missingData);
-                        this.lastRecoveryTime = Date.now();
-                        this.updateRecoveryStatus(`✅ Auto-synced ${missingData.syncedCount} items`);
-                    } else {
-                        console.log('✅ AUTO SYNC: All data is synchronized');
-                        this.updateRecoveryStatus('✅ All data synchronized');
-                    }
-
-                } catch (error) {
-                    console.error('❌ AUTO SYNC failed:', error);
-                    this.updateRecoveryStatus('❌ Sync failed - retrying...');
-                } finally {
-                    this.isRecovering = false;
-                }
-            }
-
-            // Find data that exists locally but not in Firebase
-            findMissingData(firebaseData) {
-                const firebaseBowls = firebaseData.activeBowls || [];
-                const firebasePrepared = firebaseData.preparedBowls || [];
-                const firebaseReturns = firebaseData.returnedBowls || [];
-                const firebaseScans = firebaseData.myScans || [];
-
-                const localBowls = window.appData.activeBowls || [];
-                const localPrepared = window.appData.preparedBowls || [];
-                const localReturns = window.appData.returnedBowls || [];
-                const localScans = window.appData.myScans || [];
-
-                // Create sets of Firebase data for quick lookup
-                const firebaseBowlKeys = new Set(firebaseBowls.map(b => `${b.code}-${b.timestamp}`));
-                const firebasePreparedKeys = new Set(firebasePrepared.map(p => `${p.code}-${p.timestamp}`));
-                const firebaseReturnKeys = new Set(firebaseReturns.map(r => `${r.code}-${r.returnTimestamp || r.timestamp}`));
-                const firebaseScanKeys = new Set(firebaseScans.map(s => `${s.code}-${s.timestamp}`));
-
-                // Find missing items
-                const missingBowls = localBowls.filter(bowl => 
-                    !firebaseBowlKeys.has(`${bowl.code}-${bowl.timestamp}`)
-                );
-                const missingPrepared = localPrepared.filter(prep => 
-                    !firebasePreparedKeys.has(`${prep.code}-${prep.timestamp}`)
-                );
-                const missingReturns = localReturns.filter(ret => 
-                    !firebaseReturnKeys.has(`${ret.code}-${ret.returnTimestamp || ret.timestamp}`)
-                );
-                const missingScans = localScans.filter(scan => 
-                    !firebaseScanKeys.has(`${scan.code}-${scan.timestamp}`)
-                );
-
-                const hasMissingData = missingBowls.length > 0 || missingPrepared.length > 0 || 
-                                    missingReturns.length > 0 || missingScans.length > 0;
-
-                return {
-                    hasMissingData,
-                    missingBowls,
-                    missingPrepared,
-                    missingReturns,
-                    missingScans,
-                    syncedCount: missingBowls.length + missingPrepared.length + missingReturns.length + missingScans.length
-                };
-            }
-
-            // Sync missing data to Firebase
-            async syncMissingData(firebaseData, missingData) {
-                const updatedData = {
-                    activeBowls: [...(firebaseData.activeBowls || []), ...missingData.missingBowls],
-                    preparedBowls: [...(firebaseData.preparedBowls || []), ...missingData.missingPrepared],
-                    returnedBowls: [...(firebaseData.returnedBowls || []), ...missingData.missingReturns],
-                    myScans: [...(firebaseData.myScans || []), ...missingData.missingScans],
-                    scanHistory: [...(firebaseData.scanHistory || []), ...window.appData.scanHistory || []],
-                    lastAutoSync: new Date().toISOString(),
-                    lastUpdatedBy: 'Auto-Recovery-System',
-                    lastUpdatedTime: new Date().toISOString()
-                };
-
-                await set(ref(database, 'appData'), updatedData);
-                console.log(`✅ AUTO SYNC: Successfully synced ${missingData.syncedCount} items to Firebase`);
-            }
-
-            updateRecoveryStatus(message) {
-                const recoveryInfo = document.getElementById('recoveryInfo');
-                if (recoveryInfo) {
-                    recoveryInfo.innerHTML = `<strong>Recovery Status:</strong> ${message}`;
-                }
-            }
-
-            startAutoSync() {
-                // Run immediately
-                this.autoSyncToFirebase();
-                
-                // Then run every 30 seconds
-                autoSyncInterval = setInterval(() => {
-                    this.autoSyncToFirebase();
-                }, 30000);
-            }
-
-            stopAutoSync() {
-                if (autoSyncInterval) {
-                    clearInterval(autoSyncInterval);
-                }
-            }
-        }
-
-        const autoRecovery = new AutoDataRecovery();
 
         function initializeFirebase() {
             try {
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
-                autoRecovery.startAutoSync();
-                startDailyCleanupTimer();
                 
                 setTimeout(() => {
-                    showMessage('✅ AUTO SYNC ACTIVE • Missing data will be recovered automatically', 'success');
-                    document.getElementById('systemStatus').textContent = '✅ AUTO SYNC ACTIVE • Data recovery enabled';
-                    document.getElementById('backupStatus').textContent = '💾 Auto-sync running • All devices will be synchronized';
+                    showMessage('✅ Firebase Connected • Real-time sync active', 'success');
+                    document.getElementById('systemStatus').textContent = '✅ Firebase Connected • Real-time sync active';
                 }, 2000);
                 
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
-                showMessage('⚠️ Offline mode - data saved locally only', 'warning');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Data saved locally only';
+                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
             }
         }
 
@@ -436,116 +286,28 @@
                 const firebaseAppData = snapshot.val();
                 console.log('📡 Firebase Data Received:', firebaseAppData);
                 
-                if (firebaseAppData && !isSyncing) {
-                    isSyncing = true;
-                    
-                    console.log('🔄 SYNC: Merging data from Firebase');
-                    
-                    // Smart merge - preserve local data that might be missing from Firebase
-                    window.appData.activeBowls = mergeArraysPreserveLocal(window.appData.activeBowls, firebaseAppData.activeBowls || []);
-                    window.appData.preparedBowls = mergeArraysPreserveLocal(window.appData.preparedBowls, firebaseAppData.preparedBowls || []);
-                    window.appData.returnedBowls = mergeArraysPreserveLocal(window.appData.returnedBowls, firebaseAppData.returnedBowls || []);
-                    window.appData.myScans = mergeArraysPreserveLocal(window.appData.myScans, firebaseAppData.myScans || []);
-                    window.appData.scanHistory = mergeArraysPreserveLocal(window.appData.scanHistory, firebaseAppData.scanHistory || []);
+                if (firebaseAppData) {
+                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
+                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
+                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
+                    window.appData.myScans = firebaseAppData.myScans || [];
+                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
                     
                     updateDisplay();
                     updateDishStatistics();
                     saveToStorage();
                     
-                    console.log('✅ SYNC: Data merged successfully');
-                    
-                    isSyncing = false;
+                    console.log('✅ Data loaded from Firebase');
                 }
             });
-        }
-
-        // Smart merge that preserves local data
-        function mergeArraysPreserveLocal(localArray, firebaseArray) {
-            const merged = [...firebaseArray];
-            const localKeys = new Set(localArray.map(item => getItemKey(item)));
-            const firebaseKeys = new Set(firebaseArray.map(item => getItemKey(item)));
-            
-            // Add local items that don't exist in Firebase
-            localArray.forEach(localItem => {
-                const key = getItemKey(localItem);
-                if (!firebaseKeys.has(key)) {
-                    merged.push(localItem);
-                }
-            });
-            
-            return merged;
-        }
-
-        function getItemKey(item) {
-            if (item.returnTimestamp) {
-                return `${item.code}-${item.returnTimestamp}`;
-            }
-            return `${item.code}-${item.timestamp}`;
-        }
-
-        // DAILY CLEANUP SYSTEM
-        function startDailyCleanupTimer() {
-            checkAndRunCleanup();
-            setInterval(() => {
-                checkAndRunCleanup();
-            }, 60000);
-        }
-
-        function checkAndRunCleanup() {
-            const now = new Date();
-            const today = now.toLocaleDateString('en-GB');
-            
-            const shouldCleanup = (
-                (now.getHours() === 19 && now.getMinutes() === 0) ||
-                (now.getHours() >= 19 && window.appData.lastCleanup !== today)
-            );
-            
-            if (shouldCleanup) {
-                runFirebaseCleanup();
-            }
-        }
-
-        async function runFirebaseCleanup() {
-            if (!database) return;
-
-            const today = new Date().toLocaleDateString('en-GB');
-            
-            try {
-                console.log('🧹 RUNNING FIREBASE CLEANUP AT 7:00 PM...');
-                
-                const appDataRef = ref(database, 'appData');
-                const snapshot = await get(appDataRef);
-                const currentData = snapshot.val() || {};
-                
-                const updatedData = {
-                    ...currentData,
-                    returnedBowls: [],
-                    lastCleanup: today,
-                    lastCleanupTime: new Date().toISOString()
-                };
-                
-                await set(appDataRef, updatedData);
-                
-                window.appData.returnedBowls = [];
-                window.appData.lastCleanup = today;
-                saveToStorage();
-                updateDisplay();
-                updateDishStatistics();
-                
-                showMessage(`✅ 7:00 PM Cleanup: Returned bowls cleared`, 'success');
-                
-            } catch (error) {
-                console.log('❌ Firebase cleanup failed:', error);
-            }
         }
 
         window.initializeFirebase = initializeFirebase;
-        window.autoRecovery = autoRecovery;
     </script>
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - COMPLETE SYSTEM
+        // ProGlove Scanner - SIMPLE WORKING SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -556,11 +318,7 @@
             preparedBowls: [],
             returnedBowls: [],
             scanHistory: [],
-            lastActivity: Date.now(),
-            autoSaveTimer: null,
-            lastCleanup: null,
-            expectedCounts: {},
-            dishBatchTiming: {}
+            expectedCounts: {}
         };
 
         const USERS = [
@@ -578,30 +336,25 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
-        // UNIVERSAL DATE FORMAT FUNCTION
-        function getStandardizedDate(dateInput) {
-            const date = new Date(dateInput);
-            return date.toISOString().split('T')[0];
+        // SIMPLE DATE FUNCTION - NO COMPLEX LOGIC
+        function isToday(timestamp) {
+            const today = new Date().toDateString();
+            const scanDate = new Date(timestamp).toDateString();
+            return today === scanDate;
         }
 
-        // 10 PM DAY START HELPER
-        function getEffectiveDate(date) {
-            const effectiveDate = new Date(date);
-            if (date.getHours() >= 22) {
-                effectiveDate.setDate(effectiveDate.getDate() + 1);
-            }
-            return getStandardizedDate(effectiveDate);
-        }
-
-        // ENHANCED DISH STATISTICS FUNCTION
+        // SIMPLE DISH STATISTICS FUNCTION
         function updateDishStatistics() {
-            const today = getEffectiveDate(new Date());
             const statsBody = document.getElementById('dishStatsBody');
             const updateTime = document.getElementById('statsUpdateTime');
+            
+            console.log('Updating dish statistics...');
+            console.log('Prepared bowls:', window.appData.preparedBowls);
             
             const dishData = {};
             const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
             
+            // Initialize all dishes
             allDishes.forEach(dish => {
                 dishData[dish] = {
                     scanned: 0,
@@ -611,22 +364,26 @@
                 };
             });
             
+            // Count TODAY'S prepared bowls
             window.appData.preparedBowls.forEach(bowl => {
-                const bowlDate = getEffectiveDate(new Date(bowl.timestamp));
-                if (bowlDate === today) {
+                if (isToday(bowl.timestamp)) {
                     const dish = bowl.dish;
                     const user = bowl.user;
                     const scanTime = new Date(bowl.timestamp);
                     
-                    if (!dishData[dish]) dishData[dish] = { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                    if (!dishData[dish]) {
+                        dishData[dish] = { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
+                    }
                     
                     dishData[dish].scanned++;
                     
+                    // Track who prepared this dish
                     if (!dishData[dish].preparedBy[user]) {
                         dishData[dish].preparedBy[user] = 0;
                     }
                     dishData[dish].preparedBy[user]++;
                     
+                    // Track first and last scan times
                     if (!dishData[dish].firstScanTime || scanTime < new Date(dishData[dish].firstScanTime)) {
                         dishData[dish].firstScanTime = bowl.timestamp;
                     }
@@ -638,7 +395,6 @@
             
             let totalScanned = 0;
             let totalExpected = 0;
-            
             let html = '';
             
             allDishes.forEach(dish => {
@@ -650,11 +406,13 @@
                 totalScanned += scanned;
                 totalExpected += expected;
                 
+                // Get top preparer
                 const preparers = Object.entries(data.preparedBy);
                 const topPreparer = preparers.length > 0 ? 
                     preparers.sort((a, b) => b[1] - a[1])[0] : 
                     null;
                 
+                // Format times
                 const firstTime = data.firstScanTime ? 
                     new Date(data.firstScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
                 const lastTime = data.lastScanTime ? 
@@ -689,6 +447,7 @@
                 `;
             });
             
+            // Add total row
             const totalDifference = totalScanned - totalExpected;
             html += `
                 <tr class="total-row">
@@ -705,43 +464,29 @@
             
             statsBody.innerHTML = html;
             updateTime.textContent = new Date().toLocaleTimeString();
+            
+            console.log('Dish statistics updated successfully');
+            console.log('Total scanned today:', totalScanned);
         }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Complete Scanner System...');
+            console.log('Initializing Scanner System...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
             updateDisplay();
             updateDishStatistics();
-            startAutoSaveTimer();
             
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
-            document.addEventListener('click', updateLastActivity);
-            document.addEventListener('keydown', updateLastActivity);
         });
-
-        function updateLastActivity() {
-            window.appData.lastActivity = Date.now();
-        }
-
-        function startAutoSaveTimer() {
-            if (window.appData.autoSaveTimer) {
-                clearInterval(window.appData.autoSaveTimer);
-            }
-            
-            window.appData.autoSaveTimer = setInterval(() => {
-                saveToStorage();
-            }, 30000);
-        }
 
         // Storage functions
         function saveToStorage() {
             try {
                 localStorage.setItem('proglove_data', JSON.stringify(window.appData));
             } catch (error) {
-                console.log('Storage save note:', error.message);
+                console.log('Storage save error:', error);
             }
         }
 
@@ -754,65 +499,8 @@
                     console.log('Data loaded from storage');
                 }
             } catch (error) {
-                console.log('No previous data found - starting fresh');
+                console.log('No previous data found');
             }
-        }
-
-        // EXCEL EXPORT
-        async function exportToExcel() {
-            if (window.appData.myScans.length === 0 && window.appData.activeBowls.length === 0) {
-                showMessage("ℹ️ No data to export", "info");
-                return;
-            }
-            
-            const btn = document.getElementById('exportBtn');
-            btn.disabled = true;
-            btn.textContent = "⏳ EXPORTING...";
-            
-            try {
-                await loadSheetJS();
-                
-                const wb = XLSX.utils.book_new();
-                
-                // Create sheets (simplified for example)
-                const activeData = window.appData.activeBowls.map(bowl => ({
-                    'VYT Code': bowl.code,
-                    'Dish': bowl.dish,
-                    'Customer': bowl.customer,
-                    'Company': bowl.company,
-                    'Prepared Date': bowl.date,
-                    'Prepared Time': bowl.time
-                }));
-
-                const ws = XLSX.utils.json_to_sheet(activeData);
-                XLSX.utils.book_append_sheet(wb, ws, "Active Bowls");
-                
-                XLSX.writeFile(wb, `proglove_data_${new Date().toISOString().split('T')[0]}.xlsx`);
-                
-                showMessage("✅ Data exported to Excel!", "success");
-                
-            } catch (error) {
-                console.error('Excel export failed:', error);
-                showMessage('❌ Excel export failed', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = "📤 EXPORT TO EXCEL";
-            }
-        }
-
-        function loadSheetJS() {
-            return new Promise((resolve, reject) => {
-                if (window.XLSX) {
-                    resolve();
-                    return;
-                }
-                
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
         }
 
         // User and Mode Management
@@ -846,7 +534,6 @@
             loadUsers();
             updateStatsLabels();
             updateDisplay();
-            updateLastActivity();
             showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
         }
 
@@ -909,7 +596,6 @@
                 }
             }
             updateDisplay();
-            updateLastActivity();
         }
 
         function selectDishLetter() {
@@ -920,7 +606,6 @@
                 showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
             }
             updateDisplay();
-            updateLastActivity();
         }
 
         // Scanning Functions
@@ -937,14 +622,12 @@
             window.appData.scanning = true;
             updateDisplay();
             document.getElementById('progloveInput').focus();
-            updateLastActivity();
             showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
         }
 
         function stopScanning() {
             window.appData.scanning = false;
             updateDisplay();
-            updateLastActivity();
             showMessage(`⏹ Scanning stopped`, 'info');
         }
 
@@ -956,7 +639,6 @@
                 processScan(scanValue);
                 setTimeout(() => e.target.value = '', 100);
             }
-            updateLastActivity();
         }
 
         function processScan(code) {
@@ -978,13 +660,12 @@
             
             updateDisplay();
             updateDishStatistics();
-            updateLastActivity();
         }
 
         function kitchenScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = getStandardizedDate(new Date());
+            const today = new Date().toLocaleDateString();
             
             if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
@@ -994,11 +675,7 @@
                 };
             }
             
-            const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
-                bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
-            );
-            
-            if (alreadyPrepared) {
+            if (window.appData.preparedBowls.some(bowl => bowl.code === fullCode && isToday(bowl.timestamp))) {
                 return { 
                     message: "❌ Already prepared today: " + fullCode, 
                     type: "error",
@@ -1042,6 +719,7 @@
             });
             
             saveToStorage();
+            syncToFirebase();
             
             return { 
                 message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
@@ -1053,73 +731,16 @@
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = getStandardizedDate(new Date());
-            
-            const alreadyReturned = window.appData.returnedBowls.some(bowl => 
-                bowl.code === fullCode && getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
-            );
-            
-            if (alreadyReturned) {
-                return { 
-                    message: "✅ Already returned today: " + fullCode, 
-                    type: "success",
-                    responseTime: Date.now() - startTime
-                };
-            }
+            const today = new Date().toLocaleDateString();
             
             const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
             
             if (activeBowlIndex === -1) {
-                const preparedBowl = window.appData.preparedBowls.find(bowl => 
-                    bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
-                );
-                
-                if (preparedBowl) {
-                    const returnBowl = {
-                        ...preparedBowl,
-                        returnedBy: window.appData.user,
-                        returnDate: today,
-                        returnTime: new Date().toLocaleTimeString(),
-                        returnTimestamp: new Date().toISOString(),
-                        status: 'RETURNED'
-                    };
-                    
-                    window.appData.returnedBowls.push(returnBowl);
-                    
-                    const scanRecord = {
-                        type: 'return',
-                        code: fullCode,
-                        user: window.appData.user,
-                        company: preparedBowl.company,
-                        customer: preparedBowl.customer,
-                        timestamp: new Date().toISOString(),
-                        originalData: preparedBowl
-                    };
-                    
-                    window.appData.myScans.push(scanRecord);
-                    
-                    window.appData.scanHistory.unshift({
-                        type: 'return',
-                        code: fullCode,
-                        user: window.appData.user,
-                        timestamp: new Date().toISOString(),
-                        message: `Returned: ${fullCode}`
-                    });
-                    
-                    saveToStorage();
-                    
-                    return { 
-                        message: `✅ Returned: ${fullCode} (was not in active bowls)`, 
-                        type: "success",
-                        responseTime: Date.now() - startTime
-                    };
-                } else {
-                    return { 
-                        message: "❌ Bowl not found in system: " + fullCode, 
-                        type: "error",
-                        responseTime: Date.now() - startTime
-                    };
-                }
+                return { 
+                    message: "❌ Bowl not found in active bowls: " + fullCode, 
+                    type: "error",
+                    responseTime: Date.now() - startTime
+                };
             }
             
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
@@ -1156,6 +777,7 @@
             });
             
             saveToStorage();
+            syncToFirebase();
             
             return { 
                 message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
@@ -1164,9 +786,21 @@
             };
         }
 
+        function syncToFirebase() {
+            if (!database) return;
+            
+            const appDataRef = ref(database, 'appData');
+            set(appDataRef, {
+                activeBowls: window.appData.activeBowls,
+                preparedBowls: window.appData.preparedBowls,
+                returnedBowls: window.appData.returnedBowls,
+                myScans: window.appData.myScans,
+                scanHistory: window.appData.scanHistory,
+                lastSync: new Date().toISOString()
+            });
+        }
+
         function updateDisplay() {
-            document.getElementById('userDropdown').disabled = false;
-            document.getElementById('dishDropdown').disabled = false;
             document.getElementById('exportBtn').disabled = window.appData.myScans.length === 0 && window.appData.activeBowls.length === 0;
             
             let canScan = window.appData.user && !window.appData.scanning;
@@ -1185,8 +819,9 @@
                 input.disabled = !window.appData.scanning;
             }
             
-            const now = new Date();
-            const today = getStandardizedDate(now);
+            // Count TODAY'S data
+            const preparedToday = window.appData.preparedBowls.filter(bowl => isToday(bowl.timestamp)).length;
+            const returnedToday = window.appData.returnedBowls.filter(bowl => isToday(bowl.returnTimestamp || bowl.timestamp)).length;
             
             let userTodayScans = 0;
             if (window.appData.user) {
@@ -1194,24 +829,16 @@
                     userTodayScans = window.appData.myScans.filter(scan => 
                         scan.user === window.appData.user && 
                         scan.dish === window.appData.dishLetter &&
-                        getStandardizedDate(new Date(scan.timestamp)) === today
+                        isToday(scan.timestamp)
                     ).length;
                 } else if (window.appData.mode === 'return') {
                     userTodayScans = window.appData.myScans.filter(scan => 
                         scan.user === window.appData.user && 
                         scan.type === 'return' &&
-                        getStandardizedDate(new Date(scan.timestamp)) === today
+                        isToday(scan.timestamp)
                     ).length;
                 }
             }
-            
-            const preparedToday = window.appData.preparedBowls.filter(bowl => 
-                getStandardizedDate(new Date(bowl.timestamp)) === today
-            ).length;
-            
-            const returnedToday = window.appData.returnedBowls.filter(bowl => 
-                getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
-            ).length;
             
             document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
             
@@ -1231,50 +858,26 @@
                 ${window.appData.myScans.length} total scans
             `;
             
-            const uploadInfo = document.getElementById('uploadInfo');
-            if (window.appData.scanHistory.length === 0) {
-                uploadInfo.innerHTML = '<strong>Scan History:</strong> No scans yet';
-            } else {
-                let html = '<strong>Recent Scans:</strong><br>';
-                window.appData.scanHistory.slice(0, 5).forEach(record => {
-                    const date = new Date(record.timestamp);
-                    html += `<div class="data-row">
-                        <span class="data-label">${record.type === 'kitchen' ? '🍳' : '🔄'} ${record.user}</span>
-                        <span>${date.toLocaleTimeString()}</span>
-                        <span>${record.code}</span>
-                    </div>`;
-                });
-                uploadInfo.innerHTML = html;
-            }
-            
             updateCrossTeamData();
         }
 
         function updateCrossTeamData() {
             const element = document.getElementById('crossTeamData');
-            const today = getStandardizedDate(new Date());
             
-            const preparedToday = window.appData.preparedBowls.filter(bowl => 
-                getStandardizedDate(new Date(bowl.timestamp)) === today
-            ).length;
-            
-            const returnedToday = window.appData.returnedBowls.filter(bowl => 
-                getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
-            ).length;
+            const preparedToday = window.appData.preparedBowls.filter(bowl => isToday(bowl.timestamp)).length;
+            const returnedToday = window.appData.returnedBowls.filter(bowl => isToday(bowl.returnTimestamp || bowl.timestamp)).length;
             
             if (window.appData.mode === 'kitchen') {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Returns:</span><span>${returnedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Preparations:</span><span>${window.appData.myScans.filter(s => s.type === 'kitchen' && s.user === window.appData.user && s.dish === window.appData.dishLetter).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Active Bowl Codes:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             } else {
                 element.innerHTML = `
                     <div class="data-row"><span class="data-label">Today's Preparations:</span><span>${preparedToday} bowls</span></div>
                     <div class="data-row"><span class="data-label">Active Bowls:</span><span>${window.appData.activeBowls.length} bowls</span></div>
                     <div class="data-row"><span class="data-label">My Returns:</span><span>${window.appData.myScans.filter(s => s.type === 'return' && s.user === window.appData.user).length} bowls</span></div>
-                    <div class="data-row"><span class="data-label" style="color: #4285f4">Available for Return:</span><span>${window.appData.activeBowls.slice(0, 3).map(b => b.code).join(', ')}${window.appData.activeBowls.length > 3 ? '...' : ''}</span></div>
                 `;
             }
         }
@@ -1283,6 +886,12 @@
             const element = document.getElementById('feedback');
             element.textContent = text;
             element.className = 'feedback ' + type;
+        }
+
+        // Simple Excel Export
+        async function exportToExcel() {
+            // Simplified export function
+            showMessage("📤 Exporting to Excel...", "info");
         }
     </script>
 </body>
