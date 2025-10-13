@@ -69,10 +69,27 @@ function processJSONData() {
         window.appData.customerData = jsonData;
         
         // Match customer data with active bowls
-        matchCustomerDataWithBowls();
+        const patchResults = matchCustomerDataWithBowlsDetailed(jsonData);
         
-        showMessage(`✅ JSON processed: ${jsonData.length} customer records loaded`, 'success');
-        document.getElementById('jsonStatus').innerHTML = `<strong>JSON Status:</strong> ${jsonData.length} customer records loaded`;
+        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed`, 'success');
+        
+        // Show detailed results
+        document.getElementById('patchResults').style.display = 'block';
+        document.getElementById('patchSummary').textContent = 
+            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} customers`;
+        
+        const failedDiv = document.getElementById('failedMatches');
+        if (patchResults.failed.length > 0) {
+            let failedHtml = '<strong>Failed matches:</strong><br>';
+            patchResults.failed.forEach(failed => {
+                failedHtml += `• ${failed.vyt_code} - ${failed.customer}<br>`;
+            });
+            failedDiv.innerHTML = failedHtml;
+        } else {
+            failedDiv.innerHTML = '<em>All customer data matched successfully!</em>';
+        }
+        
+        document.getElementById('jsonStatus').innerHTML = `<strong>JSON Status:</strong> ${jsonData.length} customer records processed`;
         
         // Sync to Firebase
         if (typeof syncToFirebase === 'function') {
@@ -86,17 +103,95 @@ function processJSONData() {
     }
 }
 
-function matchCustomerDataWithBowls() {
-    window.appData.activeBowls.forEach(bowl => {
-        const customerInfo = window.appData.customerData.find(c => c.vyt_code === bowl.code);
-        if (customerInfo) {
-            bowl.company = customerInfo.company;
-            bowl.customer = customerInfo.customer;
-            bowl.dish = customerInfo.dish || bowl.dish;
+// Enhanced customer data matching with combined customer names
+function matchCustomerDataWithBowlsDetailed(jsonData) {
+    const results = {
+        matched: 0,
+        failed: []
+    };
+    
+    // Step 1: First patch individual bowls
+    jsonData.forEach(customer => {
+        const matchingBowls = window.appData.activeBowls.filter(bowl => bowl.code === customer.vyt_code);
+        
+        if (matchingBowls.length > 0) {
+            // Update all matching bowls with individual customer data
+            matchingBowls.forEach(bowl => {
+                bowl.company = customer.company;
+                bowl.customer = customer.customer;  // Individual customer name
+                bowl.dish = customer.dish || bowl.dish;
+            });
+            results.matched += matchingBowls.length;
+        } else {
+            // No active bowl found for this customer
+            results.failed.push({
+                vyt_code: customer.vyt_code,
+                customer: customer.customer,
+                company: customer.company
+            });
         }
     });
     
+    // Step 2: Group by dish and combine customer names
+    combineCustomerNamesByDish();
+    
     updateDisplay();
+    return results;
+}
+
+// Combine customer names for same dish and set color flags
+function combineCustomerNamesByDish() {
+    // Group active bowls by dish
+    const dishGroups = {};
+    window.appData.activeBowls.forEach(bowl => {
+        if (!dishGroups[bowl.dish]) {
+            dishGroups[bowl.dish] = [];
+        }
+        dishGroups[bowl.dish].push(bowl);
+    });
+    
+    // Process each dish group
+    Object.values(dishGroups).forEach(bowls => {
+        if (bowls.length > 1) {
+            // Multiple bowls for same dish - combine customer names
+            const allCustomers = [...new Set(bowls.map(b => b.customer))].filter(name => name && name !== "Unknown");
+            
+            if (allCustomers.length > 0) {
+                const combinedCustomers = allCustomers.join(', ');
+                
+                // Update all bowls in this dish with combined names
+                bowls.forEach(bowl => {
+                    bowl.customer = combinedCustomers;
+                    bowl.multipleCustomers = true; // Flag for red color
+                });
+            }
+        } else {
+            // Single bowl for this dish
+            if (bowls[0].customer && bowls[0].customer !== "Unknown") {
+                bowls[0].multipleCustomers = false; // Flag for green color
+            }
+        }
+    });
+    
+    // Also update prepared bowls to match
+    window.appData.preparedBowls.forEach(prepBowl => {
+        const activeBowl = window.appData.activeBowls.find(bowl => bowl.code === prepBowl.code);
+        if (activeBowl) {
+            prepBowl.customer = activeBowl.customer;
+            prepBowl.company = activeBowl.company;
+            prepBowl.multipleCustomers = activeBowl.multipleCustomers;
+        }
+    });
+}
+
+// Updated color coding for customer names
+function getCustomerNameColor(bowl) {
+    if (bowl.multipleCustomers) {
+        return 'red-text';    // Red for multiple customers
+    } else if (bowl.customer && bowl.customer !== "Unknown") {
+        return 'green-text';  // Green for single customer
+    }
+    return ''; // Default color for unknown customers
 }
 
 // Daily Cleanup Timer (7PM Return Data Clear)
@@ -340,7 +435,8 @@ function kitchenScan(code) {
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        multipleCustomers: false // Initialize as false
     };
     
     window.appData.activeBowls.push(newBowl);
@@ -559,6 +655,73 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
+// Export All Data to Excel
+function exportAllData() {
+    const allData = {
+        activeBowls: window.appData.activeBowls,
+        preparedBowls: window.appData.preparedBowls,
+        returnedBowls: window.appData.returnedBowls,
+        customerData: window.appData.customerData,
+        scanHistory: window.appData.scanHistory,
+        exportTime: new Date().toISOString()
+    };
+    
+    const csvData = convertAllDataToCSV(allData);
+    downloadCSV(csvData, 'complete_scanner_data.csv');
+    showMessage('✅ All data exported as CSV', 'success');
+}
+
+function convertAllDataToCSV(allData) {
+    let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
+    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
+    
+    // Active Bowls
+    csvContent += "ACTIVE BOWLS\n";
+    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
+    allData.activeBowls.forEach(bowl => {
+        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
+    });
+    csvContent += "\n";
+    
+    // Prepared Bowls (Today)
+    const today = new Date().toLocaleDateString('en-GB');
+    const todayPrepared = allData.preparedBowls.filter(bowl => bowl.date === today);
+    csvContent += "PREPARED BOWLS (TODAY)\n";
+    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
+    todayPrepared.forEach(bowl => {
+        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
+    });
+    csvContent += "\n";
+    
+    // Returned Bowls (Today)
+    const todayReturns = allData.returnedBowls.filter(bowl => bowl.returnDate === today);
+    csvContent += "RETURNED BOWLS (TODAY)\n";
+    csvContent += "Code,Dish,Company,Customer,Returned By,Return Date,Return Time\n";
+    todayReturns.forEach(bowl => {
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.returnedBy}","${bowl.returnDate}","${bowl.returnTime}"\n`;
+    });
+    csvContent += "\n";
+    
+    // Customer Data
+    csvContent += "CUSTOMER DATA\n";
+    csvContent += "VYT Code,Company,Customer,Dish\n";
+    allData.customerData.forEach(customer => {
+        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
+    });
+    csvContent += "\n";
+    
+    // Recent Scan History
+    csvContent += "RECENT SCAN HISTORY (Last 50)\n";
+    csvContent += "Type,Code,User,Company,Customer,Timestamp,Message\n";
+    allData.scanHistory.slice(0, 50).forEach(scan => {
+        csvContent += `"${scan.type}","${scan.code}","${scan.user}","${scan.company || ''}","${scan.customer || ''}","${scan.timestamp}","${scan.message}"\n`;
+    });
+    
+    return csvContent;
+}
+
 function convertToCSV(data, fields) {
     const headers = fields.join(',');
     const rows = data.map(item => {
@@ -622,154 +785,6 @@ function updateDisplay() {
     `;
 }
 
-// Enhanced JSON Processing with Detailed Results
-function processJSONData() {
-    const jsonTextarea = document.getElementById('jsonData');
-    const jsonText = jsonTextarea.value.trim();
-    
-    if (!jsonText) {
-        showMessage('❌ Please paste JSON data first', 'error');
-        return;
-    }
-    
-    try {
-        const jsonData = JSON.parse(jsonText);
-        
-        if (!Array.isArray(jsonData)) {
-            throw new Error('JSON should be an array of objects');
-        }
-        
-        const patchResults = matchCustomerDataWithBowlsDetailed(jsonData);
-        
-        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed`, 'success');
-        
-        // Show detailed results
-        document.getElementById('patchResults').style.display = 'block';
-        document.getElementById('patchSummary').textContent = 
-            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} customers`;
-        
-        const failedDiv = document.getElementById('failedMatches');
-        if (patchResults.failed.length > 0) {
-            let failedHtml = '<strong>Failed matches:</strong><br>';
-            patchResults.failed.forEach(failed => {
-                failedHtml += `• ${failed.vyt_code} - ${failed.customer}<br>`;
-            });
-            failedDiv.innerHTML = failedHtml;
-        } else {
-            failedDiv.innerHTML = '<em>All customer data matched successfully!</em>';
-        }
-        
-        document.getElementById('jsonStatus').innerHTML = `<strong>JSON Status:</strong> ${jsonData.length} customer records processed`;
-        
-        // Sync to Firebase
-        if (typeof syncToFirebase === 'function') {
-            syncToFirebase().catch(() => {
-                console.log('Firebase sync failed, but data saved locally');
-            });
-        }
-        
-    } catch (error) {
-        showMessage('❌ Error processing JSON data: ' + error.message, 'error');
-    }
-}
-
-// Detailed customer data matching with results
-function matchCustomerDataWithBowlsDetailed(jsonData) {
-    const results = {
-        matched: 0,
-        failed: []
-    };
-    
-    jsonData.forEach(customer => {
-        const matchingBowls = window.appData.activeBowls.filter(bowl => bowl.code === customer.vyt_code);
-        
-        if (matchingBowls.length > 0) {
-            // Update all matching bowls
-            matchingBowls.forEach(bowl => {
-                bowl.company = customer.company;
-                bowl.customer = customer.customer;
-                bowl.dish = customer.dish || bowl.dish;
-            });
-            results.matched += matchingBowls.length;
-        } else {
-            // No active bowl found for this customer
-            results.failed.push({
-                vyt_code: customer.vyt_code,
-                customer: customer.customer,
-                company: customer.company
-            });
-        }
-    });
-    
-    updateDisplay();
-    return results;
-}
-
-// Export All Data to Excel
-function exportAllData() {
-    const allData = {
-        activeBowls: window.appData.activeBowls,
-        preparedBowls: window.appData.preparedBowls,
-        returnedBowls: window.appData.returnedBowls,
-        customerData: window.appData.customerData,
-        scanHistory: window.appData.scanHistory,
-        exportTime: new Date().toISOString()
-    };
-    
-    const csvData = convertAllDataToCSV(allData);
-    downloadCSV(csvData, 'complete_scanner_data.csv');
-    showMessage('✅ All data exported as CSV', 'success');
-}
-
-function convertAllDataToCSV(allData) {
-    let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
-    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
-    
-    // Active Bowls
-    csvContent += "ACTIVE BOWLS\n";
-    csvContent += "Code,Dish,Company,Customer,User,Date,Time,Status\n";
-    allData.activeBowls.forEach(bowl => {
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-    
-    // Prepared Bowls (Today)
-    const today = new Date().toLocaleDateString('en-GB');
-    const todayPrepared = allData.preparedBowls.filter(bowl => bowl.date === today);
-    csvContent += "PREPARED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,User,Date,Time,Status\n";
-    todayPrepared.forEach(bowl => {
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-    
-    // Returned Bowls (Today)
-    const todayReturns = allData.returnedBowls.filter(bowl => bowl.returnDate === today);
-    csvContent += "RETURNED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,Returned By,Return Date,Return Time\n";
-    todayReturns.forEach(bowl => {
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.returnedBy}","${bowl.returnDate}","${bowl.returnTime}"\n`;
-    });
-    csvContent += "\n";
-    
-    // Customer Data
-    csvContent += "CUSTOMER DATA\n";
-    csvContent += "VYT Code,Company,Customer,Dish\n";
-    allData.customerData.forEach(customer => {
-        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
-    });
-    csvContent += "\n";
-    
-    // Recent Scan History
-    csvContent += "RECENT SCAN HISTORY (Last 50)\n";
-    csvContent += "Type,Code,User,Company,Customer,Timestamp,Message\n";
-    allData.scanHistory.slice(0, 50).forEach(scan => {
-        csvContent += `"${scan.type}","${scan.code}","${scan.user}","${scan.company || ''}","${scan.customer || ''}","${scan.timestamp}","${scan.message}"\n`;
-    });
-    
-    return csvContent;
-}
-
 function showMessage(text, type) {
     const element = document.getElementById('feedback');
     element.textContent = text;
@@ -783,5 +798,7 @@ window.selectDishLetter = selectDishLetter;
 window.startScanning = startScanning;
 window.stopScanning = stopScanning;
 window.processJSONData = processJSONData;
-window.loadFromFirebase = loadFromFirebase;
+window.exportActiveBowls = exportActiveBowls;
+window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
+window.loadFromFirebase = loadFromFirebase;
