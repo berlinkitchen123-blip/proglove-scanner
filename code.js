@@ -35,6 +35,25 @@ function getStandardizedDate(dateString = null) {
     return date.toISOString().split('T')[0]; // Returns "2025-10-13"
 }
 
+// VYT CODE EXTRACTION FUNCTION - Handles all URL formats
+function extractVYTCode(input) {
+    if (!input) return null;
+    
+    const str = input.toString().toUpperCase().trim();
+    
+    // Check for VYT URL patterns
+    if (str.includes('VYT.TO/') || str.includes('VYT/') || str.includes('HTTP://VYT') || str.includes('HTTPS://VYT')) {
+        // Extract code from URL like "HTTP://VYT.TO/ABCDEF" or "HTTP://VYT/ABCDEF"
+        const urlParts = str.split('/');
+        const code = urlParts[urlParts.length - 1];
+        console.log(`🔗 Extracted VYT code from URL: ${input} → ${code}`);
+        return code;
+    } else {
+        // It's already a direct code
+        return str;
+    }
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -54,7 +73,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// CORRECTED JSON Data Processing - With uniqueidentifier and username fields
+// CORRECTED JSON Data Processing - With VYT URL support
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -71,9 +90,10 @@ function processJSONData() {
             throw new Error('JSON should be an array of objects');
         }
         
-        console.log('🔍 Starting JSON patch process...');
+        console.log('🔍 Starting JSON patch process with VYT URL support...');
         console.log('JSON records to process:', jsonData.length);
         console.log('Active bowls before patch:', window.appData.activeBowls.length);
+        console.log('Active bowl codes:', window.appData.activeBowls.map(b => b.code));
         
         const patchResults = {
             matched: 0,
@@ -81,22 +101,37 @@ function processJSONData() {
         };
         
         // STEP 1: Process each VYT code from JSON data
-        jsonData.forEach(customer => {
+        jsonData.forEach((customer, index) => {
             // Extract VYT code from multiple possible field names
-            const vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code || customer.VYTCODE;
+            let vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code || customer.VYTCODE || customer.url || customer.URL;
             
             if (!vytCode) {
                 patchResults.failed.push({
                     vyt_code: 'MISSING_CODE',
                     company: customer.uniqueidentifier || 'No company',
                     customer: customer.username || 'No customer',
-                    reason: 'No VYT code found in JSON record'
+                    reason: 'No VYT code field found in JSON record',
+                    record: index + 1
                 });
                 return;
             }
             
-            const cleanVytCode = vytCode.toString().toUpperCase().trim();
-            console.log(`Looking for bowl matching: ${cleanVytCode}`);
+            // Extract clean VYT code from URL or direct code
+            const cleanVytCode = extractVYTCode(vytCode);
+            
+            if (!cleanVytCode) {
+                patchResults.failed.push({
+                    vyt_code: 'INVALID_FORMAT',
+                    original_code: vytCode,
+                    company: customer.uniqueidentifier || 'No company',
+                    customer: customer.username || 'No customer',
+                    reason: 'Could not extract VYT code from format',
+                    record: index + 1
+                });
+                return;
+            }
+            
+            console.log(`Processing record ${index + 1}: ${vytCode} → ${cleanVytCode}`);
             
             // STEP 2: Find ALL active bowls with this VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
@@ -128,9 +163,11 @@ function processJSONData() {
                 console.log(`❌ No active bowl found for VYT code: ${cleanVytCode}`);
                 patchResults.failed.push({
                     vyt_code: cleanVytCode,
+                    original_code: vytCode,
                     company: customer.uniqueidentifier || 'No company',
                     customer: customer.username || 'No customer',
-                    reason: 'No active bowl found with this VYT code'
+                    reason: 'No active bowl found with this VYT code',
+                    record: index + 1
                 });
             }
         });
@@ -163,7 +200,7 @@ function processJSONData() {
         if (patchResults.failed.length > 0) {
             let failedHtml = '<strong>Failed matches:</strong><br>';
             patchResults.failed.forEach(failed => {
-                failedHtml += `• ${failed.vyt_code} - ${failed.customer} (${failed.reason})<br>`;
+                failedHtml += `• Record ${failed.record}: ${failed.vyt_code} (from: ${failed.original_code}) - ${failed.customer} - ${failed.reason}<br>`;
             });
             failedDiv.innerHTML = failedHtml;
         } else {
@@ -452,10 +489,21 @@ function processScan(code) {
     updateLastActivity();
 }
 
-// UPDATED: kitchenScan with correct JSON field names
+// UPDATED: kitchenScan with VYT URL support
 function kitchenScan(code) {
     const startTime = Date.now();
-    const fullCode = code.toUpperCase();
+    
+    // Handle both direct codes and VYT URLs
+    let fullCode = extractVYTCode(code);
+    
+    if (!fullCode) {
+        return { 
+            message: "❌ Invalid VYT code format: " + code, 
+            type: "error",
+            responseTime: Date.now() - startTime
+        };
+    }
+    
     const today = getStandardizedDate(); // "2025-10-13"
     
     // Error Detection: Duplicate scan
@@ -528,10 +576,21 @@ function kitchenScan(code) {
     };
 }
 
-// UPDATED: returnScan with ISO dates
+// UPDATED: returnScan with VYT URL support
 function returnScan(code) {
     const startTime = Date.now();
-    const fullCode = code.toUpperCase();
+    
+    // Handle both direct codes and VYT URLs
+    let fullCode = extractVYTCode(code);
+    
+    if (!fullCode) {
+        return { 
+            message: "❌ Invalid VYT code format: " + code, 
+            type: "error",
+            responseTime: Date.now() - startTime
+        };
+    }
+    
     const today = getStandardizedDate(); // "2025-10-13"
     
     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
