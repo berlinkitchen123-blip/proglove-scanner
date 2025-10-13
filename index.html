@@ -57,6 +57,51 @@
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
         .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+        
+        /* Dish Statistics Table Styles */
+        .dish-stats-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .dish-stats-table th {
+            background: #4285f4;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #555;
+        }
+        .dish-stats-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #555;
+            background: #333;
+        }
+        .dish-stats-table .dish-header {
+            background: #34a853;
+            font-weight: bold;
+        }
+        .dish-stats-table .total-row {
+            background: #f57c00;
+            font-weight: bold;
+        }
+        .dish-stats-table .expected-highlight {
+            background: #ffeb3b;
+            color: #000;
+            font-weight: bold;
+        }
+        .dish-stats-table .missing {
+            background: #ff4444;
+            color: white;
+            font-weight: bold;
+        }
+        .dish-stats-table .extra {
+            background: #ff9800;
+            color: white;
+            font-weight: bold;
+        }
+        
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
@@ -140,6 +185,33 @@
             </div>
         </div>
 
+        <!-- DISH SCANNING STATISTICS TABLE -->
+        <div class="card">
+            <h3>📈 DISH SCANNING STATISTICS</h3>
+            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                <small>ℹ️ Real-time tracking of scanned dishes - verify counts for accuracy</small>
+            </div>
+            <div id="dishStatistics">
+                <table class="dish-stats-table">
+                    <thead>
+                        <tr>
+                            <th>Dish</th>
+                            <th>Scanned</th>
+                            <th>Expected</th>
+                            <th>Difference</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dishStatsBody">
+                        <!-- Statistics will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="local-data" style="margin-top: 10px;">
+                <strong>Last Updated:</strong> <span id="statsUpdateTime">Never</span>
+            </div>
+        </div>
+
         <!-- HYBRID BACKUP SECTION -->
         <div class="card admin-section">
             <h3>💾 HYBRID BACKUP SYSTEM</h3>
@@ -211,7 +283,7 @@
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
-            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
+            databaseURL: "https://proglove-scanner-default-rtcdb.europe-west1.firebasedatabase.app",
             projectId: "proglove-scanner",
             storageBucket: "proglove-scanner.firebasestorage.app",
             messagingSenderId: "177575768177",
@@ -459,6 +531,7 @@
                     window.appData.scanHistory = firebaseAppData.scanHistory || [];
                     
                     updateDisplay();
+                    updateDishStatistics();
                     saveToStorage();
                     
                     isSyncing = false;
@@ -535,6 +608,7 @@
                 window.appData.lastCleanup = today;
                 saveToStorage();
                 updateDisplay();
+                updateDishStatistics();
                 
                 showMessage(`✅ 7:00 PM Cleanup: Cleared ${backupData.returnedCount} returned bowls • Active bowls preserved`, 'success');
                 
@@ -566,6 +640,7 @@
                     window.appData.scanHistory = data.scanHistory || [];
                     
                     updateDisplay();
+                    updateDishStatistics();
                     saveToStorage();
                     
                     showMessage('✅ Data loaded from Firebase backup', 'success');
@@ -623,7 +698,8 @@
             scanHistory: [],
             lastActivity: Date.now(),
             autoSaveTimer: null,
-            lastCleanup: null
+            lastCleanup: null,
+            expectedCounts: {} // Store expected dish counts
         };
 
         const USERS = [
@@ -657,19 +733,104 @@
             let businessDays = 0;
             
             while (current <= today) {
-                // Exclude Saturdays (6) and Sundays (0)
                 if (current.getDay() !== 0 && current.getDay() !== 6) {
                     businessDays++;
                 }
                 current.setDate(current.getDate() + 1);
                 
-                // Stop if we reach today (excluding time comparison)
                 if (current.toDateString() === today.toDateString()) {
                     break;
                 }
             }
             
-            return Math.max(0, businessDays - 1); // Subtract 1 to start coloring from day 3
+            return Math.max(0, businessDays - 1);
+        }
+
+        // DISH STATISTICS FUNCTION
+        function updateDishStatistics() {
+            const today = getEffectiveDate(new Date());
+            const statsBody = document.getElementById('dishStatsBody');
+            const updateTime = document.getElementById('statsUpdateTime');
+            
+            // Count scanned dishes for today
+            const scannedCounts = {};
+            const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
+            
+            // Initialize all dishes
+            allDishes.forEach(dish => {
+                scannedCounts[dish] = 0;
+            });
+            
+            // Count actual scans for today
+            window.appData.preparedBowls.forEach(bowl => {
+                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
+                    scannedCounts[bowl.dish] = (scannedCounts[bowl.dish] || 0) + 1;
+                }
+            });
+            
+            // Calculate totals
+            let totalScanned = 0;
+            let totalExpected = 0;
+            
+            // Generate table rows
+            let html = '';
+            
+            allDishes.forEach(dish => {
+                const scanned = scannedCounts[dish] || 0;
+                const expected = window.appData.expectedCounts[dish] || 0;
+                const difference = scanned - expected;
+                
+                totalScanned += scanned;
+                totalExpected += expected;
+                
+                let status = '✅ OK';
+                let statusClass = '';
+                
+                if (expected > 0) {
+                    if (difference < 0) {
+                        status = `❌ Missing ${Math.abs(difference)}`;
+                        statusClass = 'missing';
+                    } else if (difference > 0) {
+                        status = `⚠️ Extra ${difference}`;
+                        statusClass = 'extra';
+                    }
+                } else {
+                    status = scanned > 0 ? '📝 Scanned' : '➖ No orders';
+                }
+                
+                html += `
+                    <tr>
+                        <td class="dish-header">${dish}</td>
+                        <td>${scanned}</td>
+                        <td class="${expected > 0 ? 'expected-highlight' : ''}">${expected > 0 ? expected : '-'}</td>
+                        <td>${expected > 0 ? (difference >= 0 ? `+${difference}` : difference) : '-'}</td>
+                        <td class="${statusClass}">${status}</td>
+                    </tr>
+                `;
+            });
+            
+            // Add total row
+            const totalDifference = totalScanned - totalExpected;
+            html += `
+                <tr class="total-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td><strong>${totalScanned}</strong></td>
+                    <td><strong>${totalExpected}</strong></td>
+                    <td><strong>${totalExpected > 0 ? (totalDifference >= 0 ? `+${totalDifference}` : totalDifference) : '-'}</strong></td>
+                    <td><strong>${totalExpected > 0 ? (totalDifference === 0 ? '✅ Perfect' : (totalDifference > 0 ? `⚠️ Extra ${totalDifference}` : `❌ Missing ${Math.abs(totalDifference)}`)) : 'No orders set'}</strong></td>
+                </tr>
+            `;
+            
+            statsBody.innerHTML = html;
+            updateTime.textContent = new Date().toLocaleTimeString();
+        }
+
+        // FUNCTION TO SET EXPECTED COUNTS (Can be called from JSON import or manually)
+        function setExpectedDishCounts(counts) {
+            window.appData.expectedCounts = { ...window.appData.expectedCounts, ...counts };
+            updateDishStatistics();
+            saveToStorage();
+            showMessage('✅ Expected dish counts updated', 'success');
         }
 
         // Initialize
@@ -679,6 +840,7 @@
             loadFromStorage();
             initializeUsers();
             updateDisplay();
+            updateDishStatistics();
             startAutoSaveTimer();
             
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
@@ -736,6 +898,7 @@
                 let createdCount = 0;
                 let removedFromPrepCount = 0;
                 let errors = [];
+                const dishCounts = {};
 
                 const processOrder = (order) => {
                     const { vytCode, customer, company, dishLetter } = order;
@@ -746,14 +909,18 @@
                     }
 
                     const code = vytCode.toUpperCase();
+                    const dish = (dishLetter || 'X').toUpperCase();
                     const today = new Date().toLocaleDateString('en-GB');
+
+                    // Count dishes for expected counts
+                    dishCounts[dish] = (dishCounts[dish] || 0) + 1;
 
                     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
                     
                     if (activeBowlIndex !== -1) {
                         window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
                         window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
-                        window.appData.activeBowls[activeBowlIndex].dish = dishLetter || window.appData.activeBowls[activeBowlIndex].dish;
+                        window.appData.activeBowls[activeBowlIndex].dish = dish || window.appData.activeBowls[activeBowlIndex].dish;
                         enrichedCount++;
 
                         const prepBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
@@ -768,7 +935,7 @@
                     } else {
                         const newBowl = {
                             code: code,
-                            dish: dishLetter || 'X',
+                            dish: dish,
                             user: 'System Import',
                             company: company || 'Unknown Company',
                             customer: customer || 'Unknown Customer',
@@ -791,9 +958,13 @@
                     processOrder(orderData);
                 }
 
+                // Update expected counts from imported data
+                setExpectedDishCounts(dishCounts);
+
                 saveToStorage();
                 syncToFirebase();
                 updateDisplay();
+                updateDishStatistics();
 
                 let resultMessage = `✅ Import completed: `;
                 if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
@@ -830,18 +1001,15 @@
             btn.textContent = "⏳ EXPORTING...";
             
             try {
-                // Load SheetJS library dynamically
                 await loadSheetJS();
                 
-                // Create workbook
                 const wb = XLSX.utils.book_new();
                 
-                // Create sheets
                 createActiveSheet(wb);
                 createPreparedSheet(wb);
                 createReturnedSheet(wb);
+                createStatisticsSheet(wb);
                 
-                // Generate and download Excel file
                 XLSX.writeFile(wb, `proglove_data_${new Date().toISOString().split('T')[0]}.xlsx`);
                 
                 showMessage("✅ Data exported to Excel with colors!", "success");
@@ -871,29 +1039,25 @@
         }
 
         function createActiveSheet(wb) {
-            // Count dishes for font colors
             const dishCounts = {};
             window.appData.activeBowls.forEach(bowl => {
                 dishCounts[bowl.dish] = (dishCounts[bowl.dish] || 0) + 1;
             });
 
-            // Prepare data with colors
             const activeData = window.appData.activeBowls.map(bowl => {
                 const businessDays = getBusinessDaysSince(new Date(bowl.timestamp));
                 
-                // Determine font color based on dish count
-                let fontColor = '000000'; // Black default
+                let fontColor = '000000';
                 const dishCount = dishCounts[bowl.dish] || 0;
-                if (dishCount === 1) fontColor = '00FF00'; // Green
-                else if (dishCount === 2) fontColor = 'FFFF00'; // Yellow
-                else if (dishCount >= 3) fontColor = 'FF0000'; // Red
+                if (dishCount === 1) fontColor = '00FF00';
+                else if (dishCount === 2) fontColor = 'FFFF00';
+                else if (dishCount >= 3) fontColor = 'FF0000';
 
-                // Determine cell fill color based on business days
-                let fillColor = 'FFFFFF'; // White
-                if (businessDays >= 3) fillColor = 'FFFFCC'; // Light Yellow
-                if (businessDays >= 4) fillColor = 'FFCCFF'; // Light Pink
-                if (businessDays >= 5) fillColor = 'FFE5CC'; // Light Orange
-                if (businessDays >= 6) fillColor = 'FFCCCC'; // Light Red
+                let fillColor = 'FFFFFF';
+                if (businessDays >= 3) fillColor = 'FFFFCC';
+                if (businessDays >= 4) fillColor = 'FFCCFF';
+                if (businessDays >= 5) fillColor = 'FFE5CC';
+                if (businessDays >= 6) fillColor = 'FFCCCC';
 
                 return {
                     'VYT Code': bowl.code,
@@ -910,13 +1074,11 @@
 
             const ws = XLSX.utils.json_to_sheet(activeData.map(({_fontColor, _fillColor, ...rest}) => rest));
             
-            // Apply styling
             if (ws['!ref']) {
                 const range = XLSX.utils.decode_range(ws['!ref']);
                 for (let R = range.s.r + 1; R <= range.e.r; R++) {
                     const row = activeData[R - 1];
                     if (row) {
-                        // Apply font color to Customer column (column C)
                         const customerCell = ws[XLSX.utils.encode_cell({r: R, c: 2})];
                         if (customerCell) {
                             customerCell.s = {
@@ -925,7 +1087,6 @@
                             };
                         }
                         
-                        // Apply fill color to entire row
                         for (let C = range.s.c; C <= range.e.c; C++) {
                             const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
                             if (cell && !cell.s) {
@@ -972,6 +1133,47 @@
 
             const ws = XLSX.utils.json_to_sheet(returnedData);
             XLSX.utils.book_append_sheet(wb, ws, "Returned Bowls");
+        }
+
+        function createStatisticsSheet(wb) {
+            const today = getEffectiveDate(new Date());
+            const scannedCounts = {};
+            const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
+            
+            allDishes.forEach(dish => {
+                scannedCounts[dish] = 0;
+            });
+            
+            window.appData.preparedBowls.forEach(bowl => {
+                if (getEffectiveDate(new Date(bowl.timestamp)) === today) {
+                    scannedCounts[bowl.dish] = (scannedCounts[bowl.dish] || 0) + 1;
+                }
+            });
+            
+            const statsData = allDishes.map(dish => {
+                const scanned = scannedCounts[dish] || 0;
+                const expected = window.appData.expectedCounts[dish] || 0;
+                const difference = scanned - expected;
+                
+                let status = 'OK';
+                if (expected > 0) {
+                    if (difference < 0) status = `Missing ${Math.abs(difference)}`;
+                    else if (difference > 0) status = `Extra ${difference}`;
+                } else {
+                    status = scanned > 0 ? 'Scanned' : 'No orders';
+                }
+                
+                return {
+                    'Dish': dish,
+                    'Scanned': scanned,
+                    'Expected': expected > 0 ? expected : '-',
+                    'Difference': expected > 0 ? (difference >= 0 ? `+${difference}` : difference) : '-',
+                    'Status': status
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(statsData);
+            XLSX.utils.book_append_sheet(wb, ws, "Dish Statistics");
         }
 
         // User and Mode Management
@@ -1037,6 +1239,27 @@
             });
         }
 
+        function loadDishLetters() {
+            const dropdown = document.getElementById('dishDropdown');
+            dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
+            
+            // Add A-Z letters
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+                const option = document.createElement('option');
+                option.value = letter;
+                option.textContent = letter;
+                dropdown.appendChild(option);
+            });
+            
+            // Add numbers 1-4
+            '1234'.split('').forEach(number => {
+                const option = document.createElement('option');
+                option.value = number;
+                option.textContent = number;
+                dropdown.appendChild(option);
+            });
+        }
+
         function selectUser() {
             const dropdown = document.getElementById('userDropdown');
             window.appData.user = dropdown.value;
@@ -1050,17 +1273,6 @@
             }
             updateDisplay();
             updateLastActivity();
-        }
-
-        function loadDishLetters() {
-            const dropdown = document.getElementById('dishDropdown');
-            dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
-                const option = document.createElement('option');
-                option.value = letter;
-                option.textContent = letter;
-                dropdown.appendChild(option);
-            });
         }
 
         function selectDishLetter() {
@@ -1131,6 +1343,7 @@
             }
             
             updateDisplay();
+            updateDishStatistics();
             updateLastActivity();
         }
 
