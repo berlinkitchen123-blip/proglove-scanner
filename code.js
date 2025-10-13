@@ -54,7 +54,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// CORRECTED JSON Data Processing - Now with standardized dates
+// CORRECTED JSON Data Processing - With uniqueidentifier and username fields
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -71,7 +71,7 @@ function processJSONData() {
             throw new Error('JSON should be an array of objects');
         }
         
-        console.log('🔍 Starting JSON patch with CORRECT field names...');
+        console.log('🔍 Starting JSON patch process...');
         console.log('JSON records to process:', jsonData.length);
         console.log('Active bowls before patch:', window.appData.activeBowls.length);
         
@@ -113,8 +113,8 @@ function processJSONData() {
                     const oldCustomer = bowl.customer;
                     
                     // PATCH WITH CORRECT FIELD NAMES:
-                    bowl.company = customer.uniqueidentifier || "Unknown";  // ← Company name
-                    bowl.customer = customer.username || "Unknown";         // ← Customer name
+                    bowl.company = customer.uniqueidentifier || "Unknown";  // Company name
+                    bowl.customer = customer.username || "Unknown";         // Customer name
                     bowl.dish = customer.dish || bowl.dish; // Update dish if provided
                     
                     console.log(`🔄 Patched bowl ${bowl.code}:`);
@@ -134,51 +134,6 @@ function processJSONData() {
                 });
             }
         });
-        
-        // STEP 4: After individual patching, combine customer names for same dish
-        if (patchResults.matched > 0) {
-            combineCustomerNamesByDish();
-        }
-        
-        // Update display and save
-        updateDisplay();
-        saveToStorage();
-        
-        // Sync to Firebase
-        if (typeof syncToFirebase === 'function') {
-            syncToFirebase().catch(() => {
-                console.log('Firebase sync failed, but data saved locally');
-            });
-        }
-        
-        // Show results
-        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed matches`, 'success');
-        
-        // Show detailed results
-        document.getElementById('patchResults').style.display = 'block';
-        document.getElementById('patchSummary').textContent = 
-            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} VYT codes`;
-        
-        const failedDiv = document.getElementById('failedMatches');
-        if (patchResults.failed.length > 0) {
-            let failedHtml = '<strong>Failed matches:</strong><br>';
-            patchResults.failed.forEach(failed => {
-                failedHtml += `• ${failed.vyt_code} - ${failed.customer} (${failed.reason})<br>`;
-            });
-            failedDiv.innerHTML = failedHtml;
-        } else {
-            failedDiv.innerHTML = '<em>All VYT codes matched successfully!</em>';
-        }
-        
-        document.getElementById('jsonStatus').innerHTML = 
-            `<strong>JSON Status:</strong> ${jsonData.length} customer records processed, ${patchResults.matched} bowls patched`;
-        
-        console.log('📊 Final patch results:', patchResults);
-        
-    } catch (error) {
-        showMessage('❌ Error processing JSON data: ' + error.message, 'error');
-    }
-});
         
         // STEP 4: After individual patching, combine customer names for same dish
         if (patchResults.matched > 0) {
@@ -497,7 +452,7 @@ function processScan(code) {
     updateLastActivity();
 }
 
-// UPDATED: kitchenScan with ISO dates
+// UPDATED: kitchenScan with correct JSON field names
 function kitchenScan(code) {
     const startTime = Date.now();
     const fullCode = code.toUpperCase();
@@ -520,15 +475,15 @@ function kitchenScan(code) {
         };
     }
     
-    // Find customer data from JSON
+    // Find customer data from JSON - UPDATED FIELD NAMES
     const customerInfo = window.appData.customerData.find(c => c.vyt_code === fullCode);
     
     const newBowl = {
         code: fullCode,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: customerInfo ? customerInfo.company : "Unknown",
-        customer: customerInfo ? customerInfo.customer : "Unknown",
+        company: customerInfo ? customerInfo.uniqueidentifier : "Unknown",  // Updated field
+        customer: customerInfo ? customerInfo.username : "Unknown",         // Updated field
         date: today, // "2025-10-13" format
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
@@ -815,7 +770,7 @@ function convertAllDataToCSV(allData) {
     csvContent += "CUSTOMER DATA\n";
     csvContent += "VYT Code,Company,Customer,Dish\n";
     allData.customerData.forEach(customer => {
-        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
+        csvContent += `"${customer.vyt_code}","${customer.uniqueidentifier}","${customer.username}","${customer.dish}"\n`;
     });
     csvContent += "\n";
     
