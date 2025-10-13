@@ -218,19 +218,29 @@
 
         <!-- JSON DATA PASTE SECTION -->
         <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+            <h3>📁 PASTE DELIVERY DATA (JSON)</h3>
             <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
-[
-  {
-    "vyt_code": "VYT12345",
-    "company": "Company Name", 
-    "customer": "Customer Name",
-    "dish": "A"
-  }
-]
+                <textarea class="json-textarea" id="jsonData" placeholder='Paste your delivery JSON here (complex format):
+{
+  "name": "Delivery Name",
+  "boxes": [
+    {
+      "dishes": [
+        {
+          "label": "A",
+          "bowlCodes": ["HTTP://VYT.TO/ABCDEF"],
+          "users": [
+            {
+              "username": "Customer Name"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
 
-Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
+The system will automatically extract VYT codes and customer data!'></textarea>
                 <div class="sync-controls">
                     <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
                     <button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
