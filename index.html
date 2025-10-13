@@ -287,15 +287,20 @@
         let timeoutTimer;
         let countdownTimer;
 
-        // DEVICE LOCKING SYSTEM
+        // IMPROVED DEVICE LOCKING SYSTEM
         class DeviceLockSystem {
             constructor() {
                 this.lockCheckInterval = null;
                 this.isLocked = false;
+                this.lockTimeout = 120000; // 2 minutes
+                this.cleanupInterval = null;
             }
 
             async requestLock() {
-                if (!database) return false;
+                if (!database) {
+                    console.log('⚠️ Firebase not available - proceeding without lock');
+                    return true; // Allow scanning without lock if Firebase is down
+                }
 
                 try {
                     const lockRef = ref(database, 'deviceLock');
@@ -309,26 +314,34 @@
                             user: window.appData.user,
                             timestamp: Date.now(),
                             mode: window.appData.mode,
-                            dishLetter: window.appData.dishLetter
+                            dishLetter: window.appData.dishLetter,
+                            lastActivity: Date.now()
                         };
 
                         await set(lockRef, lockData);
                         this.isLocked = true;
                         this.startLockMonitoring();
-                        console.log('🔒 Lock acquired by', deviceId);
+                        this.startLockCleanup();
+                        console.log('🔒 Lock acquired by', deviceId, 'for user', window.appData.user);
+                        return true;
+                    } else if (currentLock.deviceId === deviceId) {
+                        // We already have the lock, just update activity
+                        await update(lockRef, { lastActivity: Date.now() });
+                        console.log('🔒 Lock refreshed by', deviceId);
                         return true;
                     } else {
-                        console.log('🔐 Lock held by', currentLock.deviceId);
+                        console.log('🔐 Lock held by', currentLock.deviceId, 'for user', currentLock.user);
                         return false;
                     }
                 } catch (error) {
                     console.error('Lock request failed:', error);
-                    return false;
+                    // If Firebase fails, allow scanning without lock
+                    return true;
                 }
             }
 
             async releaseLock() {
-                if (!database || !this.isLocked) return;
+                if (!database) return;
 
                 try {
                     const lockRef = ref(database, 'deviceLock');
@@ -340,6 +353,7 @@
                         await set(lockRef, null);
                         this.isLocked = false;
                         this.stopLockMonitoring();
+                        this.stopLockCleanup();
                         console.log('🔓 Lock released by', deviceId);
                     }
                 } catch (error) {
@@ -348,11 +362,14 @@
             }
 
             isLockExpired(lock) {
-                return Date.now() - lock.timestamp > 130000; // 2 minutes 10 seconds
+                const timeSinceLastActivity = Date.now() - (lock.lastActivity || lock.timestamp);
+                return timeSinceLastActivity > this.lockTimeout + 30000; // 2.5 minutes total
             }
 
             startLockMonitoring() {
                 this.lockCheckInterval = setInterval(async () => {
+                    if (!database) return;
+                    
                     const lockRef = ref(database, 'deviceLock');
                     onValue(lockRef, (snapshot) => {
                         const lock = snapshot.val();
@@ -364,22 +381,64 @@
             stopLockMonitoring() {
                 if (this.lockCheckInterval) {
                     clearInterval(this.lockCheckInterval);
+                    this.lockCheckInterval = null;
                 }
                 this.updateLockDisplay(null);
             }
 
+            startLockCleanup() {
+                this.cleanupInterval = setInterval(async () => {
+                    if (!database || !this.isLocked) return;
+                    
+                    try {
+                        const lockRef = ref(database, 'deviceLock');
+                        const snapshot = await get(lockRef);
+                        const currentLock = snapshot.val();
+                        
+                        // Update our activity timestamp to keep lock alive
+                        if (currentLock && currentLock.deviceId === deviceId) {
+                            await update(lockRef, { lastActivity: Date.now() });
+                        }
+                    } catch (error) {
+                        console.error('Lock cleanup failed:', error);
+                    }
+                }, 30000); // Update every 30 seconds
+            }
+
+            stopLockCleanup() {
+                if (this.cleanupInterval) {
+                    clearInterval(this.cleanupInterval);
+                    this.cleanupInterval = null;
+                }
+            }
+
             updateLockDisplay(lock) {
                 const lockStatus = document.getElementById('deviceLockStatus');
+                const startBtn = document.getElementById('startBtn');
+                
                 if (!lock) {
                     lockStatus.innerHTML = '🔓 No active scanner';
                     lockStatus.style.borderLeftColor = '#34a853';
+                    startBtn.disabled = !canStartScanning();
+                    startBtn.textContent = '▶ START SCANNING';
                 } else if (lock.deviceId === deviceId) {
                     const timeElapsed = Math.floor((Date.now() - lock.timestamp) / 1000);
                     lockStatus.innerHTML = `🔒 You are scanning • ${120 - timeElapsed}s left`;
                     lockStatus.style.borderLeftColor = '#4285f4';
+                    startBtn.disabled = true;
+                    startBtn.textContent = '▶ YOU ARE SCANNING';
                 } else {
-                    lockStatus.innerHTML = `🔐 ${lock.user} is scanning • Wait your turn`;
+                    const timeSinceActivity = Math.floor((Date.now() - (lock.lastActivity || lock.timestamp)) / 1000);
+                    lockStatus.innerHTML = `🔐 ${lock.user} is scanning • ${120 - timeSinceActivity}s left`;
                     lockStatus.style.borderLeftColor = '#ff9800';
+                    startBtn.disabled = true;
+                    startBtn.textContent = `⏸️ ${lock.user} IS SCANNING`;
+                    
+                    // Auto-release if lock appears to be stuck
+                    if (this.isLockExpired(lock)) {
+                        console.log('🔄 Auto-releasing expired lock');
+                        this.forceReleaseLock();
+                    }
                 }
             }
 
@@ -391,6 +450,7 @@
                     await set(lockRef, null);
                     this.isLocked = false;
                     this.stopLockMonitoring();
+                    this.stopLockCleanup();
                     console.log('🔓 Lock force released');
                     showMessage('✅ Lock force released', 'success');
                 } catch (error) {
@@ -445,15 +505,6 @@
             onValue(lockRef, (snapshot) => {
                 const lock = snapshot.val();
                 deviceLock.updateLockDisplay(lock);
-                
-                // Update UI based on lock status
-                if (lock && lock.deviceId !== deviceId) {
-                    document.getElementById('startBtn').disabled = true;
-                    document.getElementById('startBtn').textContent = `⏸️ ${lock.user} IS SCANNING`;
-                } else {
-                    document.getElementById('startBtn').disabled = !canStartScanning();
-                    document.getElementById('startBtn').textContent = '▶ START SCANNING';
-                }
             });
         }
 
@@ -463,7 +514,7 @@
 
     <!-- Main Application Logic -->
     <script>
-        // ProGlove Scanner - DEVICE LOCKING SYSTEM
+        // ProGlove Scanner - IMPROVED DEVICE LOCKING SYSTEM
         window.appData = {
             mode: null,
             user: null,
@@ -528,6 +579,16 @@
 
         function resetTimeoutTimer() {
             window.appData.lastActivity = Date.now();
+            // Also update lock activity if we have the lock
+            if (window.appData.scanning && database) {
+                const lockRef = ref(database, 'deviceLock');
+                get(lockRef).then((snapshot) => {
+                    const lock = snapshot.val();
+                    if (lock && lock.deviceId === deviceId) {
+                        update(lockRef, { lastActivity: Date.now() });
+                    }
+                });
+            }
             startTimeoutTimer();
         }
 
@@ -624,7 +685,7 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Initializing Scanner System with Device Locking...');
+            console.log('Initializing Scanner System with Improved Device Locking...');
             initializeFirebase();
             loadFromStorage();
             initializeUsers();
@@ -634,6 +695,13 @@
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', resetTimeoutTimer);
             document.addEventListener('keydown', resetTimeoutTimer);
+            
+            // Auto-cleanup any stuck locks on page load
+            setTimeout(() => {
+                if (database) {
+                    deviceLock.forceReleaseLock().catch(() => {});
+                }
+            }, 5000);
         });
 
         // Storage functions
@@ -698,7 +766,7 @@
                    (window.appData.mode !== 'kitchen' || window.appData.dishLetter);
         }
 
-        // REQUEST SCANNING ACCESS WITH DEVICE LOCK
+        // REQUEST SCANNING ACCESS WITH IMPROVED DEVICE LOCK
         async function requestScanningAccess() {
             if (!canStartScanning()) {
                 showMessage('❌ Please select user and dish letter first', 'error');
@@ -710,6 +778,12 @@
                 startScanning();
             } else {
                 showMessage('⏸️ Another device is currently scanning. Please wait...', 'warning');
+                // Auto-retry after 5 seconds
+                setTimeout(() => {
+                    if (!window.appData.scanning) {
+                        requestScanningAccess();
+                    }
+                }, 5000);
             }
         }
 
@@ -740,6 +814,8 @@
         function forceReleaseLock() {
             deviceLock.forceReleaseLock();
         }
+
+        // ... rest of the functions remain the same (updateStatsLabels, loadUsers, loadDishLetters, etc.)
 
         function updateStatsLabels() {
             const prepLabel = document.getElementById('prepLabel');
