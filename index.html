@@ -118,7 +118,7 @@
     <div class="container">
         <div class="header">
             <h1>🧤 ProGlove Scanner - Complete System</h1>
-            <p>Multi-Device • Real-Time Sync • Manager Dashboard</p>
+            <p>Multi-Device • Auto-Sync • Data Recovery</p>
         </div>
         
         <div class="card">
@@ -127,10 +127,10 @@
                 🔄 Connecting to cloud...
             </div>
             <div class="backup-status" id="backupStatus">
-                💾 Hybrid backup initializing...
+                💾 Auto-sync initializing...
             </div>
             <div class="local-data" id="syncInfo">
-                <strong>Sync Status:</strong> Checking multi-device connection...
+                <strong>Sync Status:</strong> Checking data integrity...
             </div>
         </div>
 
@@ -167,7 +167,7 @@
             <h3>🔍 SCANNING</h3>
             <div class="scan-controls">
                 <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP & BACKUP</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
             </div>
             
             <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
@@ -226,48 +226,15 @@
             </div>
         </div>
 
-        <!-- HYBRID BACKUP SECTION -->
+        <!-- AUTO DATA RECOVERY SECTION -->
         <div class="card admin-section">
-            <h3>💾 HYBRID BACKUP SYSTEM</h3>
+            <h3>🔄 AUTO DATA RECOVERY</h3>
             <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ Instant sync + Smart backup • Never runs during scanning</small>
+                <small>ℹ️ Automatically syncs all device data to Firebase in background</small>
             </div>
-            
-            <div class="sync-controls">
-                <button class="sync-btn emergency-btn" onclick="forceSmartBackup()" id="smartBackupBtn">
-                    🔥 SMART BACKUP NOW
-                </button>
-                <button class="sync-btn download-btn" onclick="forceAllDevicesSync()" id="forceSyncBtn">
-                    🔄 FORCE SYNC ALL DEVICES
-                </button>
-                <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
-                    📥 LOAD FROM BACKUP
-                </button>
+            <div class="local-data" id="recoveryInfo">
+                <strong>Recovery Status:</strong> Checking for missing data...
             </div>
-            <div class="local-data" id="backupInfo">
-                <strong>Backup Status:</strong> Last backup: Never
-            </div>
-        </div>
-
-        <!-- ADMIN JSON IMPORT SECTION -->
-        <div class="card admin-section">
-            <h3>🔧 ADMIN: IMPORT ORDER DATA</h3>
-            <div style="background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <small>ℹ️ For admin use only - imports company/customer data to bowls</small>
-            </div>
-            
-            <textarea id="jsonInput" placeholder="Paste JSON order data from Bella Bona website here..." 
-                      style="width:100%; height:120px; background:#333; color:white; padding:10px; border-radius:5px; border:1px solid #666; font-size: 12px;"></textarea>
-            
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <button onclick="processBellaBonaJSON()" class="sync-btn upload-btn" style="flex:1;">
-                    📥 IMPORT & ASSIGN DATA
-                </button>
-                <button onclick="clearJSONInput()" class="sync-btn export-btn" style="flex:1;">
-                    🗑️ CLEAR
-                </button>
-            </div>
-            <div id="importResult" style="margin-top:10px; font-size:12px;"></div>
         </div>
 
         <!-- EXCEL EXPORT SECTION -->
@@ -285,9 +252,6 @@
                 <div class="local-data" id="localDataInfo">
                     <strong>Current Data:</strong> Loading...
                 </div>
-                <div class="upload-info" id="uploadInfo">
-                    <strong>Last Sync:</strong> Never
-                </div>
             </div>
         </div>
     </div>
@@ -295,7 +259,7 @@
     <!-- Firebase Configuration -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
@@ -309,296 +273,158 @@
 
         let app;
         let database;
-        let lastBackupTime = null;
         let isSyncing = false;
-        let lastFirebaseUpdate = null;
+        let autoSyncInterval;
 
-        // HYBRID BACKUP SYSTEM
-        class SmartBackupSystem {
+        // AUTOMATIC DATA RECOVERY SYSTEM
+        class AutoDataRecovery {
             constructor() {
-                this.lastIncrementalBackup = 0;
-                this.lastFullBackup = 0;
-                this.pendingScans = [];
-                this.isBackupRunning = false;
-                this.backupTimer = null;
+                this.isRecovering = false;
+                this.lastRecoveryTime = 0;
             }
 
-            async syncScanInstantly(scanData) {
-                if (!database) {
-                    this.queueScanForBackup(scanData);
+            // Automatically sync local data to Firebase
+            async autoSyncToFirebase() {
+                if (this.isRecovering || !database) {
                     return;
                 }
-                
+
+                this.isRecovering = true;
+                console.log('🔄 AUTO SYNC: Checking for data to sync...');
+
                 try {
-                    await this.syncSingleScan(scanData);
-                    console.log('✅ Instant scan sync completed');
-                } catch (error) {
-                    console.log('Instant sync failed, queuing for backup:', error);
-                    this.queueScanForBackup(scanData);
-                }
-            }
+                    // Get current Firebase data
+                    const appDataRef = ref(database, 'appData');
+                    const snapshot = await get(appDataRef);
+                    const firebaseData = snapshot.val() || {};
 
-            async syncSingleScan(scanData) {
-                const appDataRef = ref(database, 'appData');
-                const snapshot = await get(appDataRef);
-                const currentData = snapshot.val() || {};
-                
-                // Get current data
-                const currentActiveBowls = currentData.activeBowls || [];
-                const currentPreparedBowls = currentData.preparedBowls || [];
-                const currentMyScans = currentData.myScans || [];
-                const currentScanHistory = currentData.scanHistory || [];
-                
-                // Check if scan already exists in Firebase (prevent duplicates)
-                const scanExists = currentMyScans.some(scan => 
-                    scan.code === scanData.code && scan.timestamp === scanData.timestamp
-                );
-                
-                if (!scanExists) {
-                    const updatedData = {
-                        ...currentData,
-                        activeBowls: mergeBowls(currentActiveBowls, window.appData.activeBowls),
-                        preparedBowls: mergeBowls(currentPreparedBowls, window.appData.preparedBowls),
-                        myScans: [...currentMyScans, scanData],
-                        scanHistory: [{
-                            type: scanData.type,
-                            code: scanData.code,
-                            user: scanData.user,
-                            timestamp: new Date().toISOString(),
-                            message: `${scanData.dish} ${scanData.type}: ${scanData.code}`
-                        }, ...currentScanHistory],
-                        lastSync: new Date().toISOString(),
-                        lastUpdatedBy: window.appData.user || 'Unknown',
-                        lastUpdatedTime: new Date().toISOString()
-                    };
+                    // Find missing data that exists locally but not in Firebase
+                    const missingData = this.findMissingData(firebaseData);
 
-                    await set(appDataRef, updatedData);
-                    console.log('✅ Instant sync: Scan saved to Firebase');
-                }
-            }
-
-            mergeArrays(arr1, arr2) {
-                const merged = [...arr1];
-                const existingKeys = new Set(arr1.map(item => item.code + item.timestamp));
-                
-                arr2.forEach(item => {
-                    const key = item.code + item.timestamp;
-                    if (!existingKeys.has(key)) {
-                        merged.push(item);
+                    if (missingData.hasMissingData) {
+                        console.log('📦 AUTO SYNC: Found missing data, syncing to Firebase...', missingData);
+                        await this.syncMissingData(firebaseData, missingData);
+                        this.lastRecoveryTime = Date.now();
+                        this.updateRecoveryStatus(`✅ Auto-synced ${missingData.syncedCount} items`);
+                    } else {
+                        console.log('✅ AUTO SYNC: All data is synchronized');
+                        this.updateRecoveryStatus('✅ All data synchronized');
                     }
-                });
-                
-                return merged;
-            }
 
-            queueScanForBackup(scanData) {
-                this.pendingScans.push({
-                    ...scanData,
-                    queueTime: Date.now()
-                });
-                console.log('📦 Scan queued for backup. Queue size:', this.pendingScans.length);
-                this.updateBackupStatus();
-            }
-
-            async runIncrementalBackup() {
-                if (this.isBackupRunning || this.pendingScans.length === 0 || window.appData.scanning) {
-                    return;
-                }
-                
-                this.isBackupRunning = true;
-                const scansToBackup = [...this.pendingScans];
-                this.pendingScans = [];
-
-                try {
-                    if (!database) throw new Error('Firebase not available');
-                    
-                    const backupRef = ref(database, `incrementalBackups/${Date.now()}`);
-                    await set(backupRef, {
-                        scans: scansToBackup,
-                        count: scansToBackup.length,
-                        timestamp: new Date().toISOString(),
-                        type: 'incremental'
-                    });
-
-                    this.lastIncrementalBackup = Date.now();
-                    console.log(`✅ Incremental backup: ${scansToBackup.length} scans`);
-                    this.updateBackupStatus();
-                    
                 } catch (error) {
-                    console.log('Incremental backup failed, re-queueing scans:', error);
-                    this.pendingScans = [...scansToBackup, ...this.pendingScans];
+                    console.error('❌ AUTO SYNC failed:', error);
+                    this.updateRecoveryStatus('❌ Sync failed - retrying...');
                 } finally {
-                    this.isBackupRunning = false;
+                    this.isRecovering = false;
                 }
             }
 
-            async runFullBackup() {
-                if (window.appData.scanning) {
-                    console.log('⏸️ Full backup deferred - scanning in progress');
-                    return false;
-                }
+            // Find data that exists locally but not in Firebase
+            findMissingData(firebaseData) {
+                const firebaseBowls = firebaseData.activeBowls || [];
+                const firebasePrepared = firebaseData.preparedBowls || [];
+                const firebaseReturns = firebaseData.returnedBowls || [];
+                const firebaseScans = firebaseData.myScans || [];
 
-                this.isBackupRunning = true;
+                const localBowls = window.appData.activeBowls || [];
+                const localPrepared = window.appData.preparedBowls || [];
+                const localReturns = window.appData.returnedBowls || [];
+                const localScans = window.appData.myScans || [];
 
-                try {
-                    if (!database) throw new Error('Firebase not available');
-                    
-                    const backupData = {
-                        activeBowls: [...window.appData.activeBowls],
-                        preparedBowls: [...window.appData.preparedBowls],
-                        returnedBowls: [...window.appData.returnedBowls],
-                        myScans: [...window.appData.myScans],
-                        scanHistory: [...window.appData.scanHistory],
-                        dishBatchTiming: {...window.appData.dishBatchTiming},
-                        lastSync: new Date().toISOString(),
-                        lastUpdatedBy: window.appData.user || 'System',
-                        backupType: 'full',
-                        timestamp: new Date().toISOString()
-                    };
+                // Create sets of Firebase data for quick lookup
+                const firebaseBowlKeys = new Set(firebaseBowls.map(b => `${b.code}-${b.timestamp}`));
+                const firebasePreparedKeys = new Set(firebasePrepared.map(p => `${p.code}-${p.timestamp}`));
+                const firebaseReturnKeys = new Set(firebaseReturns.map(r => `${r.code}-${r.returnTimestamp || r.timestamp}`));
+                const firebaseScanKeys = new Set(firebaseScans.map(s => `${s.code}-${s.timestamp}`));
 
-                    await Promise.all([
-                        set(ref(database, 'appData'), backupData),
-                        set(ref(database, 'lastBackupTime'), new Date().toISOString())
-                    ]);
-
-                    this.lastFullBackup = Date.now();
-                    lastBackupTime = new Date().toISOString();
-                    updateBackupDisplay();
-                    
-                    console.log('✅ Full backup completed');
-                    this.updateBackupStatus();
-                    return true;
-                    
-                } catch (error) {
-                    console.log('Full backup failed:', error);
-                    throw error;
-                } finally {
-                    this.isBackupRunning = false;
-                }
-            }
-
-            startSmartTimer() {
-                if (this.backupTimer) {
-                    clearInterval(this.backupTimer);
-                }
-
-                this.backupTimer = setInterval(() => {
-                    const conditions = [
-                        !window.appData.scanning,
-                        isUserActive(),
-                        !this.isBackupRunning
-                    ];
-
-                    if (conditions.every(Boolean)) {
-                        if (this.pendingScans.length > 0) {
-                            this.runIncrementalBackup();
-                        }
-                        
-                        if (Date.now() - this.lastFullBackup > 300000) {
-                            this.runFullBackup();
-                        }
-                    }
-                }, 60000);
-            }
-
-            async onStopScanning() {
-                console.log('🔄 Manual backup triggered by stop scanning');
-                
-                if (this.pendingScans.length > 0) {
-                    await this.runIncrementalBackup();
-                }
-                
-                const result = await this.runFullBackup();
-                
-                if (result) {
-                    showMessage('✅ Backup completed', 'success');
-                }
-            }
-
-            updateBackupStatus() {
-                const backupStatus = document.getElementById('backupStatus');
-                if (this.pendingScans.length > 0) {
-                    backupStatus.innerHTML = `💾 Backup active • ${this.pendingScans.length} scans queued`;
-                } else {
-                    backupStatus.innerHTML = `💾 Backup ready • No pending scans`;
-                }
-            }
-        }
-
-        // SMART MERGE FUNCTIONS FOR MULTI-DEVICE SYNC
-        function mergeBowls(localBowls, firebaseBowls) {
-            const merged = [...localBowls];
-            const firebaseCodes = new Set(firebaseBowls.map(bowl => bowl.code + bowl.timestamp));
-            
-            // Add Firebase bowls that we don't have locally
-            firebaseBowls.forEach(fbBowl => {
-                const key = fbBowl.code + fbBowl.timestamp;
-                const exists = localBowls.some(localBowl => 
-                    localBowl.code + localBowl.timestamp === key
+                // Find missing items
+                const missingBowls = localBowls.filter(bowl => 
+                    !firebaseBowlKeys.has(`${bowl.code}-${bowl.timestamp}`)
                 );
-                if (!exists) {
-                    merged.push(fbBowl);
-                }
-            });
-            
-            return merged;
-        }
-
-        function mergeScans(localScans, firebaseScans) {
-            const merged = [...localScans];
-            const firebaseKeys = new Set(firebaseScans.map(scan => scan.code + scan.timestamp));
-            
-            // Add Firebase scans that we don't have locally
-            firebaseScans.forEach(fbScan => {
-                const key = fbScan.code + fbScan.timestamp;
-                const exists = localScans.some(localScan => 
-                    localScan.code + localScan.timestamp === key
+                const missingPrepared = localPrepared.filter(prep => 
+                    !firebasePreparedKeys.has(`${prep.code}-${prep.timestamp}`)
                 );
-                if (!exists) {
-                    merged.push(fbScan);
+                const missingReturns = localReturns.filter(ret => 
+                    !firebaseReturnKeys.has(`${ret.code}-${ret.returnTimestamp || ret.timestamp}`)
+                );
+                const missingScans = localScans.filter(scan => 
+                    !firebaseScanKeys.has(`${scan.code}-${scan.timestamp}`)
+                );
+
+                const hasMissingData = missingBowls.length > 0 || missingPrepared.length > 0 || 
+                                    missingReturns.length > 0 || missingScans.length > 0;
+
+                return {
+                    hasMissingData,
+                    missingBowls,
+                    missingPrepared,
+                    missingReturns,
+                    missingScans,
+                    syncedCount: missingBowls.length + missingPrepared.length + missingReturns.length + missingScans.length
+                };
+            }
+
+            // Sync missing data to Firebase
+            async syncMissingData(firebaseData, missingData) {
+                const updatedData = {
+                    activeBowls: [...(firebaseData.activeBowls || []), ...missingData.missingBowls],
+                    preparedBowls: [...(firebaseData.preparedBowls || []), ...missingData.missingPrepared],
+                    returnedBowls: [...(firebaseData.returnedBowls || []), ...missingData.missingReturns],
+                    myScans: [...(firebaseData.myScans || []), ...missingData.missingScans],
+                    scanHistory: [...(firebaseData.scanHistory || []), ...window.appData.scanHistory || []],
+                    lastAutoSync: new Date().toISOString(),
+                    lastUpdatedBy: 'Auto-Recovery-System',
+                    lastUpdatedTime: new Date().toISOString()
+                };
+
+                await set(ref(database, 'appData'), updatedData);
+                console.log(`✅ AUTO SYNC: Successfully synced ${missingData.syncedCount} items to Firebase`);
+            }
+
+            updateRecoveryStatus(message) {
+                const recoveryInfo = document.getElementById('recoveryInfo');
+                if (recoveryInfo) {
+                    recoveryInfo.innerHTML = `<strong>Recovery Status:</strong> ${message}`;
                 }
-            });
-            
-            // Sort by timestamp (newest first)
-            return merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            }
+
+            startAutoSync() {
+                // Run immediately
+                this.autoSyncToFirebase();
+                
+                // Then run every 30 seconds
+                autoSyncInterval = setInterval(() => {
+                    this.autoSyncToFirebase();
+                }, 30000);
+            }
+
+            stopAutoSync() {
+                if (autoSyncInterval) {
+                    clearInterval(autoSyncInterval);
+                }
+            }
         }
 
-        const backupSystem = new SmartBackupSystem();
+        const autoRecovery = new AutoDataRecovery();
 
         function initializeFirebase() {
             try {
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
-                backupSystem.startSmartTimer();
+                autoRecovery.startAutoSync();
                 startDailyCleanupTimer();
                 
-                loadLastBackupTime();
-                
                 setTimeout(() => {
-                    showMessage('✅ HYBRID SYNC ACTIVE • Multi-device sync enabled', 'success');
-                    document.getElementById('systemStatus').textContent = '✅ HYBRID SYNC ACTIVE • Multi-device sync enabled';
-                    backupSystem.updateBackupStatus();
-                    checkFirebaseStatus();
+                    showMessage('✅ AUTO SYNC ACTIVE • Missing data will be recovered automatically', 'success');
+                    document.getElementById('systemStatus').textContent = '✅ AUTO SYNC ACTIVE • Data recovery enabled';
+                    document.getElementById('backupStatus').textContent = '💾 Auto-sync running • All devices will be synchronized';
                 }, 2000);
                 
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
-                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
-            }
-        }
-
-        function checkFirebaseStatus() {
-            const systemStatus = document.getElementById('systemStatus');
-            const syncInfo = document.getElementById('syncInfo');
-            
-            if (database) {
-                systemStatus.innerHTML = '✅ Firebase Connected • Real-time sync active';
-                syncInfo.innerHTML = `<strong>Sync Status:</strong> Connected to Firebase • All devices will sync automatically`;
-            } else {
-                systemStatus.innerHTML = '❌ Firebase Disconnected • Using local data only';
-                syncInfo.innerHTML = `<strong>Sync Status:</strong> Offline mode • Data saved locally only`;
+                showMessage('⚠️ Offline mode - data saved locally only', 'warning');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Data saved locally only';
             }
         }
 
@@ -612,42 +438,54 @@
                 
                 if (firebaseAppData && !isSyncing) {
                     isSyncing = true;
-                    lastFirebaseUpdate = new Date();
                     
                     console.log('🔄 SYNC: Merging data from Firebase');
-                    console.log('Local active bowls:', window.appData.activeBowls.length);
-                    console.log('Firebase active bowls:', firebaseAppData.activeBowls?.length || 0);
                     
-                    // MERGE instead of REPLACE - Key fix for multi-device sync
-                    window.appData.activeBowls = mergeBowls(window.appData.activeBowls, firebaseAppData.activeBowls || []);
-                    window.appData.preparedBowls = mergeBowls(window.appData.preparedBowls, firebaseAppData.preparedBowls || []);
-                    window.appData.returnedBowls = mergeBowls(window.appData.returnedBowls, firebaseAppData.returnedBowls || []);
-                    window.appData.myScans = mergeScans(window.appData.myScans, firebaseAppData.myScans || []);
-                    window.appData.scanHistory = mergeScans(window.appData.scanHistory, firebaseAppData.scanHistory || []);
-                    window.appData.dishBatchTiming = {...window.appData.dishBatchTiming, ...(firebaseAppData.dishBatchTiming || {})};
+                    // Smart merge - preserve local data that might be missing from Firebase
+                    window.appData.activeBowls = mergeArraysPreserveLocal(window.appData.activeBowls, firebaseAppData.activeBowls || []);
+                    window.appData.preparedBowls = mergeArraysPreserveLocal(window.appData.preparedBowls, firebaseAppData.preparedBowls || []);
+                    window.appData.returnedBowls = mergeArraysPreserveLocal(window.appData.returnedBowls, firebaseAppData.returnedBowls || []);
+                    window.appData.myScans = mergeArraysPreserveLocal(window.appData.myScans, firebaseAppData.myScans || []);
+                    window.appData.scanHistory = mergeArraysPreserveLocal(window.appData.scanHistory, firebaseAppData.scanHistory || []);
                     
                     updateDisplay();
                     updateDishStatistics();
                     saveToStorage();
                     
                     console.log('✅ SYNC: Data merged successfully');
-                    console.log('Merged active bowls:', window.appData.activeBowls.length);
                     
                     isSyncing = false;
                 }
             });
+        }
 
-            const backupTimeRef = ref(database, 'lastBackupTime');
-            onValue(backupTimeRef, (snapshot) => {
-                lastBackupTime = snapshot.val();
-                updateBackupDisplay();
+        // Smart merge that preserves local data
+        function mergeArraysPreserveLocal(localArray, firebaseArray) {
+            const merged = [...firebaseArray];
+            const localKeys = new Set(localArray.map(item => getItemKey(item)));
+            const firebaseKeys = new Set(firebaseArray.map(item => getItemKey(item)));
+            
+            // Add local items that don't exist in Firebase
+            localArray.forEach(localItem => {
+                const key = getItemKey(localItem);
+                if (!firebaseKeys.has(key)) {
+                    merged.push(localItem);
+                }
             });
+            
+            return merged;
+        }
+
+        function getItemKey(item) {
+            if (item.returnTimestamp) {
+                return `${item.code}-${item.returnTimestamp}`;
+            }
+            return `${item.code}-${item.timestamp}`;
         }
 
         // DAILY CLEANUP SYSTEM
         function startDailyCleanupTimer() {
             checkAndRunCleanup();
-            
             setInterval(() => {
                 checkAndRunCleanup();
             }, 60000);
@@ -668,10 +506,7 @@
         }
 
         async function runFirebaseCleanup() {
-            if (!database) {
-                console.log('❌ Firebase not available for cleanup');
-                return;
-            }
+            if (!database) return;
 
             const today = new Date().toLocaleDateString('en-GB');
             
@@ -682,16 +517,6 @@
                 const snapshot = await get(appDataRef);
                 const currentData = snapshot.val() || {};
                 
-                const backupData = {
-                    returnedBowls: currentData.returnedBowls || [],
-                    cleanupDate: today,
-                    cleanupTime: new Date().toISOString(),
-                    returnedCount: currentData.returnedBowls ? currentData.returnedBowls.length : 0
-                };
-                
-                const backupRef = ref(database, `cleanupBackups/${today}`);
-                await set(backupRef, backupData);
-                
                 const updatedData = {
                     ...currentData,
                     returnedBowls: [],
@@ -701,115 +526,21 @@
                 
                 await set(appDataRef, updatedData);
                 
-                console.log('✅ Firebase cleanup completed - returned bowls cleared');
-                
                 window.appData.returnedBowls = [];
                 window.appData.lastCleanup = today;
                 saveToStorage();
                 updateDisplay();
                 updateDishStatistics();
                 
-                showMessage(`✅ 7:00 PM Cleanup: Cleared ${backupData.returnedCount} returned bowls • Active bowls preserved`, 'success');
+                showMessage(`✅ 7:00 PM Cleanup: Returned bowls cleared`, 'success');
                 
             } catch (error) {
                 console.log('❌ Firebase cleanup failed:', error);
             }
         }
 
-        function syncToFirebase() {
-            return backupSystem.runFullBackup();
-        }
-
-        async function loadFromFirebase() {
-            if (!database) {
-                showMessage('❌ Firebase not available', 'error');
-                return;
-            }
-            
-            try {
-                const appDataRef = ref(database, 'appData');
-                const snapshot = await get(appDataRef);
-                const data = snapshot.val();
-                
-                if (data) {
-                    window.appData.activeBowls = data.activeBowls || [];
-                    window.appData.preparedBowls = data.preparedBowls || [];
-                    window.appData.returnedBowls = data.returnedBowls || [];
-                    window.appData.myScans = data.myScans || [];
-                    window.appData.scanHistory = data.scanHistory || [];
-                    window.appData.dishBatchTiming = data.dishBatchTiming || {};
-                    
-                    updateDisplay();
-                    updateDishStatistics();
-                    saveToStorage();
-                    
-                    showMessage('✅ Data loaded from Firebase backup', 'success');
-                } else {
-                    showMessage('ℹ️ No data found in Firebase', 'info');
-                }
-            } catch (error) {
-                showMessage('❌ Error loading from Firebase', 'error');
-            }
-        }
-
-        // FORCE SYNC ALL DEVICES
-        async function forceAllDevicesSync() {
-            if (!database) {
-                showMessage('❌ Firebase not available', 'error');
-                return;
-            }
-            
-            const btn = document.getElementById('forceSyncBtn');
-            btn.disabled = true;
-            btn.textContent = "🔄 SYNCING...";
-            
-            try {
-                // Force read from Firebase
-                await loadFromFirebase();
-                
-                // Force write to Firebase
-                await syncToFirebase();
-                
-                showMessage('✅ Forced sync completed - all devices should update', 'success');
-                
-            } catch (error) {
-                showMessage('❌ Force sync failed', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = "🔄 FORCE SYNC ALL DEVICES";
-            }
-        }
-
-        function loadLastBackupTime() {
-            if (!database) return;
-            
-            const backupTimeRef = ref(database, 'lastBackupTime');
-            onValue(backupTimeRef, (snapshot) => {
-                lastBackupTime = snapshot.val();
-                updateBackupDisplay();
-            });
-        }
-
-        function updateBackupDisplay() {
-            const backupInfo = document.getElementById('backupInfo');
-            
-            if (lastBackupTime) {
-                const backupDate = new Date(lastBackupTime);
-                backupInfo.innerHTML = `<strong>Backup Status:</strong> Last backup: ${backupDate.toLocaleTimeString()}`;
-            } else {
-                backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
-            }
-        }
-
-        function isUserActive() {
-            return (Date.now() - window.appData.lastActivity) < 300000;
-        }
-
         window.initializeFirebase = initializeFirebase;
-        window.syncToFirebase = syncToFirebase;
-        window.loadFromFirebase = loadFromFirebase;
-        window.backupSystem = backupSystem;
-        window.forceAllDevicesSync = forceAllDevicesSync;
+        window.autoRecovery = autoRecovery;
     </script>
 
     <!-- Main Application Logic -->
@@ -828,8 +559,8 @@
             lastActivity: Date.now(),
             autoSaveTimer: null,
             lastCleanup: null,
-            expectedCounts: {}, // Store expected dish counts
-            dishBatchTiming: {} // Store first/last scan times for each dish
+            expectedCounts: {},
+            dishBatchTiming: {}
         };
 
         const USERS = [
@@ -847,54 +578,30 @@
             {name: "Kitchen Team", role: "Return"}
         ];
 
-        // UNIVERSAL DATE FORMAT FUNCTION - FIXES JSON IMPORT ISSUES
+        // UNIVERSAL DATE FORMAT FUNCTION
         function getStandardizedDate(dateInput) {
             const date = new Date(dateInput);
-            // Return in YYYY-MM-DD format for consistent comparison
             return date.toISOString().split('T')[0];
         }
 
-        // 10 PM DAY START HELPER - UPDATED FOR CONSISTENCY
+        // 10 PM DAY START HELPER
         function getEffectiveDate(date) {
             const effectiveDate = new Date(date);
             if (date.getHours() >= 22) {
                 effectiveDate.setDate(effectiveDate.getDate() + 1);
             }
-            // Use standardized format for all date comparisons
             return getStandardizedDate(effectiveDate);
         }
 
-        // BUSINESS DAY CALCULATION (Exclude weekends)
-        function getBusinessDaysSince(startDate) {
-            let current = new Date(startDate);
-            let today = new Date();
-            let businessDays = 0;
-            
-            while (current <= today) {
-                if (current.getDay() !== 0 && current.getDay() !== 6) {
-                    businessDays++;
-                }
-                current.setDate(current.getDate() + 1);
-                
-                if (current.toDateString() === today.toDateString()) {
-                    break;
-                }
-            }
-            
-            return Math.max(0, businessDays - 1);
-        }
-
-        // ENHANCED DISH STATISTICS FUNCTION WITH KITCHEN ASSIGNMENTS
+        // ENHANCED DISH STATISTICS FUNCTION
         function updateDishStatistics() {
             const today = getEffectiveDate(new Date());
             const statsBody = document.getElementById('dishStatsBody');
             const updateTime = document.getElementById('statsUpdateTime');
             
-            // Count scanned dishes for today and track kitchen assignments
             const dishData = {};
             const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
             
-            // Initialize all dishes
             allDishes.forEach(dish => {
                 dishData[dish] = {
                     scanned: 0,
@@ -904,7 +611,6 @@
                 };
             });
             
-            // Process all prepared bowls for today - USING STANDARDIZED DATE COMPARISON
             window.appData.preparedBowls.forEach(bowl => {
                 const bowlDate = getEffectiveDate(new Date(bowl.timestamp));
                 if (bowlDate === today) {
@@ -916,13 +622,11 @@
                     
                     dishData[dish].scanned++;
                     
-                    // Track who prepared this dish
                     if (!dishData[dish].preparedBy[user]) {
                         dishData[dish].preparedBy[user] = 0;
                     }
                     dishData[dish].preparedBy[user]++;
                     
-                    // Track first and last scan times
                     if (!dishData[dish].firstScanTime || scanTime < new Date(dishData[dish].firstScanTime)) {
                         dishData[dish].firstScanTime = bowl.timestamp;
                     }
@@ -932,11 +636,9 @@
                 }
             });
             
-            // Calculate totals
             let totalScanned = 0;
             let totalExpected = 0;
             
-            // Generate table rows
             let html = '';
             
             allDishes.forEach(dish => {
@@ -948,13 +650,11 @@
                 totalScanned += scanned;
                 totalExpected += expected;
                 
-                // Get top preparer
                 const preparers = Object.entries(data.preparedBy);
                 const topPreparer = preparers.length > 0 ? 
                     preparers.sort((a, b) => b[1] - a[1])[0] : 
                     null;
                 
-                // Format times
                 const firstTime = data.firstScanTime ? 
                     new Date(data.firstScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
                 const lastTime = data.lastScanTime ? 
@@ -989,7 +689,6 @@
                 `;
             });
             
-            // Add total row
             const totalDifference = totalScanned - totalExpected;
             html += `
                 <tr class="total-row">
@@ -1006,14 +705,6 @@
             
             statsBody.innerHTML = html;
             updateTime.textContent = new Date().toLocaleTimeString();
-        }
-
-        // FUNCTION TO SET EXPECTED COUNTS (Can be called from JSON import or manually)
-        function setExpectedDishCounts(counts) {
-            window.appData.expectedCounts = { ...window.appData.expectedCounts, ...counts };
-            updateDishStatistics();
-            saveToStorage();
-            showMessage('✅ Expected dish counts updated', 'success');
         }
 
         // Initialize
@@ -1067,116 +758,7 @@
             }
         }
 
-        // FIXED JSON IMPORT FUNCTION - HANDLES DATE FORMAT ISSUES
-        function processBellaBonaJSON() {
-            const jsonText = document.getElementById('jsonInput').value.trim();
-            if (!jsonText) {
-                showMessage('❌ Please paste JSON data', 'error');
-                return;
-            }
-
-            try {
-                const orderData = JSON.parse(jsonText);
-                let enrichedCount = 0;
-                let createdCount = 0;
-                let removedFromPrepCount = 0;
-                let errors = [];
-                const dishCounts = {};
-
-                const processOrder = (order) => {
-                    const { vytCode, customer, company, dishLetter } = order;
-                    
-                    if (!vytCode) {
-                        errors.push('❌ Missing VYT code in order data');
-                        return;
-                    }
-
-                    const code = vytCode.toUpperCase();
-                    const dish = (dishLetter || 'X').toUpperCase();
-                    const today = getStandardizedDate(new Date()); // Use standardized date
-
-                    // Count dishes for expected counts
-                    dishCounts[dish] = (dishCounts[dish] || 0) + 1;
-
-                    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
-                    
-                    if (activeBowlIndex !== -1) {
-                        // Update existing bowl with imported data
-                        window.appData.activeBowls[activeBowlIndex].company = company || 'Unknown Company';
-                        window.appData.activeBowls[activeBowlIndex].customer = customer || 'Unknown Customer';
-                        window.appData.activeBowls[activeBowlIndex].dish = dish || window.appData.activeBowls[activeBowlIndex].dish;
-                        enrichedCount++;
-
-                        // Remove from prepared bowls if it exists there (clean up duplicates)
-                        const prepBowlIndex = window.appData.preparedBowls.findIndex(bowl => 
-                            bowl.code === code && getStandardizedDate(new Date(bowl.timestamp)) === today
-                        );
-                        
-                        if (prepBowlIndex !== -1) {
-                            window.appData.preparedBowls.splice(prepBowlIndex, 1);
-                            removedFromPrepCount++;
-                        }
-                        
-                    } else {
-                        // Create new bowl with imported data
-                        const newBowl = {
-                            code: code,
-                            dish: dish,
-                            user: 'System Import',
-                            company: company || 'Unknown Company',
-                            customer: customer || 'Unknown Customer',
-                            date: today, // Use standardized date format
-                            time: new Date().toLocaleTimeString(),
-                            timestamp: new Date().toISOString(),
-                            status: 'ACTIVE',
-                            imported: true
-                        };
-                        window.appData.activeBowls.push(newBowl);
-                        createdCount++;
-                    }
-                };
-
-                if (Array.isArray(orderData)) {
-                    orderData.forEach(processOrder);
-                } else if (orderData.orders && Array.isArray(orderData.orders)) {
-                    orderData.orders.forEach(processOrder);
-                } else {
-                    processOrder(orderData);
-                }
-
-                // Update expected counts from imported data
-                setExpectedDishCounts(dishCounts);
-
-                saveToStorage();
-                syncToFirebase();
-                updateDisplay();
-                updateDishStatistics();
-
-                let resultMessage = `✅ Import completed: `;
-                if (enrichedCount > 0) resultMessage += `${enrichedCount} bowls enriched, `;
-                if (createdCount > 0) resultMessage += `${createdCount} new bowls created, `;
-                if (removedFromPrepCount > 0) resultMessage += `${removedFromPrepCount} removed from prep sheet`;
-                
-                showMessage(resultMessage, 'success');
-                
-                if (errors.length > 0) {
-                    document.getElementById('importResult').innerHTML = 
-                        '<strong>Errors:</strong><br>' + errors.slice(0, 5).join('<br>') + 
-                        (errors.length > 5 ? '<br>...' : '');
-                }
-
-            } catch (error) {
-                showMessage('❌ Invalid JSON format: ' + error.message, 'error');
-                console.error('JSON Parse Error:', error);
-            }
-        }
-
-        function clearJSONInput() {
-            document.getElementById('jsonInput').value = '';
-            document.getElementById('importResult').innerHTML = '';
-        }
-
-        // EXCEL EXPORT WITH MULTI-SHEETS & COLORS
+        // EXCEL EXPORT
         async function exportToExcel() {
             if (window.appData.myScans.length === 0 && window.appData.activeBowls.length === 0) {
                 showMessage("ℹ️ No data to export", "info");
@@ -1192,14 +774,22 @@
                 
                 const wb = XLSX.utils.book_new();
                 
-                createActiveSheet(wb);
-                createPreparedSheet(wb);
-                createReturnedSheet(wb);
-                createStatisticsSheet(wb);
+                // Create sheets (simplified for example)
+                const activeData = window.appData.activeBowls.map(bowl => ({
+                    'VYT Code': bowl.code,
+                    'Dish': bowl.dish,
+                    'Customer': bowl.customer,
+                    'Company': bowl.company,
+                    'Prepared Date': bowl.date,
+                    'Prepared Time': bowl.time
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(activeData);
+                XLSX.utils.book_append_sheet(wb, ws, "Active Bowls");
                 
                 XLSX.writeFile(wb, `proglove_data_${new Date().toISOString().split('T')[0]}.xlsx`);
                 
-                showMessage("✅ Data exported to Excel with colors!", "success");
+                showMessage("✅ Data exported to Excel!", "success");
                 
             } catch (error) {
                 console.error('Excel export failed:', error);
@@ -1223,182 +813,6 @@
                 script.onerror = reject;
                 document.head.appendChild(script);
             });
-        }
-
-        function createActiveSheet(wb) {
-            const dishCounts = {};
-            window.appData.activeBowls.forEach(bowl => {
-                dishCounts[bowl.dish] = (dishCounts[bowl.dish] || 0) + 1;
-            });
-
-            const activeData = window.appData.activeBowls.map(bowl => {
-                const businessDays = getBusinessDaysSince(new Date(bowl.timestamp));
-                
-                let fontColor = '000000';
-                const dishCount = dishCounts[bowl.dish] || 0;
-                if (dishCount === 1) fontColor = '00FF00';
-                else if (dishCount === 2) fontColor = 'FFFF00';
-                else if (dishCount >= 3) fontColor = 'FF0000';
-
-                let fillColor = 'FFFFFF';
-                if (businessDays >= 3) fillColor = 'FFFFCC';
-                if (businessDays >= 4) fillColor = 'FFCCFF';
-                if (businessDays >= 5) fillColor = 'FFE5CC';
-                if (businessDays >= 6) fillColor = 'FFCCCC';
-
-                return {
-                    'VYT Code': bowl.code,
-                    'Dish': bowl.dish,
-                    'Customer': bowl.customer,
-                    'Company': bowl.company,
-                    'Prepared Date': bowl.date,
-                    'Prepared Time': bowl.time,
-                    'Days Not Returned': businessDays,
-                    '_fontColor': fontColor,
-                    '_fillColor': fillColor
-                };
-            });
-
-            const ws = XLSX.utils.json_to_sheet(activeData.map(({_fontColor, _fillColor, ...rest}) => rest));
-            
-            if (ws['!ref']) {
-                const range = XLSX.utils.decode_range(ws['!ref']);
-                for (let R = range.s.r + 1; R <= range.e.r; R++) {
-                    const row = activeData[R - 1];
-                    if (row) {
-                        const customerCell = ws[XLSX.utils.encode_cell({r: R, c: 2})];
-                        if (customerCell) {
-                            customerCell.s = {
-                                font: { color: { rgb: row._fontColor } },
-                                fill: { fgColor: { rgb: row._fillColor } }
-                            };
-                        }
-                        
-                        for (let C = range.s.c; C <= range.e.c; C++) {
-                            const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
-                            if (cell && !cell.s) {
-                                cell.s = { fill: { fgColor: { rgb: row._fillColor } } };
-                            } else if (cell && cell.s) {
-                                cell.s.fill = { fgColor: { rgb: row._fillColor } };
-                            }
-                        }
-                    }
-                }
-            }
-
-            XLSX.utils.book_append_sheet(wb, ws, "Active Bowls");
-        }
-
-        function createPreparedSheet(wb) {
-            const preparedData = window.appData.preparedBowls.map(bowl => ({
-                'VYT Code': bowl.code,
-                'Dish': bowl.dish,
-                'Customer': bowl.customer,
-                'Company': bowl.company,
-                'User': bowl.user,
-                'Date': bowl.date,
-                'Time': bowl.time,
-                'Timestamp': bowl.timestamp
-            }));
-
-            const ws = XLSX.utils.json_to_sheet(preparedData);
-            XLSX.utils.book_append_sheet(wb, ws, "Prepared Bowls");
-        }
-
-        function createReturnedSheet(wb) {
-            const returnedData = window.appData.returnedBowls.map(bowl => ({
-                'VYT Code': bowl.code,
-                'Dish': bowl.dish,
-                'Customer': bowl.customer,
-                'Company': bowl.company,
-                'Prepared By': bowl.user,
-                'Returned By': bowl.returnedBy,
-                'Prepared Date': bowl.date,
-                'Return Date': bowl.returnDate,
-                'Return Time': bowl.returnTime
-            }));
-
-            const ws = XLSX.utils.json_to_sheet(returnedData);
-            XLSX.utils.book_append_sheet(wb, ws, "Returned Bowls");
-        }
-
-        function createStatisticsSheet(wb) {
-            const today = getEffectiveDate(new Date());
-            const dishData = {};
-            const allDishes = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'];
-            
-            allDishes.forEach(dish => {
-                dishData[dish] = {
-                    scanned: 0,
-                    preparedBy: {},
-                    firstScanTime: null,
-                    lastScanTime: null
-                };
-            });
-            
-            window.appData.preparedBowls.forEach(bowl => {
-                const bowlDate = getEffectiveDate(new Date(bowl.timestamp));
-                if (bowlDate === today) {
-                    const dish = bowl.dish;
-                    const user = bowl.user;
-                    const scanTime = new Date(bowl.timestamp);
-                    
-                    if (!dishData[dish]) dishData[dish] = { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
-                    
-                    dishData[dish].scanned++;
-                    
-                    if (!dishData[dish].preparedBy[user]) {
-                        dishData[dish].preparedBy[user] = 0;
-                    }
-                    dishData[dish].preparedBy[user]++;
-                    
-                    if (!dishData[dish].firstScanTime || scanTime < new Date(dishData[dish].firstScanTime)) {
-                        dishData[dish].firstScanTime = bowl.timestamp;
-                    }
-                    if (!dishData[dish].lastScanTime || scanTime > new Date(dishData[dish].lastScanTime)) {
-                        dishData[dish].lastScanTime = bowl.timestamp;
-                    }
-                }
-            });
-            
-            const statsData = allDishes.map(dish => {
-                const data = dishData[dish] || { scanned: 0, preparedBy: {}, firstScanTime: null, lastScanTime: null };
-                const scanned = data.scanned;
-                const expected = window.appData.expectedCounts[dish] || 0;
-                const difference = scanned - expected;
-                
-                const preparers = Object.entries(data.preparedBy);
-                const topPreparer = preparers.length > 0 ? 
-                    preparers.sort((a, b) => b[1] - a[1])[0] : 
-                    null;
-                
-                const firstTime = data.firstScanTime ? 
-                    new Date(data.firstScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-                const lastTime = data.lastScanTime ? 
-                    new Date(data.lastScanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-                
-                let status = 'OK';
-                if (expected > 0) {
-                    if (difference < 0) status = `Missing ${Math.abs(difference)}`;
-                    else if (difference > 0) status = `Extra ${difference}`;
-                } else {
-                    status = scanned > 0 ? 'Scanned' : 'No orders';
-                }
-                
-                return {
-                    'Dish': dish,
-                    'Prepared By': topPreparer ? `${topPreparer[0]} (${topPreparer[1]})` : '-',
-                    'Scanned': scanned,
-                    'Expected': expected > 0 ? expected : '-',
-                    'Difference': expected > 0 ? (difference >= 0 ? `+${difference}` : difference) : '-',
-                    'First Scan Time': firstTime,
-                    'Last Scan Time': lastTime,
-                    'Status': status
-                };
-            });
-
-            const ws = XLSX.utils.json_to_sheet(statsData);
-            XLSX.utils.book_append_sheet(wb, ws, "Dish Statistics");
         }
 
         // User and Mode Management
@@ -1468,7 +882,6 @@
             const dropdown = document.getElementById('dishDropdown');
             dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
             
-            // Add A-Z letters
             'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
                 const option = document.createElement('option');
                 option.value = letter;
@@ -1476,7 +889,6 @@
                 dropdown.appendChild(option);
             });
             
-            // Add numbers 1-4
             '1234'.split('').forEach(number => {
                 const option = document.createElement('option');
                 option.value = number;
@@ -1533,10 +945,7 @@
             window.appData.scanning = false;
             updateDisplay();
             updateLastActivity();
-            
-            backupSystem.onStopScanning();
-            
-            showMessage(`⏹ Scanning stopped • Backup started`, 'info');
+            showMessage(`⏹ Scanning stopped`, 'info');
         }
 
         function handleScanInput(e) {
@@ -1575,7 +984,7 @@
         function kitchenScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = getStandardizedDate(new Date()); // Use standardized date
+            const today = getStandardizedDate(new Date());
             
             if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
                 return { 
@@ -1585,7 +994,6 @@
                 };
             }
             
-            // Check if already prepared today using standardized date comparison
             const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
                 bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
             );
@@ -1604,7 +1012,7 @@
                 user: window.appData.user,
                 company: "Unknown",
                 customer: "Unknown",
-                date: today, // Use standardized date
+                date: today,
                 time: new Date().toLocaleTimeString(),
                 timestamp: new Date().toISOString(),
                 status: 'ACTIVE'
@@ -1635,8 +1043,6 @@
             
             saveToStorage();
             
-            backupSystem.syncScanInstantly(scanRecord);
-            
             return { 
                 message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
                 type: "success",
@@ -1644,13 +1050,11 @@
             };
         }
 
-        // FIXED RETURN SCAN FUNCTION - Uses standardized date format
         function returnScan(code) {
             const startTime = Date.now();
             const fullCode = code.toUpperCase();
-            const today = getStandardizedDate(new Date()); // Use standardized date
+            const today = getStandardizedDate(new Date());
             
-            // Check if already returned today using standardized date comparison
             const alreadyReturned = window.appData.returnedBowls.some(bowl => 
                 bowl.code === fullCode && getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
             );
@@ -1663,17 +1067,14 @@
                 };
             }
             
-            // Find in active bowls
             const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
             
             if (activeBowlIndex === -1) {
-                // Bowl not found in active bowls - check if it exists in prepared bowls but not active
                 const preparedBowl = window.appData.preparedBowls.find(bowl => 
                     bowl.code === fullCode && getStandardizedDate(new Date(bowl.timestamp)) === today
                 );
                 
                 if (preparedBowl) {
-                    // Bowl was prepared today but not in active bowls - mark as returned
                     const returnBowl = {
                         ...preparedBowl,
                         returnedBy: window.appData.user,
@@ -1706,7 +1107,6 @@
                     });
                     
                     saveToStorage();
-                    backupSystem.syncScanInstantly(scanRecord);
                     
                     return { 
                         message: `✅ Returned: ${fullCode} (was not in active bowls)`, 
@@ -1722,13 +1122,10 @@
                 }
             }
             
-            // Process normal return from active bowls
             const activeBowl = window.appData.activeBowls[activeBowlIndex];
             
-            // Remove from active bowls
             window.appData.activeBowls.splice(activeBowlIndex, 1);
             
-            // Add to returned bowls
             window.appData.returnedBowls.push({
                 ...activeBowl,
                 returnedBy: window.appData.user,
@@ -1759,7 +1156,6 @@
             });
             
             saveToStorage();
-            backupSystem.syncScanInstantly(scanRecord);
             
             return { 
                 message: `✅ Returned: ${fullCode} - Removed from active bowls`, 
@@ -1790,9 +1186,8 @@
             }
             
             const now = new Date();
-            const today = getStandardizedDate(now); // Use standardized date
+            const today = getStandardizedDate(now);
             
-            // MY SCANS TODAY - ONLY WHEN USER SELECTED
             let userTodayScans = 0;
             if (window.appData.user) {
                 if (window.appData.mode === 'kitchen' && window.appData.dishLetter) {
@@ -1810,12 +1205,10 @@
                 }
             }
             
-            // PREPARED TODAY - Using standardized date logic
             const preparedToday = window.appData.preparedBowls.filter(bowl => 
                 getStandardizedDate(new Date(bowl.timestamp)) === today
             ).length;
             
-            // RETURNED TODAY - Using standardized date logic  
             const returnedToday = window.appData.returnedBowls.filter(bowl => 
                 getStandardizedDate(new Date(bowl.returnTimestamp || bowl.timestamp)) === today
             ).length;
@@ -1859,7 +1252,7 @@
 
         function updateCrossTeamData() {
             const element = document.getElementById('crossTeamData');
-            const today = getStandardizedDate(new Date()); // Use standardized date
+            const today = getStandardizedDate(new Date());
             
             const preparedToday = window.appData.preparedBowls.filter(bowl => 
                 getStandardizedDate(new Date(bowl.timestamp)) === today
@@ -1890,20 +1283,6 @@
             const element = document.getElementById('feedback');
             element.textContent = text;
             element.className = 'feedback ' + type;
-        }
-
-        function forceSmartBackup() {
-            const btn = document.getElementById('smartBackupBtn');
-            btn.disabled = true;
-            btn.textContent = "🔄 BACKING UP...";
-            
-            console.log('🔥 FORCING SMART BACKUP...');
-            backupSystem.onStopScanning();
-            
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = "🔥 SMART BACKUP NOW";
-            }, 3000);
         }
     </script>
 </body>
