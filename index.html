@@ -2,79 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ProGlove Scanner - Samsung Fix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProGlove Scanner - Complete Bowl Tracking</title>
     <style>
-        /* COMPATIBILITY FIXES FOR SAMSUNG TAB */
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-            -webkit-tap-highlight-color: transparent; /* Remove blue tap highlight */
-            -webkit-touch-callout: none; /* Disable callout */
-        }
-        
-        body { 
-            font-family: 'Arial', 'Helvetica', sans-serif; 
-            background: #1a1a1a; 
-            color: white; 
-            padding: 10px;
-            -webkit-text-size-adjust: 100%; /* Prevent text zoom */
-            touch-action: manipulation; /* Better touch handling */
-        }
-        
-        .container { 
-            max-width: 100%; 
-            margin: 0 auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
-        }
-        
-        /* LARGER TOUCH TARGETS FOR SAMSUNG */
-        .sync-btn, .mode-btn, .scan-btn {
-            min-height: 50px; /* Larger touch targets */
-            font-size: 18px; /* Larger text */
-            cursor: pointer;
-        }
-        
-        .dropdown {
-            min-height: 50px;
-            font-size: 18px;
-        }
-        
-        .proglove-input {
-            min-height: 60px;
-            font-size: 20px;
-        }
-        
-        /* REST OF YOUR EXISTING STYLES... */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
+        .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
         .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
         .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-        .sync-section { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
-        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: bold; }
+        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .download-btn { background: #4285f4; color: white; }
         .upload-btn { background: #34a853; color: white; }
         .export-btn { background: #f57c00; color: white; }
-        .emergency-btn { background: #ea4335; color: white; }
+        .backup-btn { background: #ea4335; color: white; }
         .sync-btn:disabled { background: #666; cursor: not-allowed; }
         .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
-        .sync-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #4285f4; }
-        .sync-status.success { border-left-color: #34a853; background: #2a2a2a; }
-        .sync-status.error { border-left-color: #ea4335; background: #2a2a2a; }
         .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-weight: bold; }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .kitchen-btn { background: #34a853; color: white; }
         .return-btn { background: #ea4335; color: white; }
         .mode-btn.active { box-shadow: 0 0 0 3px white; }
-        .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; margin-top: 10px; }
+        .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
         .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
-        .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-weight: bold; }
+        .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .start-btn { background: #34a853; color: white; }
         .stop-btn { background: #ea4335; color: white; }
         .scan-btn:disabled { background: #666; cursor: not-allowed; }
-        .proglove-input { width: 100%; padding: 15px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
+        .proglove-input { width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
         .proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
         .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
         .feedback { padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; display: flex; align-items: center; justify-content: center; }
@@ -98,17 +53,59 @@
         .data-label { font-weight: bold; }
         .admin-section { border: 2px solid #f57c00; }
         .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
-        .device-lock { background: #ff9800; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #ff9800; }
-
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        /* Table Styles */
+        .data-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px;
+            font-size: 11px;
+        }
+        .data-table th {
+            background: #4285f4;
+            color: white;
+            padding: 6px;
+            text-align: center;
+            border: 1px solid #555;
+        }
+        .data-table td {
+            padding: 6px;
+            text-align: center;
+            border: 1px solid #555;
+            background: #333;
+        }
+        .dish-header { background: #34a853; font-weight: bold; }
+        .total-row { background: #f57c00; font-weight: bold; }
+        
+        /* Color Coding */
+        .yellow-bg { background: #ffeb3b !important; color: #000 !important; }
+        .pink-bg { background: #e91e63 !important; color: white !important; }
+        .orange-bg { background: #ff9800 !important; color: white !important; }
+        .red-bg { background: #f44336 !important; color: white !important; }
+        .green-text { color: #4caf50 !important; font-weight: bold; }
+        .red-text { color: #f44336 !important; font-weight: bold; }
+        
+        /* JSON Upload */
+        .json-upload { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .file-input { width: 100%; padding: 8px; margin: 5px 0; }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
+        }
+        @keyframes shake { 
+            0%, 100% { transform: translateX(0); } 
+            25% { transform: translateX(-5px); } 
+            75% { transform: translateX(5px); } 
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧤 ProGlove Scanner - Samsung Fix</h1>
-            <p>Multi-Device • Cross-Browser Compatible</p>
+            <h1>🧤 ProGlove Scanner - Complete System</h1>
+            <p>Real-time Tracking • JSON Import • Color Coding • Daily Reset</p>
         </div>
         
         <div class="card">
@@ -117,14 +114,19 @@
                 🔄 Connecting to cloud...
             </div>
             <div class="backup-status" id="backupStatus">
-                💾 Sync active
+                💾 Real-time sync active
             </div>
-            <div class="device-lock" id="deviceLockStatus">
-                🔓 No active scanner
+        </div>
+
+        <!-- JSON UPLOAD SECTION -->
+        <div class="card">
+            <h3>📁 UPLOAD CUSTOMER DATA (JSON)</h3>
+            <div class="json-upload">
+                <input type="file" id="jsonFile" class="file-input" accept=".json">
+                <button class="sync-btn upload-btn" onclick="processJSONFile()">📤 PROCESS JSON DATA</button>
             </div>
-            <!-- DEBUG INFO FOR SAMSUNG -->
-            <div class="local-data" id="debugInfo" style="border-left-color: #4285f4;">
-                <strong>Device Info:</strong> <span id="deviceInfo">Detecting...</span>
+            <div class="local-data" id="jsonStatus">
+                <strong>JSON Status:</strong> No file loaded
             </div>
         </div>
 
@@ -141,9 +143,6 @@
             <select class="dropdown" id="userDropdown" onchange="selectUser()">
                 <option value="">-- Select User --</option>
             </select>
-            <div class="local-data" id="userSelectionInfo" style="display: none;">
-                <strong>Selected:</strong> <span id="selectedUser">None</span>
-            </div>
         </div>
         
         <div class="card hidden" id="dishSection">
@@ -153,23 +152,33 @@
             </select>
         </div>
         
+        <!-- SCANNING SECTION -->
         <div class="card" id="scanSection">
             <h3>🔍 SCANNING CONTROLS</h3>
             <div class="scan-controls">
-                <button class="scan-btn start-btn" id="startBtn" onclick="requestScanningAccess()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()">⏹ STOP SCANNING</button>
-            </div>
-            
-            <!-- SCANNING STATUS INFO -->
-            <div class="local-data" id="scanStatusInfo" style="border-left-color: #34a853;">
-                <strong>Scanning Status:</strong> <span id="scanStatusText">Ready to start</span>
+                <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
             </div>
             
             <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
             
             <div class="response-time">
-                Response time: <span id="responseTimeValue">0</span>ms • 
-                Timeout: <span id="timeoutCounter">120</span>s
+                Response time: <span id="responseTimeValue">0</span>ms
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Active Bowls</div>
+                    <div class="stat-value active-stat" id="activeCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label" id="prepLabel">Prepared Today</div>
+                    <div class="stat-value prep-stat" id="prepCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">My Scans Today</div>
+                    <div class="stat-value kitchen-stat" id="myScansCount">0</div>
+                </div>
             </div>
             
             <div class="feedback info" id="feedback">
@@ -177,34 +186,101 @@
             </div>
         </div>
 
-        <!-- TROUBLESHOOTING SECTION FOR SAMSUNG -->
-        <div class="card" style="border: 2px solid #4285f4;">
-            <h3>🔧 SAMSUNG TAB TROUBLESHOOTING</h3>
-            <div class="sync-controls">
-                <button class="sync-btn download-btn" onclick="forceRefresh()" id="refreshBtn">
-                    🔄 FORCE REFRESH
-                </button>
-                <button class="sync-btn emergency-btn" onclick="clearAllData()" id="clearBtn">
-                    🗑️ CLEAR ALL DATA
-                </button>
-            </div>
+        <!-- OVERNIGHT STATISTICS TABLE -->
+        <div class="card">
+            <h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
             <div class="local-data">
-                <strong>If Start Scanning doesn't appear:</strong>
-                <br>1. Select Mode → Select User
-                <br>2. Wait 3 seconds for lock check
-                <br>3. Click FORCE REFRESH if stuck
-                <br>4. Use CLEAR ALL DATA as last resort
+                <strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
+            </div>
+            <div id="overnightStats">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Dish</th>
+                            <th>User</th>
+                            <th>Bowls</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overnightStatsBody">
+                        <tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- REST OF YOUR EXISTING HTML... -->
+        <!-- ACTIVE BOWLS SHEET -->
+        <div class="card">
+            <h3>📋 ACTIVE BOWLS SHEET</h3>
+            <div class="local-data">
+                <strong>Active Bowls:</strong> <span id="activeBowlsCount">0</span> bowls waiting for return
+            </div>
+            <div id="activeSheet">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>VYT Code</th>
+                            <th>Dish</th>
+                            <th>Company</th>
+                            <th>Customer</th>
+                            <th>Prepared By</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activeSheetBody">
+                        <tr><td colspan="6" style="text-align: center;">No active bowls</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RETURN SHEET -->
+        <div class="card">
+            <h3>🔄 RETURN SHEET (Clears daily at 7PM)</h3>
+            <div class="local-data">
+                <strong>Today's Returns:</strong> <span id="returnsCount">0</span> bowls • Auto-clear at 7PM
+            </div>
+            <div id="returnSheet">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>VYT Code</th>
+                            <th>Dish</th>
+                            <th>Company</th>
+                            <th>Customer</th>
+                            <th>Returned By</th>
+                            <th>Return Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="returnSheetBody">
+                        <tr><td colspan="6" style="text-align: center;">No returns today</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- BACKUP SYSTEM -->
+        <div class="card admin-section">
+            <h3>💾 BACKUP & RECOVERY</h3>
+            <div class="sync-controls">
+                <button class="sync-btn backup-btn" onclick="forceBackupNow()" id="forceBackupBtn">
+                    🔥 BACKUP NOW
+                </button>
+                <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
+                    📥 LOAD FROM BACKUP
+                </button>
+            </div>
+            <div class="local-data" id="backupInfo">
+                <strong>Backup Status:</strong> Last backup: Never
+            </div>
+        </div>
     </div>
 
     <!-- Firebase Configuration -->
     <script type="module">
-        // SAMSUNG COMPATIBLE FIREBASE INIT
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
@@ -218,514 +294,151 @@
 
         let app;
         let database;
-        let deviceId = 'samsung_' + Math.random().toString(36).substr(2, 9);
-        let isSamsungDevice = false;
-
-        // DETECT SAMSUNG DEVICE
-        function detectSamsungDevice() {
-            const userAgent = navigator.userAgent.toLowerCase();
-            isSamsungDevice = userAgent.includes('samsung') || 
-                             userAgent.includes('sm-') || 
-                             /android.*samsung/i.test(userAgent);
-            
-            document.getElementById('deviceInfo').textContent = 
-                isSamsungDevice ? 'Samsung Tablet Detected' : 'Other Device';
-            
-            console.log('📱 Device detected:', {
-                userAgent: navigator.userAgent,
-                isSamsung: isSamsungDevice,
-                deviceId: deviceId
-            });
-        }
-
-        // IMPROVED DEVICE LOCKING WITH SAMSUNG SUPPORT
-        class DeviceLockSystem {
-            constructor() {
-                this.lockCheckInterval = null;
-                this.isLocked = false;
-            }
-
-            async requestLock() {
-                if (!database) {
-                    console.log('⚠️ Firebase not available - allowing scan without lock');
-                    return true;
-                }
-
-                try {
-                    const lockRef = ref(database, 'deviceLock');
-                    const snapshot = await get(lockRef);
-                    const currentLock = snapshot.val();
-
-                    // If no lock or lock expired
-                    if (!currentLock || this.isLockExpired(currentLock)) {
-                        const lockData = {
-                            deviceId: deviceId,
-                            user: window.appData.user,
-                            timestamp: Date.now(),
-                            mode: window.appData.mode,
-                            dishLetter: window.appData.dishLetter,
-                            deviceType: isSamsungDevice ? 'samsung' : 'other'
-                        };
-
-                        await set(lockRef, lockData);
-                        this.isLocked = true;
-                        this.startLockMonitoring();
-                        console.log('🔒 Lock acquired by Samsung device');
-                        return true;
-                    } else if (currentLock.deviceId === deviceId) {
-                        // We already have the lock
-                        console.log('🔒 Lock already held by this device');
-                        return true;
-                    } else {
-                        console.log('🔐 Lock held by another device:', currentLock.deviceId);
-                        return false;
-                    }
-                } catch (error) {
-                    console.error('❌ Lock request failed:', error);
-                    // On Samsung devices, allow scanning even if lock fails
-                    return true;
-                }
-            }
-
-            isLockExpired(lock) {
-                return Date.now() - lock.timestamp > 130000; // 2 minutes 10 seconds
-            }
-
-            startLockMonitoring() {
-                this.lockCheckInterval = setInterval(() => {
-                    if (!database) return;
-                    
-                    const lockRef = ref(database, 'deviceLock');
-                    onValue(lockRef, (snapshot) => {
-                        const lock = snapshot.val();
-                        this.updateLockDisplay(lock);
-                    });
-                }, 3000); // Faster checking for Samsung
-            }
-
-            updateLockDisplay(lock) {
-                const lockStatus = document.getElementById('deviceLockStatus');
-                const startBtn = document.getElementById('startBtn');
-                const scanStatus = document.getElementById('scanStatusText');
-                
-                if (!lock) {
-                    lockStatus.innerHTML = '🔓 No active scanner';
-                    lockStatus.style.borderLeftColor = '#34a853';
-                    startBtn.disabled = !canStartScanning();
-                    scanStatus.textContent = 'Ready to start scanning';
-                } else if (lock.deviceId === deviceId) {
-                    const timeElapsed = Math.floor((Date.now() - lock.timestamp) / 1000);
-                    lockStatus.innerHTML = `🔒 You are scanning • ${120 - timeElapsed}s left`;
-                    lockStatus.style.borderLeftColor = '#4285f4';
-                    startBtn.disabled = true;
-                    startBtn.textContent = '▶ YOU ARE SCANNING';
-                    scanStatus.textContent = 'You are currently scanning';
-                } else {
-                    const timeSinceActivity = Math.floor((Date.now() - lock.timestamp) / 1000);
-                    lockStatus.innerHTML = `🔐 ${lock.user} is scanning • ${120 - timeSinceActivity}s left`;
-                    lockStatus.style.borderLeftColor = '#ff9800';
-                    startBtn.disabled = true;
-                    startBtn.textContent = `⏸️ ${lock.user} IS SCANNING`;
-                    scanStatus.textContent = `${lock.user} is currently scanning`;
-                    
-                    // Auto-release if lock expired
-                    if (this.isLockExpired(lock)) {
-                        this.forceReleaseLock();
-                    }
-                }
-                
-                // FORCE ENABLE START BUTTON AFTER 5 SECONDS ON SAMSUNG (Safety net)
-                if (isSamsungDevice && startBtn.disabled) {
-                    setTimeout(() => {
-                        if (startBtn.disabled && !window.appData.scanning) {
-                            console.log('🔄 Samsung safety net - enabling start button');
-                            startBtn.disabled = !canStartScanning();
-                            startBtn.textContent = '▶ START SCANNING';
-                        }
-                    }, 5000);
-                }
-            }
-
-            async forceReleaseLock() {
-                if (!database) return;
-                try {
-                    const lockRef = ref(database, 'deviceLock');
-                    await set(lockRef, null);
-                    this.isLocked = false;
-                    console.log('🔓 Lock force released');
-                } catch (error) {
-                    console.error('Force release failed:', error);
-                }
-            }
-        }
-
-        const deviceLock = new DeviceLockSystem();
+        let lastBackupTime = null;
 
         function initializeFirebase() {
             try {
-                detectSamsungDevice();
                 app = initializeApp(firebaseConfig);
                 database = getDatabase(app);
                 setupFirebaseListeners();
                 
+                loadLastBackupTime();
+                
                 setTimeout(() => {
-                    showMessage('✅ Firebase Connected • Samsung Optimized', 'success');
-                    document.getElementById('systemStatus').textContent = '✅ Firebase Connected • Samsung Optimized';
-                }, 1000);
+                    if (typeof showMessage === 'function') {
+                        showMessage('✅ Cloud sync active • Real-time tracking', 'success');
+                        document.getElementById('systemStatus').textContent = '✅ Cloud sync active • Real-time tracking';
+                    }
+                }, 2000);
                 
             } catch (error) {
                 console.log('Firebase initialization failed:', error);
-                showMessage('⚠️ Offline mode - Limited functionality', 'warning');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Limited functionality';
+                if (typeof showMessage === 'function') {
+                    showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                    document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
+                }
             }
         }
 
         function setupFirebaseListeners() {
             if (!database) return;
 
-            // Listen for app data
             const appDataRef = ref(database, 'appData');
             onValue(appDataRef, (snapshot) => {
                 const firebaseAppData = snapshot.val();
-                if (firebaseAppData) {
+                if (firebaseAppData && window.appData) {
                     window.appData.activeBowls = firebaseAppData.activeBowls || [];
                     window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
                     window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
                     window.appData.myScans = firebaseAppData.myScans || [];
                     window.appData.scanHistory = firebaseAppData.scanHistory || [];
+                    window.appData.customerData = firebaseAppData.customerData || [];
                     
-                    updateDisplay();
-                    saveToStorage();
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof updateSheets === 'function') updateSheets();
+                    if (typeof updateOvernightStats === 'function') updateOvernightStats();
+                    if (typeof saveToStorage === 'function') saveToStorage();
                 }
             });
 
-            // Listen for device lock
-            const lockRef = ref(database, 'deviceLock');
-            onValue(lockRef, (snapshot) => {
-                const lock = snapshot.val();
-                deviceLock.updateLockDisplay(lock);
+            const backupTimeRef = ref(database, 'lastBackupTime');
+            onValue(backupTimeRef, (snapshot) => {
+                lastBackupTime = snapshot.val();
+                updateBackupDisplay();
             });
+        }
+
+        async function syncToFirebase() {
+            if (!database) {
+                throw new Error('Firebase not available');
+            }
+            
+            try {
+                const backupData = {
+                    activeBowls: [...window.appData.activeBowls],
+                    preparedBowls: [...window.appData.preparedBowls],
+                    returnedBowls: [...window.appData.returnedBowls],
+                    myScans: [...window.appData.myScans],
+                    scanHistory: [...window.appData.scanHistory],
+                    customerData: [...window.appData.customerData],
+                    lastSync: new Date().toISOString()
+                };
+                
+                await Promise.all([
+                    set(ref(database, 'appData'), backupData),
+                    set(ref(database, 'lastBackupTime'), new Date().toISOString())
+                ]);
+                
+                lastBackupTime = new Date().toISOString();
+                updateBackupDisplay();
+                
+                return true;
+            } catch (error) {
+                console.log('Firebase sync failed:', error);
+                throw error;
+            }
+        }
+
+        async function loadFromFirebase() {
+            if (!database) {
+                showMessage('❌ Firebase not available', 'error');
+                return;
+            }
+            
+            try {
+                const appDataRef = ref(database, 'appData');
+                const snapshot = await get(appDataRef);
+                const data = snapshot.val();
+                
+                if (data) {
+                    window.appData.activeBowls = data.activeBowls || [];
+                    window.appData.preparedBowls = data.preparedBowls || [];
+                    window.appData.returnedBowls = data.returnedBowls || [];
+                    window.appData.myScans = data.myScans || [];
+                    window.appData.scanHistory = data.scanHistory || [];
+                    window.appData.customerData = data.customerData || [];
+                    
+                    if (typeof updateDisplay === 'function') updateDisplay();
+                    if (typeof updateSheets === 'function') updateSheets();
+                    if (typeof updateOvernightStats === 'function') updateOvernightStats();
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                    
+                    showMessage('✅ Data loaded from Firebase backup', 'success');
+                } else {
+                    showMessage('ℹ️ No data found in Firebase', 'info');
+                }
+            } catch (error) {
+                showMessage('❌ Error loading from Firebase', 'error');
+            }
+        }
+
+        function loadLastBackupTime() {
+            if (!database) return;
+            
+            const backupTimeRef = ref(database, 'lastBackupTime');
+            onValue(backupTimeRef, (snapshot) => {
+                lastBackupTime = snapshot.val();
+                updateBackupDisplay();
+            });
+        }
+
+        function updateBackupDisplay() {
+            const backupInfo = document.getElementById('backupInfo');
+            
+            if (lastBackupTime) {
+                const backupDate = new Date(lastBackupTime);
+                backupInfo.innerHTML = `<strong>Backup Status:</strong> Last backup: ${backupDate.toLocaleTimeString()}`;
+            } else {
+                backupInfo.innerHTML = '<strong>Backup Status:</strong> Last backup: Never';
+            }
         }
 
         window.initializeFirebase = initializeFirebase;
-        window.deviceLock = deviceLock;
+        window.syncToFirebase = syncToFirebase;
+        window.loadFromFirebase = loadFromFirebase;
     </script>
 
-    <!-- SAMSUNG-OPTIMIZED APPLICATION LOGIC -->
-    <script>
-        // ProGlove Scanner - SAMSUNG OPTIMIZED
-        window.appData = {
-            mode: null,
-            user: null,
-            dishLetter: null,
-            scanning: false,
-            myScans: [],
-            activeBowls: [],
-            preparedBowls: [],
-            returnedBowls: [],
-            scanHistory: [],
-            expectedCounts: {},
-            lastActivity: Date.now()
-        };
-
-        const USERS = [
-            {name: "Hamid", role: "Kitchen"},
-            {name: "Richa", role: "Kitchen"},
-            {name: "Mary", role: "Kitchen"},
-            {name: "Jash", role: "Kitchen"},
-            {name: "Joel", role: "Kitchen"},
-            {name: "Rushal", role: "Kitchen"},
-            {name: "Sreekanth", role: "Kitchen"},
-            {name: "M.Sultan", role: "Return"},
-            {name: "Riyaz", role: "Return"},
-            {name: "Alan", role: "Return"},
-            {name: "Aadesh", role: "Return"},
-            {name: "Kitchen Team", role: "Return"}
-        ];
-
-        // SAMSUNG COMPATIBILITY FUNCTIONS
-        function forceRefresh() {
-            console.log('🔄 Force refreshing Samsung device');
-            window.location.reload(true);
-        }
-
-        function clearAllData() {
-            console.log('🗑️ Clearing all data on Samsung device');
-            localStorage.clear();
-            sessionStorage.clear();
-            window.appData = {
-                mode: null, user: null, dishLetter: null, scanning: false,
-                myScans: [], activeBowls: [], preparedBowls: [], returnedBowls: [], scanHistory: []
-            };
-            showMessage('✅ All data cleared - refreshing page', 'success');
-            setTimeout(forceRefresh, 2000);
-        }
-
-        // Initialize with Samsung optimizations
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Initializing Samsung-optimized scanner...');
-            initializeFirebase();
-            loadFromStorage();
-            initializeUsers();
-            updateDisplay();
-            
-            // Samsung-specific event listeners
-            document.getElementById('progloveInput').addEventListener('input', handleScanInput);
-            document.addEventListener('click', resetTimeoutTimer);
-            document.addEventListener('touchstart', resetTimeoutTimer); // Added for touch devices
-            document.addEventListener('keydown', resetTimeoutTimer);
-            
-            // Auto-enable start button after 3 seconds (Samsung workaround)
-            setTimeout(() => {
-                const startBtn = document.getElementById('startBtn');
-                if (startBtn.disabled && !window.appData.scanning) {
-                    startBtn.disabled = !canStartScanning();
-                    console.log('🔄 Samsung auto-enable check completed');
-                }
-            }, 3000);
-        });
-
-        // Storage functions
-        function saveToStorage() {
-            try {
-                localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-            } catch (error) {
-                console.log('Storage save error:', error);
-            }
-        }
-
-        function loadFromStorage() {
-            try {
-                const saved = localStorage.getItem('proglove_data');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    window.appData = { ...window.appData, ...data };
-                    console.log('Data loaded from storage');
-                }
-            } catch (error) {
-                console.log('No previous data found');
-            }
-        }
-
-        // User and Mode Management
-        function initializeUsers() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.innerHTML = '<option value="">-- Select User --</option>';
-            
-            USERS.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.name;
-                option.textContent = user.name + (user.role ? ` (${user.role})` : '');
-                dropdown.appendChild(option);
-            });
-        }
-
-        function setMode(mode) {
-            window.appData.mode = mode;
-            window.appData.user = null;
-            window.appData.dishLetter = null;
-            window.appData.scanning = false;
-            
-            document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
-            document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
-            
-            document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
-            document.getElementById('userDropdown').value = '';
-            document.getElementById('dishDropdown').value = '';
-            document.getElementById('progloveInput').value = '';
-            
-            loadUsers();
-            updateStatsLabels();
-            updateDisplay();
-            showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
-            
-            // Samsung: Force UI update
-            setTimeout(updateDisplay, 100);
-        }
-
-        function canStartScanning() {
-            const canStart = window.appData.user && 
-                           (!window.appData.scanning) &&
-                           (window.appData.mode !== 'kitchen' || window.appData.dishLetter);
-            
-            console.log('🔍 Can start scanning check:', {
-                user: window.appData.user,
-                scanning: window.appData.scanning,
-                mode: window.appData.mode,
-                dishLetter: window.appData.dishLetter,
-                canStart: canStart
-            });
-            
-            return canStart;
-        }
-
-        // REQUEST SCANNING ACCESS - SAMSUNG OPTIMIZED
-        async function requestScanningAccess() {
-            console.log('🎯 Samsung device requesting scan access...');
-            
-            if (!canStartScanning()) {
-                showMessage('❌ Please select user and dish letter first', 'error');
-                // Show debug info
-                document.getElementById('userSelectionInfo').style.display = 'block';
-                document.getElementById('selectedUser').textContent = window.appData.user || 'None';
-                return;
-            }
-
-            const lockAcquired = await deviceLock.requestLock();
-            if (lockAcquired) {
-                startScanning();
-            } else {
-                showMessage('⏸️ Another device is scanning. Wait 5 seconds...', 'warning');
-                // Auto-retry for Samsung
-                setTimeout(() => {
-                    if (!window.appData.scanning) {
-                        console.log('🔄 Samsung auto-retry scan access');
-                        requestScanningAccess();
-                    }
-                }, 5000);
-            }
-        }
-
-        function startScanning() {
-            window.appData.scanning = true;
-            updateDisplay();
-            document.getElementById('progloveInput').focus();
-            showMessage(`🎯 SCANNING ACTIVE - Samsung Ready`, 'success');
-        }
-
-        async function stopScanning() {
-            if (!window.appData.scanning) {
-                showMessage('ℹ️ Scanning is not active', 'info');
-                return;
-            }
-            
-            console.log('🛑 Samsung device stopping scan');
-            window.appData.scanning = false;
-            await deviceLock.releaseLock();
-            updateDisplay();
-            syncToFirebase();
-            showMessage(`⏹ Scanning stopped • Data saved`, 'success');
-        }
-
-        function selectUser() {
-            const dropdown = document.getElementById('userDropdown');
-            window.appData.user = dropdown.value;
-            
-            if (window.appData.user) {
-                showMessage(`✅ ${window.appData.user} selected`, 'success');
-                document.getElementById('userSelectionInfo').style.display = 'block';
-                document.getElementById('selectedUser').textContent = window.appData.user;
-                
-                if (window.appData.mode === 'kitchen') {
-                    document.getElementById('dishSection').classList.remove('hidden');
-                    loadDishLetters();
-                }
-            }
-            updateDisplay();
-            
-            // Samsung: Force button state update
-            setTimeout(() => {
-                document.getElementById('startBtn').disabled = !canStartScanning();
-            }, 100);
-        }
-
-        function selectDishLetter() {
-            const dropdown = document.getElementById('dishDropdown');
-            window.appData.dishLetter = dropdown.value;
-            
-            if (window.appData.dishLetter) {
-                showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
-            }
-            updateDisplay();
-            
-            // Samsung: Force button state update
-            setTimeout(() => {
-                document.getElementById('startBtn').disabled = !canStartScanning();
-            }, 100);
-        }
-
-        // ... REST OF YOUR EXISTING FUNCTIONS (handleScanInput, processScan, kitchenScan, returnScan, etc.)
-
-        function loadUsers() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.innerHTML = '<option value="">-- Select User --</option>';
-            
-            let usersToShow = [];
-            if (window.appData.mode === 'kitchen') {
-                usersToShow = USERS.filter(user => user.role === 'Kitchen');
-            } else if (window.appData.mode === 'return') {
-                usersToShow = USERS.filter(user => user.role === 'Return' || user.name === "Kitchen Team");
-            }
-            
-            usersToShow.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.name;
-                option.textContent = user.name + (user.role ? ` (${user.role})` : '');
-                dropdown.appendChild(option);
-            });
-        }
-
-        function loadDishLetters() {
-            const dropdown = document.getElementById('dishDropdown');
-            dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
-            
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
-                const option = document.createElement('option');
-                option.value = letter;
-                option.textContent = letter;
-                dropdown.appendChild(option);
-            });
-        }
-
-        function handleScanInput(e) {
-            if (!window.appData.scanning) return;
-            
-            const scanValue = e.target.value.trim();
-            if (scanValue.length >= 2) {
-                processScan(scanValue);
-                setTimeout(() => e.target.value = '', 100);
-            }
-        }
-
-        function processScan(code) {
-            // Your existing scan processing logic
-            console.log('📦 Scan processed:', code);
-            showMessage(`✅ Scanned: ${code}`, 'success');
-            // Add your kitchenScan/returnScan logic here
-        }
-
-        function syncToFirebase() {
-            if (!database) return;
-            // Your existing Firebase sync logic
-            console.log('☁️ Data synced to Firebase');
-        }
-
-        function updateDisplay() {
-            const startBtn = document.getElementById('startBtn');
-            startBtn.disabled = !canStartScanning();
-            
-            // Update other display elements...
-        }
-
-        function showMessage(text, type) {
-            const element = document.getElementById('feedback');
-            element.textContent = text;
-            element.className = 'feedback ' + type;
-        }
-
-        function updateStatsLabels() {
-            const prepLabel = document.getElementById('prepLabel');
-            if (window.appData.mode === 'kitchen') {
-                prepLabel.textContent = 'Prepared Today';
-            } else {
-                prepLabel.textContent = 'Returned Today';
-            }
-        }
-
-        // Make functions globally available
-        window.forceRefresh = forceRefresh;
-        window.clearAllData = clearAllData;
-        window.forceReleaseLock = () => deviceLock.forceReleaseLock();
-    </script>
+    <!-- Main Application Logic -->
+    <script src="code.js"></script>
 </body>
 </html>
