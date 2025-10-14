@@ -628,7 +628,7 @@ function returnScan(code) {
     };
 }
 
-// Overnight Statistics Table - Resets at 10PM for new shift
+// Overnight Statistics Table - Show ALL Dish Letters (including unprepared)
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
     const cycleInfo = document.getElementById('cycleInfo');
@@ -675,32 +675,82 @@ function updateOvernightStats() {
     
     console.log(`📊 Overnight stats: ${overnightScans.length} scans in ${cycleText}`);
     
-    // Group by dish and user
-    const dishStats = {};
-    overnightScans.forEach(scan => {
-        const key = `${scan.dish}-${scan.user}`;
-        if (!dishStats[key]) {
-            dishStats[key] = {
-                dish: scan.dish,
-                user: scan.user,
-                scans: [],
+    // Get ALL dish letters (A-Z and 1-4)
+    const allDishLetters = [
+        ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+        ...'1234'.split('')
+    ];
+    
+    // Get all kitchen users
+    const kitchenUsers = USERS.filter(user => user.role === 'Kitchen').map(user => user.name);
+    
+    // Create empty structure for ALL combinations
+    const allCombinations = {};
+    
+    allDishLetters.forEach(dish => {
+        kitchenUsers.forEach(user => {
+            const key = `${dish}-${user}`;
+            allCombinations[key] = {
+                dish: dish,
+                user: user,
                 count: 0,
                 startTime: null,
-                endTime: null
+                scans: []
             };
-        }
-        
-        dishStats[key].scans.push(scan);
-        dishStats[key].count++;
-        
-        const scanTime = new Date(scan.timestamp);
-        if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
-            dishStats[key].startTime = scan.timestamp;
-        }
-        if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
-            dishStats[key].endTime = scan.timestamp;
+        });
+    });
+    
+    // Fill with actual scan data
+    overnightScans.forEach(scan => {
+        const key = `${scan.dish}-${scan.user}`;
+        if (allCombinations[key]) {
+            allCombinations[key].scans.push(scan);
+            allCombinations[key].count++;
+            
+            const scanTime = new Date(scan.timestamp);
+            if (!allCombinations[key].startTime || scanTime < new Date(allCombinations[key].startTime)) {
+                allCombinations[key].startTime = scan.timestamp;
+            }
         }
     });
+    
+    // Convert to array and sort
+    const statsArray = Object.values(allCombinations).sort((a, b) => {
+        if (a.dish !== b.dish) {
+            const aIsNumber = !isNaN(a.dish);
+            const bIsNumber = !isNaN(b.dish);
+            
+            if (aIsNumber && !bIsNumber) return 1;
+            if (!aIsNumber && bIsNumber) return -1;
+            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
+            return a.dish.localeCompare(b.dish);
+        }
+        return a.user.localeCompare(b.user);
+    });
+    
+    // Update table - Show ALL combinations
+    let html = '';
+    statsArray.forEach(stat => {
+        const startTime = stat.startTime ? 
+            new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
+            '-';
+        
+        // Add different styling for zero counts
+        const rowClass = stat.count === 0 ? 'zero-count' : '';
+        const countDisplay = stat.count === 0 ? '0' : stat.count;
+        
+        html += `
+            <tr class="${rowClass}">
+                <td class="dish-header">${stat.dish}</td>
+                <td>${stat.user}</td>
+                <td>${countDisplay}</td>
+                <td>${startTime}</td>
+            </tr>
+        `;
+    });
+    
+    statsBody.innerHTML = html;
+ });
     
     // Convert to array and sort
     const statsArray = Object.values(dishStats).sort((a, b) => {
