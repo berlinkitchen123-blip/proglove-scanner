@@ -1,4 +1,4 @@
-// code.js - Main Application File (Simplified)
+// code.js - Main ProGlove Scanner Application
 class ProGloveApp {
     constructor() {
         this.dataManager = new DataManager();
