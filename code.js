@@ -29,6 +29,23 @@ const USERS = [
     {name: "Adesh", role: "Return"}
 ];
 
+// VYTAL URL DETECTION - KEEP URLs EXACT, NO SHORTENING
+function detectVytCode(input) {
+    if (!input || typeof input !== 'string') return null;
+    
+    const cleanInput = input.trim();
+    
+    // Check if it's ANY VYTAL-related URL (VYT.TO or VYTAL)
+    if (cleanInput.includes('VYT.TO/') || cleanInput.includes('VYTAL')) {
+        return {
+            fullUrl: cleanInput, // KEEP ORIGINAL URL EXACTLY
+            type: cleanInput.includes('VYT.TO/') ? 'VYT.TO' : 'VYTAL'
+        };
+    }
+    
+    return null;
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -48,7 +65,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// CORRECTED JSON Data Processing - Proper sequential matching
+// UPDATED JSON Data Processing - KEEP URLs EXACT, MULTIPLE CUSTOMERS = RED FONT
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -74,9 +91,9 @@ function processJSONData() {
             failed: []
         };
         
-        // STEP 1: Process each VYT code from JSON data
+        // STEP 1: Process each VYT code from JSON data - KEEP URLs EXACT
         jsonData.forEach(customer => {
-            // Extract VYT code from multiple possible field names
+            // Extract VYT code from multiple possible field names - KEEP EXACT
             const vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code || customer.VYTCODE;
             
             if (!vytCode) {
@@ -89,16 +106,16 @@ function processJSONData() {
                 return;
             }
             
-            const cleanVytCode = vytCode.toString().toUpperCase().trim();
-            console.log(`Looking for bowl matching: ${cleanVytCode}`);
+            const exactVytCode = vytCode.toString().trim(); // KEEP EXACT FORMAT
+            console.log(`Looking for bowl matching: ${exactVytCode}`);
             
-            // STEP 2: Find ALL active bowls with this VYT code
+            // STEP 2: Find ALL active bowls with this EXACT VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
-                return bowl.code.toUpperCase() === cleanVytCode;
+                return bowl.code === exactVytCode; // EXACT MATCH
             });
             
             if (matchingBowls.length > 0) {
-                console.log(`✅ Found ${matchingBowls.length} matches for ${cleanVytCode}`);
+                console.log(`✅ Found ${matchingBowls.length} matches for ${exactVytCode}`);
                 
                 // STEP 3: Patch company and customer name to all matching bowls
                 matchingBowls.forEach(bowl => {
@@ -117,9 +134,9 @@ function processJSONData() {
                 patchResults.matched += matchingBowls.length;
             } else {
                 // No active bowl found for this VYT code
-                console.log(`❌ No active bowl found for VYT code: ${cleanVytCode}`);
+                console.log(`❌ No active bowl found for VYT code: ${exactVytCode}`);
                 patchResults.failed.push({
-                    vyt_code: cleanVytCode,
+                    vyt_code: exactVytCode,
                     customer: customer.customer || 'Unknown',
                     company: customer.company || 'Unknown',
                     reason: 'No active bowl found with this VYT code'
@@ -127,7 +144,7 @@ function processJSONData() {
             }
         });
         
-        // STEP 4: After individual patching, combine customer names for same dish
+        // STEP 4: After individual patching, combine customer names for same dish + COLOR CODING
         if (patchResults.matched > 0) {
             combineCustomerNamesByDish();
         }
@@ -172,7 +189,7 @@ function processJSONData() {
     }
 }
 
-// Combine customer names for same dish and set color flags
+// UPDATED: Combine customer names for same dish and set color flags (MULTIPLE = RED, SINGLE = GREEN)
 function combineCustomerNamesByDish() {
     // Group active bowls by dish
     const dishGroups = {};
@@ -186,22 +203,22 @@ function combineCustomerNamesByDish() {
     // Process each dish group
     Object.values(dishGroups).forEach(bowls => {
         if (bowls.length > 1) {
-            // Multiple bowls for same dish - combine customer names
+            // Multiple bowls for same dish - combine customer names + RED FONT
             const allCustomers = [...new Set(bowls.map(b => b.customer))].filter(name => name && name !== "Unknown");
             
             if (allCustomers.length > 0) {
                 const combinedCustomers = allCustomers.join(', ');
                 
-                // Update all bowls in this dish with combined names
+                // Update all bowls in this dish with combined names + RED FLAG
                 bowls.forEach(bowl => {
                     bowl.customer = combinedCustomers;
-                    bowl.multipleCustomers = true; // Flag for red color
+                    bowl.multipleCustomers = true; // Flag for RED color
                 });
             }
         } else {
-            // Single bowl for this dish
+            // Single bowl for this dish - GREEN FONT
             if (bowls[0].customer && bowls[0].customer !== "Unknown") {
-                bowls[0].multipleCustomers = false; // Flag for green color
+                bowls[0].multipleCustomers = false; // Flag for GREEN color
             }
         }
     });
@@ -217,14 +234,215 @@ function combineCustomerNamesByDish() {
     });
 }
 
-// Updated color coding for customer names
+// UPDATED color coding for customer names (GREEN = single, RED = multiple)
 function getCustomerNameColor(bowl) {
     if (bowl.multipleCustomers) {
-        return 'red-text';    // Red for multiple customers
+        return 'red-text';    // RED for multiple customers
     } else if (bowl.customer && bowl.customer !== "Unknown") {
-        return 'green-text';  // Green for single customer
+        return 'green-text';  // GREEN for single customer
     }
     return ''; // Default color for unknown customers
+}
+
+// UPDATED Scanning Functions - KEEP URLs EXACT
+function processScan(input) {
+    let result;
+    
+    // Detect VYT code - KEEP URL EXACT
+    const vytInfo = detectVytCode(input);
+    
+    if (!vytInfo) {
+        return {
+            message: "❌ Invalid VYT code/URL format: " + input,
+            type: "error", 
+            responseTime: 0
+        };
+    }
+    
+    console.log(`🎯 Processing scan: ${vytInfo.fullUrl} (${vytInfo.type})`);
+    
+    if (window.appData.mode === 'kitchen') {
+        result = kitchenScan(vytInfo);
+    } else {
+        result = returnScan(vytInfo);
+    }
+    
+    document.getElementById('responseTimeValue').textContent = result.responseTime;
+    showMessage(result.message, result.type);
+    
+    if (result.type === 'error') {
+        document.getElementById('progloveInput').classList.add('error');
+        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
+    }
+    
+    updateDisplay();
+    updateOvernightStats();
+    updateLastActivity();
+}
+
+// UPDATED Kitchen Scan - CORRECTED LOGIC: New OR returned bowls → Add to BOTH
+function kitchenScan(vytInfo) {
+    const startTime = Date.now();
+    const today = new Date().toLocaleDateString('en-GB');
+    
+    // CORRECTED: Check if bowl is already processed today
+    const isAlreadyActive = window.appData.activeBowls.some(bowl => bowl.code === vytInfo.fullUrl);
+    const isPreparedToday = window.appData.preparedBowls.some(bowl => bowl.code === vytInfo.fullUrl && bowl.date === today);
+    
+    // ERROR: Bowl is currently active (can't scan same bowl twice without return)
+    if (isAlreadyActive) {
+        return { 
+            message: "❌ Bowl already active: " + vytInfo.fullUrl, 
+            type: "error",
+            responseTime: Date.now() - startTime
+        };
+    }
+    
+    // ERROR: Already prepared today (even if returned, can't prepare twice same day)
+    if (isPreparedToday) {
+        return { 
+            message: "❌ Already prepared today: " + vytInfo.fullUrl, 
+            type: "error",
+            responseTime: Date.now() - startTime
+        };
+    }
+    
+    // ALLOW: New bowls AND returned bowls - they can be used!
+    // Find customer data from JSON
+    const customerInfo = window.appData.customerData.find(c => c.vyt_code === vytInfo.fullUrl);
+    
+    const newBowl = {
+        code: vytInfo.fullUrl, // STORE EXACT URL
+        dish: window.appData.dishLetter,
+        user: window.appData.user,
+        company: customerInfo ? customerInfo.company : "Unknown",
+        customer: customerInfo ? customerInfo.customer : "Unknown",
+        date: today,
+        time: new Date().toLocaleTimeString(),
+        timestamp: new Date().toISOString(),
+        status: 'ACTIVE',
+        multipleCustomers: false
+    };
+    
+    // ADD TO BOTH collections
+    window.appData.activeBowls.push(newBowl);
+    window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
+    
+    window.appData.myScans.push({
+        type: 'kitchen',
+        code: vytInfo.fullUrl, // STORE EXACT URL
+        dish: window.appData.dishLetter,
+        user: window.appData.user,
+        company: newBowl.company,
+        customer: newBowl.customer,
+        timestamp: new Date().toISOString()
+    });
+    
+    window.appData.scanHistory.unshift({
+        type: 'kitchen',
+        code: vytInfo.fullUrl, // STORE EXACT URL
+        user: window.appData.user,
+        timestamp: new Date().toISOString(),
+        message: `${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`
+    });
+    
+    saveToStorage();
+    
+    // REAL-TIME FIREBASE SYNC
+    if (typeof syncToFirebase === 'function') {
+        syncToFirebase().catch(() => {
+            console.log('Firebase sync failed, but data saved locally');
+        });
+    }
+    
+    return { 
+        message: `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`, 
+        type: "success",
+        responseTime: Date.now() - startTime
+    };
+}
+
+// UPDATED Return Scan - CORRECTED LOGIC: Remove from BOTH active and prepared
+function returnScan(vytInfo) {
+    const startTime = Date.now();
+    const today = new Date().toLocaleDateString('en-GB');
+    
+    // Find in activeBowls
+    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
+    
+    if (activeBowlIndex === -1) {
+        const isReturnedToday = window.appData.returnedBowls.some(bowl => bowl.code === vytInfo.fullUrl && bowl.returnDate === today);
+        
+        if (isReturnedToday) {
+            return { 
+                message: "❌ Already returned today: " + vytInfo.fullUrl, 
+                type: "error",
+                responseTime: Date.now() - startTime
+            };
+        } else {
+            return { 
+                message: "❌ Bowl not active: " + vytInfo.fullUrl, 
+                type: "error",
+                responseTime: Date.now() - startTime
+            };
+        }
+    }
+    
+    const activeBowl = window.appData.activeBowls[activeBowlIndex];
+    
+    // STEP 1: Remove from activeBowls
+    window.appData.activeBowls.splice(activeBowlIndex, 1);
+    
+    // STEP 2: Remove from preparedBowls (today's entry)
+    const preparedBowlIndex = window.appData.preparedBowls.findIndex(
+        bowl => bowl.code === vytInfo.fullUrl && bowl.date === today
+    );
+    if (preparedBowlIndex !== -1) {
+        window.appData.preparedBowls.splice(preparedBowlIndex, 1);
+    }
+    
+    // STEP 3: Add to returnedBowls
+    window.appData.returnedBowls.push({
+        ...activeBowl,
+        returnedBy: window.appData.user,
+        returnDate: today,
+        returnTime: new Date().toLocaleTimeString(),
+        returnTimestamp: new Date().toISOString(),
+        status: 'RETURNED'
+    });
+    
+    window.appData.myScans.push({
+        type: 'return',
+        code: vytInfo.fullUrl, // STORE EXACT URL
+        user: window.appData.user,
+        company: activeBowl.company,
+        customer: activeBowl.customer,
+        timestamp: new Date().toISOString(),
+        originalData: activeBowl
+    });
+    
+    window.appData.scanHistory.unshift({
+        type: 'return',
+        code: vytInfo.fullUrl, // STORE EXACT URL
+        user: window.appData.user,
+        timestamp: new Date().toISOString(),
+        message: `Returned: ${vytInfo.fullUrl}`
+    });
+    
+    saveToStorage();
+    
+    // REAL-TIME FIREBASE SYNC
+    if (typeof syncToFirebase === 'function') {
+        syncToFirebase().catch(() => {
+            console.log('Firebase sync failed, but data saved locally');
+        });
+    }
+    
+    return { 
+        message: `✅ Returned: ${vytInfo.fullUrl}`, 
+        type: "success",
+        responseTime: Date.now() - startTime
+    };
 }
 
 // Daily Cleanup Timer (7PM Return Data Clear)
@@ -422,173 +640,6 @@ function handleScanInput(e) {
     updateLastActivity();
 }
 
-function processScan(code) {
-    let result;
-    
-    if (window.appData.mode === 'kitchen') {
-        result = kitchenScan(code);
-    } else {
-        result = returnScan(code);
-    }
-    
-    document.getElementById('responseTimeValue').textContent = result.responseTime;
-    showMessage(result.message, result.type);
-    
-    if (result.type === 'error') {
-        document.getElementById('progloveInput').classList.add('error');
-        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
-    }
-    
-    updateDisplay();
-    updateOvernightStats();
-    updateLastActivity();
-}
-
-function kitchenScan(code) {
-    const startTime = Date.now();
-    const fullCode = code.toUpperCase();
-    const today = new Date().toLocaleDateString('en-GB');
-    
-    // Error Detection: Duplicate scan
-    if (window.appData.activeBowls.some(bowl => bowl.code === fullCode)) {
-        return { 
-            message: "❌ Bowl already active: " + fullCode, 
-            type: "error",
-            responseTime: Date.now() - startTime
-        };
-    }
-    
-    if (window.appData.preparedBowls.some(bowl => bowl.code === fullCode && bowl.date === today)) {
-        return { 
-            message: "❌ Already prepared today: " + fullCode, 
-            type: "error",
-            responseTime: Date.now() - startTime
-        };
-    }
-    
-    // Find customer data from JSON
-    const customerInfo = window.appData.customerData.find(c => c.vyt_code === fullCode);
-    
-    const newBowl = {
-        code: fullCode,
-        dish: window.appData.dishLetter,
-        user: window.appData.user,
-        company: customerInfo ? customerInfo.company : "Unknown",
-        customer: customerInfo ? customerInfo.customer : "Unknown",
-        date: today,
-        time: new Date().toLocaleTimeString(),
-        timestamp: new Date().toISOString(),
-        status: 'ACTIVE',
-        multipleCustomers: false // Initialize as false
-    };
-    
-    window.appData.activeBowls.push(newBowl);
-    window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
-    
-    window.appData.myScans.push({
-        type: 'kitchen',
-        code: fullCode,
-        dish: window.appData.dishLetter,
-        user: window.appData.user,
-        company: newBowl.company,
-        customer: newBowl.customer,
-        timestamp: new Date().toISOString()
-    });
-    
-    window.appData.scanHistory.unshift({
-        type: 'kitchen',
-        code: fullCode,
-        user: window.appData.user,
-        timestamp: new Date().toISOString(),
-        message: `${window.appData.dishLetter} Prepared: ${fullCode}`
-    });
-    
-    saveToStorage();
-    
-    // REAL-TIME FIREBASE SYNC
-    if (typeof syncToFirebase === 'function') {
-        syncToFirebase().catch(() => {
-            console.log('Firebase sync failed, but data saved locally');
-        });
-    }
-    
-    return { 
-        message: `✅ ${window.appData.dishLetter} Prepared: ${fullCode}`, 
-        type: "success",
-        responseTime: Date.now() - startTime
-    };
-}
-
-function returnScan(code) {
-    const startTime = Date.now();
-    const fullCode = code.toUpperCase();
-    const today = new Date().toLocaleDateString('en-GB');
-    
-    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === fullCode);
-    
-    if (activeBowlIndex === -1) {
-        if (window.appData.returnedBowls.some(bowl => bowl.code === fullCode && bowl.returnDate === today)) {
-            return { 
-                message: "❌ Already returned today: " + fullCode, 
-                type: "error",
-                responseTime: Date.now() - startTime
-            };
-        } else {
-            return { 
-                message: "❌ Bowl not found in active bowls: " + fullCode, 
-                type: "error",
-                responseTime: Date.now() - startTime
-            };
-        }
-    }
-    
-    const activeBowl = window.appData.activeBowls[activeBowlIndex];
-    
-    window.appData.activeBowls.splice(activeBowlIndex, 1);
-    
-    window.appData.returnedBowls.push({
-        ...activeBowl,
-        returnedBy: window.appData.user,
-        returnDate: today,
-        returnTime: new Date().toLocaleTimeString(),
-        returnTimestamp: new Date().toISOString(),
-        status: 'RETURNED'
-    });
-    
-    window.appData.myScans.push({
-        type: 'return',
-        code: fullCode,
-        user: window.appData.user,
-        company: activeBowl.company,
-        customer: activeBowl.customer,
-        timestamp: new Date().toISOString(),
-        originalData: activeBowl
-    });
-    
-    window.appData.scanHistory.unshift({
-        type: 'return',
-        code: fullCode,
-        user: window.appData.user,
-        timestamp: new Date().toISOString(),
-        message: `Returned: ${fullCode}`
-    });
-    
-    saveToStorage();
-    
-    // REAL-TIME FIREBASE SYNC
-    if (typeof syncToFirebase === 'function') {
-        syncToFirebase().catch(() => {
-            console.log('Firebase sync failed, but data saved locally');
-        });
-    }
-    
-    return { 
-        message: `✅ Returned: ${fullCode}`, 
-        type: "success",
-        responseTime: Date.now() - startTime
-    };
-}
-
 // Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
@@ -727,7 +778,7 @@ function convertAllDataToCSV(allData) {
     let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
     csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
     
-    // Active Bowls
+    // Active Bowls - INCLUDE COLOR CODING INFO
     csvContent += "ACTIVE BOWLS\n";
     csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
     allData.activeBowls.forEach(bowl => {
