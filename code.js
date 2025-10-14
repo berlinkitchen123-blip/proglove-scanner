@@ -54,7 +54,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// SIMPLE JSON Data Processing - Uses ORIGINAL codes only
+// CORRECTED JSON Data Processing - Proper customer assignment
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -74,13 +74,14 @@ function processJSONData() {
             failed: []
         };
 
-        // STEP 1: Extract all bowl codes from JSON
+        // STEP 1: Extract all bowl codes from JSON with PROPER customer assignment
         const extractedData = [];
         
         const deliveries = Array.isArray(jsonData) ? jsonData : [jsonData];
         
         deliveries.forEach((delivery, deliveryIndex) => {
-            console.log(`Processing delivery ${deliveryIndex + 1}: ${delivery.name || 'Unnamed'}`);
+            const companyName = delivery.name || "Unknown Company";
+            console.log(`Processing delivery ${deliveryIndex + 1}: ${companyName}`);
             
             if (delivery.boxes && Array.isArray(delivery.boxes)) {
                 delivery.boxes.forEach((box, boxIndex) => {
@@ -88,29 +89,39 @@ function processJSONData() {
                     
                     if (box.dishes && Array.isArray(box.dishes)) {
                         box.dishes.forEach((dish, dishIndex) => {
-                            console.log(`    Processing dish ${dishIndex + 1}: ${dish.name || 'No name'} (Label: ${dish.label || 'No label'})`);
+                            const dishLetter = dish.label || "Unknown";
+                            console.log(`    Processing dish ${dishIndex + 1}: ${dish.name || 'No name'} (Label: ${dishLetter})`);
+                            
+                            // Get SPECIFIC customers for THIS dish
+                            let customerNames = "Unknown";
+                            let isMultipleCustomers = false;
+                            
+                            if (dish.users && Array.isArray(dish.users) && dish.users.length > 0) {
+                                const customers = dish.users.map(user => user.username).filter(name => name);
+                                if (customers.length > 0) {
+                                    customerNames = customers.join(', ');
+                                    isMultipleCustomers = customers.length > 1;
+                                }
+                            }
+                            
+                            console.log(`      Customers for dish ${dishLetter}: ${customerNames} (Multiple: ${isMultipleCustomers})`);
                             
                             if (dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0) {
                                 dish.bowlCodes.forEach((bowlCode, codeIndex) => {
                                     // Use ORIGINAL code exactly as in JSON
                                     const originalCode = bowlCode;
                                     
-                                    // Get customer name from dish users
-                                    let customerName = "Unknown";
-                                    if (dish.users && dish.users.length > 0) {
-                                        customerName = dish.users.map(user => user.username).join(', ');
-                                    }
-                                    
                                     extractedData.push({
                                         code: originalCode, // ORIGINAL code only
-                                        company: delivery.name || "Unknown Company",
-                                        customer: customerName,
-                                        dish: dish.label || "Unknown",
+                                        company: companyName,
+                                        customer: customerNames,
+                                        dish: dishLetter,
+                                        multipleCustomers: isMultipleCustomers,
                                         delivery: delivery.name,
                                         box: box.uniqueIdentifier
                                     });
                                     
-                                    console.log(`      ✅ Extracted: ${originalCode} for ${customerName}`);
+                                    console.log(`      ✅ Extracted: ${originalCode} | Dish: ${dishLetter} | Customers: ${customerNames}`);
                                 });
                             } else {
                                 console.log(`      ⚠️ No bowlCodes in dish: ${dish.name}`);
@@ -138,18 +149,22 @@ function processJSONData() {
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${originalCode}`);
                 
-                // Patch company and customer name to all matching bowls
+                // Patch company, customer name, and dish to all matching bowls
                 matchingBowls.forEach(bowl => {
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
+                    const oldDish = bowl.dish;
                     
                     bowl.company = item.company;
                     bowl.customer = item.customer;
                     bowl.dish = item.dish || bowl.dish;
+                    bowl.multipleCustomers = item.multipleCustomers;
                     
                     console.log(`🔄 Patched bowl ${bowl.code}:`);
                     console.log(`   Company: "${oldCompany}" → "${bowl.company}"`);
                     console.log(`   Customer: "${oldCustomer}" → "${bowl.customer}"`);
+                    console.log(`   Dish: "${oldDish}" → "${bowl.dish}"`);
+                    console.log(`   Multiple Customers: ${bowl.multipleCustomers}`);
                 });
                 
                 patchResults.matched += matchingBowls.length;
@@ -159,15 +174,16 @@ function processJSONData() {
                     code: originalCode,
                     company: item.company,
                     customer: item.customer,
+                    dish: item.dish,
                     reason: 'No active bowl found with this exact code',
                     record: index + 1
                 });
             }
         });
 
-        // STEP 3: After individual patching, combine customer names for same dish
+        // STEP 3: After individual patching, ensure consistency for same dish
         if (patchResults.matched > 0) {
-            combineCustomerNamesByDish();
+            ensureDishConsistency();
         }
         
         // Update display and save
@@ -215,9 +231,11 @@ function processJSONData() {
     }
 }
 
-// Combine customer names for same dish
-function combineCustomerNamesByDish() {
+// Ensure all bowls with same dish have same customer data
+function ensureDishConsistency() {
     const dishGroups = {};
+    
+    // Group by dish
     window.appData.activeBowls.forEach(bowl => {
         if (!dishGroups[bowl.dish]) {
             dishGroups[bowl.dish] = [];
@@ -225,43 +243,61 @@ function combineCustomerNamesByDish() {
         dishGroups[bowl.dish].push(bowl);
     });
     
+    // For each dish group, use the most common customer data
     Object.values(dishGroups).forEach(bowls => {
         if (bowls.length > 1) {
-            const allCustomers = [...new Set(bowls.map(b => b.customer))].filter(name => name && name !== "Unknown");
+            // Find the most common customer data in this dish group
+            const customerCounts = {};
+            bowls.forEach(bowl => {
+                const key = `${bowl.customer}|${bowl.multipleCustomers}`;
+                customerCounts[key] = (customerCounts[key] || 0) + 1;
+            });
             
-            if (allCustomers.length > 0) {
-                const combinedCustomers = allCustomers.join(', ');
+            // Get the most common customer data
+            let mostCommonData = null;
+            let maxCount = 0;
+            Object.entries(customerCounts).forEach(([key, count]) => {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostCommonData = key;
+                }
+            });
+            
+            if (mostCommonData) {
+                const [customer, multipleFlag] = mostCommonData.split('|');
+                const isMultiple = multipleFlag === 'true';
                 
+                // Apply to all bowls in this dish group
                 bowls.forEach(bowl => {
-                    bowl.customer = combinedCustomers;
-                    bowl.multipleCustomers = true;
+                    bowl.customer = customer;
+                    bowl.multipleCustomers = isMultiple;
                 });
-            }
-        } else {
-            if (bowls[0].customer && bowls[0].customer !== "Unknown") {
-                bowls[0].multipleCustomers = false;
+                
+                console.log(`🔄 Consolidated dish ${bowls[0].dish}: ${customer} (Multiple: ${isMultiple})`);
             }
         }
     });
     
+    // Also update prepared bowls
     window.appData.preparedBowls.forEach(prepBowl => {
         const activeBowl = window.appData.activeBowls.find(bowl => bowl.code === prepBowl.code);
         if (activeBowl) {
             prepBowl.customer = activeBowl.customer;
             prepBowl.company = activeBowl.company;
+            prepBowl.dish = activeBowl.dish;
             prepBowl.multipleCustomers = activeBowl.multipleCustomers;
         }
     });
 }
 
-// Color coding for customer names
+// Color coding for customer names - CORRECTED LOGIC
 function getCustomerNameColor(bowl) {
     if (bowl.multipleCustomers) {
-        return 'red-text';
+        return 'red-text'; // Multiple customers = RED
     } else if (bowl.customer && bowl.customer !== "Unknown") {
-        return 'green-text';
+        return 'green-text'; // Single customer = GREEN
     }
-    return '';
+    return ''; // Unknown/No customer = Normal (black)
 }
 
 // Daily Cleanup Timer (7PM Return Data Clear)
@@ -750,48 +786,9 @@ function updateOvernightStats() {
     });
     
     statsBody.innerHTML = html;
- });
-    
-    // Convert to array and sort
-    const statsArray = Object.values(dishStats).sort((a, b) => {
-        if (a.dish !== b.dish) {
-            const aIsNumber = !isNaN(a.dish);
-            const bIsNumber = !isNaN(b.dish);
-            
-            if (aIsNumber && !bIsNumber) return 1;
-            if (!aIsNumber && bIsNumber) return -1;
-            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
-            return a.dish.localeCompare(b.dish);
-        }
-        return new Date(a.startTime) - new Date(b.startTime);
-    });
-    
-    // Update table
-    if (statsArray.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No scans in current overnight cycle</td></tr>';
-        return;
-    }
-    
-    let html = '';
-    statsArray.forEach(stat => {
-        const startTime = stat.startTime ? new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-        const endTime = stat.endTime ? new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-        
-        html += `
-            <tr>
-                <td class="dish-header">${stat.dish}</td>
-                <td>${stat.user}</td>
-                <td>${stat.count}</td>
-                <td>${startTime}</td>
-                <td>${endTime}</td>
-            </tr>
-        `;
-    });
-    
-    statsBody.innerHTML = html;
 }
 
-// Data Export Functions
+// Data Export Functions with COLOR CODING
 function exportActiveBowls() {
     if (window.appData.activeBowls.length === 0) {
         showMessage('❌ No active bowls to export', 'error');
@@ -817,7 +814,7 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// Export All Data to Excel
+// Export All Data to Excel with COLOR CODING INFO
 function exportAllData() {
     const allData = {
         activeBowls: window.appData.activeBowls,
@@ -835,7 +832,8 @@ function exportAllData() {
 
 function convertAllDataToCSV(allData) {
     let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
-    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
+    csvContent += `Exported on: ${new Date().toLocaleString()}\n`;
+    csvContent += "COLOR CODING: Single Customer=GREEN, Multiple Customers=RED, Unknown=BLACK\n\n";
     
     // Active Bowls
     csvContent += "ACTIVE BOWLS\n";
@@ -902,7 +900,7 @@ function downloadCSV(csvData, filename) {
     window.URL.revokeObjectURL(url);
 }
 
-// Display Functions
+// Display Functions with COLOR CODING
 function updateDisplay() {
     document.getElementById('userDropdown').disabled = false;
     document.getElementById('dishDropdown').disabled = false;
