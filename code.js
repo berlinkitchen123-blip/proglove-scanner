@@ -664,7 +664,7 @@ function returnScan(code) {
     };
 }
 
-// Overnight Statistics Table - Show ALL Dish Letters (including unprepared)
+// Overnight Statistics Table - Merge sessions for same user+dish
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
     const cycleInfo = document.getElementById('cycleInfo');
@@ -708,50 +708,50 @@ function updateOvernightStats() {
         const scanTime = new Date(scan.timestamp);
         return scanTime >= cycleStart && scanTime <= cycleEnd;
     });
-    
+
     console.log(`📊 Overnight stats: ${overnightScans.length} scans in ${cycleText}`);
-    
-    // Get ALL dish letters (A-Z and 1-4)
-    const allDishLetters = [
-        ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
-        ...'1234'.split('')
-    ];
-    
-    // Get all kitchen users
-    const kitchenUsers = USERS.filter(user => user.role === 'Kitchen').map(user => user.name);
-    
-    // Create empty structure for ALL combinations
-    const allCombinations = {};
-    
-    allDishLetters.forEach(dish => {
-        kitchenUsers.forEach(user => {
-            const key = `${dish}-${user}`;
-            allCombinations[key] = {
-                dish: dish,
-                user: user,
-                count: 0,
-                startTime: null,
-                scans: []
-            };
-        });
-    });
-    
-    // Fill with actual scan data
+
+    // Group by user and dish - MERGE all sessions for same user+dish
+    const sessionMap = {};
+
     overnightScans.forEach(scan => {
-        const key = `${scan.dish}-${scan.user}`;
-        if (allCombinations[key]) {
-            allCombinations[key].scans.push(scan);
-            allCombinations[key].count++;
+        const key = `${scan.user}-${scan.dish}`;
+        
+        if (!sessionMap[key]) {
+            // Create new session for this user+dish combination
+            sessionMap[key] = {
+                dish: scan.dish,
+                user: scan.user,
+                scans: [scan],
+                count: 1,
+                startTime: scan.timestamp,
+                lastScanTime: scan.timestamp
+            };
+        } else {
+            // Merge into existing session for same user+dish
+            sessionMap[key].scans.push(scan);
+            sessionMap[key].count++;
             
+            // Update start time if this scan is earlier
             const scanTime = new Date(scan.timestamp);
-            if (!allCombinations[key].startTime || scanTime < new Date(allCombinations[key].startTime)) {
-                allCombinations[key].startTime = scan.timestamp;
+            const currentStartTime = new Date(sessionMap[key].startTime);
+            if (scanTime < currentStartTime) {
+                sessionMap[key].startTime = scan.timestamp;
+            }
+            
+            // Update last scan time if this scan is later
+            const currentLastTime = new Date(sessionMap[key].lastScanTime);
+            if (scanTime > currentLastTime) {
+                sessionMap[key].lastScanTime = scan.timestamp;
             }
         }
     });
-    
-    // Convert to array and sort
-    const statsArray = Object.values(allCombinations).sort((a, b) => {
+
+    // Convert to array
+    const sessions = Object.values(sessionMap);
+
+    // Sort sessions: by dish, then by start time
+    sessions.sort((a, b) => {
         if (a.dish !== b.dish) {
             const aIsNumber = !isNaN(a.dish);
             const bIsNumber = !isNaN(b.dish);
@@ -761,30 +761,31 @@ function updateOvernightStats() {
             if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
             return a.dish.localeCompare(b.dish);
         }
-        return a.user.localeCompare(b.user);
+        return new Date(a.startTime) - new Date(b.startTime);
     });
-    
-    // Update table - Show ALL combinations
+
+    // Update table
+    if (sessions.length === 0) {
+        statsBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No scans in current overnight cycle</td></tr>';
+        return;
+    }
+
     let html = '';
-    statsArray.forEach(stat => {
-        const startTime = stat.startTime ? 
-            new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
+    sessions.forEach(session => {
+        const startTime = session.startTime ? 
+            new Date(session.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
             '-';
         
-        // Add different styling for zero counts
-        const rowClass = stat.count === 0 ? 'zero-count' : '';
-        const countDisplay = stat.count === 0 ? '0' : stat.count;
-        
         html += `
-            <tr class="${rowClass}">
-                <td class="dish-header">${stat.dish}</td>
-                <td>${stat.user}</td>
-                <td>${countDisplay}</td>
+            <tr>
+                <td class="dish-header">${session.dish}</td>
+                <td>${session.user}</td>
+                <td>${session.count}</td>
                 <td>${startTime}</td>
             </tr>
         `;
     });
-    
+
     statsBody.innerHTML = html;
 }
 
