@@ -31,155 +31,59 @@ const USERS = [
     {name: "Adesh", role: "Return"}
 ];
 
-// FIREBASE CONFIG - UPDATE WITH YOUR ACTUAL CONFIG
-const firebaseConfig = {
-    apiKey: "your-api-key",
-    authDomain: "your-project.firebaseapp.com",
-    databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "your-app-id"
-};
-
-// ========== FIREBASE FUNCTIONS ==========
-function initializeFirebase() {
-    try {
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        console.log('✅ Firebase initialized');
-        updateSyncStatus(true);
-        return true;
-    } catch (error) {
-        console.error('❌ Firebase initialization failed:', error);
-        updateSyncStatus(false);
-        return false;
-    }
-}
-
-let syncInterval;
-function startRealTimeSync() {
-    syncToFirebase();
-    syncInterval = setInterval(syncToFirebase, 1000);
-    console.log('🔄 Real-time sync started');
-}
-
-let firebaseListener;
-function startRealTimeListener() {
-    const database = firebase.database();
-    firebaseListener = database.ref('proglove_scanner/').on('value', (snapshot) => {
-        if (snapshot.exists()) {
-            const firebaseData = snapshot.val();
-            console.log('📥 Real-time update from Firebase');
-            window.appData = { ...window.appData, ...firebaseData };
-            window.appData.lastSync = new Date().toISOString();
-            updateDisplay();
-            updateOvernightStats();
-            updateSyncStatus(true);
-        }
-    }, (error) => {
-        console.error('❌ Firebase listener error:', error);
-        updateSyncStatus(false);
-    });
-    console.log('👂 Real-time listener started');
-}
-
-async function syncToFirebase() {
-    try {
-        const database = firebase.database();
-        const timestamp = new Date().toISOString();
-        const syncData = {
-            ...window.appData,
-            lastSync: timestamp,
-            syncBy: window.appData.user || 'system'
-        };
-        await database.ref('proglove_scanner/').set(syncData);
-        window.appData.lastSync = timestamp;
-        updateSyncStatus(true);
-        return true;
-    } catch (error) {
-        console.error('❌ Firebase sync error:', error);
-        updateSyncStatus(false);
-        return false;
-    }
-}
-
-async function forceSync() {
-    showMessage('🔄 Syncing to Firebase...', 'info');
-    const success = await syncToFirebase();
-    if (success) {
-        showMessage('✅ Data synced to Firebase successfully', 'success');
-    } else {
-        showMessage('❌ Failed to sync to Firebase', 'error');
-    }
-}
-
-async function reloadFromFirebase() {
-    showMessage('📥 Loading from Firebase...', 'info');
-    try {
-        const database = firebase.database();
-        const snapshot = await database.ref('proglove_scanner/').once('value');
-        if (snapshot.exists()) {
-            const firebaseData = snapshot.val();
-            window.appData = { ...window.appData, ...firebaseData };
-            updateDisplay();
-            updateOvernightStats();
-            showMessage('✅ Data loaded from Firebase', 'success');
-            return true;
-        } else {
-            showMessage('ℹ️ No data found in Firebase', 'info');
-            return false;
-        }
-    } catch (error) {
-        console.error('❌ Firebase reload error:', error);
-        showMessage('❌ Error loading from Firebase', 'error');
-        return false;
-    }
-}
-
-function updateSyncStatus(online) {
-    const statusElement = document.getElementById('syncStatus');
-    if (online) {
-        statusElement.textContent = '🟢 ONLINE';
-        statusElement.className = 'sync-status sync-online';
-    } else {
-        statusElement.textContent = '🔴 OFFLINE';
-        statusElement.className = 'sync-status sync-offline';
-    }
-}
-
 // ========== CORE SYSTEM FUNCTIONS ==========
 function getStandardizedDate(dateString = null) {
     const date = dateString ? new Date(dateString) : new Date();
     return date.toISOString().split('T')[0];
 }
 
+function getCurrentCycle() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    if (currentHour >= 22 || currentHour < 10) {
+        // Overnight cycle (10PM - 10AM) - PREPARATION TIME
+        const cycleStart = new Date(now);
+        if (currentHour < 10) {
+            cycleStart.setDate(cycleStart.getDate() - 1);
+        }
+        cycleStart.setHours(22, 0, 0, 0);
+        return cycleStart.toISOString().split('T')[0];
+    } else {
+        // Day cycle (10AM - 10PM) - ACTIVE/DISPATCH TIME
+        const cycleStart = new Date(now);
+        cycleStart.setHours(10, 0, 0, 0);
+        return cycleStart.toISOString().split('T')[0];
+    }
+}
+
+function isPreparationTime() {
+    const currentHour = new Date().getHours();
+    return currentHour >= 22 || currentHour < 10;
+}
+
+function isActiveTime() {
+    const currentHour = new Date().getHours();
+    return currentHour >= 10 && currentHour < 22;
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
-    if (initializeFirebase()) {
-        reloadFromFirebase().then(success => {
-            if (!success) {
-                loadFromStorage();
-            }
-            initializeUsers();
-            updateDisplay();
-            updateOvernightStats();
-            startRealTimeSync();
-            startRealTimeListener();
-        });
-    } else {
-        loadFromStorage();
-        initializeUsers();
-        updateDisplay();
-        updateOvernightStats();
-    }
-    startDailyCleanupTimer();
+    loadFromStorage();
+    initializeUsers();
+    updateDisplay();
+    updateOvernightStats();
+    startDailyResetTimer();
     
     document.getElementById('progloveInput').addEventListener('input', handleScanInput);
     document.addEventListener('click', updateLastActivity);
     document.addEventListener('keydown', updateLastActivity);
+    
+    // Initialize Firebase if available
+    if (typeof initializeFirebase === 'function') {
+        initializeFirebase();
+    }
 });
 
 function updateLastActivity() {
@@ -343,17 +247,19 @@ function kitchenScan(code) {
     const originalCode = code;
     const today = getStandardizedDate();
     
-    if (window.appData.activeBowls.some(bowl => bowl.code === originalCode)) {
-        return { message: "❌ Bowl already active: " + originalCode, type: "error", responseTime: Date.now() - startTime };
-    }
-    if (window.appData.preparedBowls.some(bowl => bowl.code === originalCode && bowl.date === today)) {
-        return { message: "❌ Already prepared today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
-    }
-    if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
-        return { message: "❌ Bowl was returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
+    // Check if bowl is already prepared today
+    const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
+        bowl.code === originalCode && bowl.date === today);
+    
+    if (alreadyPrepared) {
+        return { message: "❌ Bowl already prepared today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
-    const newBowl = {
+    // Remove this bowl from active bowls if it exists (clean up)
+    window.appData.activeBowls = window.appData.activeBowls.filter(bowl => bowl.code !== originalCode);
+    
+    // Add to prepared bowls
+    const newPreparedBowl = {
         code: originalCode,
         dish: window.appData.dishLetter,
         user: window.appData.user,
@@ -362,14 +268,13 @@ function kitchenScan(code) {
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
-        status: 'ACTIVE',
-        multipleCustomers: false
+        status: 'PREPARED'
     };
     
-    window.appData.activeBowls.push(newBowl);
-    window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
+    window.appData.preparedBowls.push(newPreparedBowl);
     updateDishTimes(window.appData.dishLetter, window.appData.user);
     
+    // Add to my scans
     window.appData.myScans.push({
         type: 'kitchen',
         code: originalCode,
@@ -378,6 +283,7 @@ function kitchenScan(code) {
         timestamp: new Date().toISOString()
     });
     
+    // Add to scan history
     window.appData.scanHistory.unshift({
         type: 'kitchen',
         code: originalCode,
@@ -386,7 +292,10 @@ function kitchenScan(code) {
         message: `${window.appData.dishLetter} Prepared: ${originalCode}`
     });
     
-    syncToFirebase().catch(() => console.log('Firebase sync failed after kitchen scan'));
+    // Sync to Firebase if available
+    if (typeof syncToFirebase === 'function') {
+        syncToFirebase().catch(() => console.log('Firebase sync failed after kitchen scan'));
+    }
     
     return { message: `✅ ${window.appData.dishLetter} Prepared: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
 }
@@ -396,30 +305,33 @@ function returnScan(code) {
     const originalCode = code;
     const today = getStandardizedDate();
     
+    // Check if already returned today
     if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
         return { message: "❌ Already returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
+    // Find and remove from active bowls
+    const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
     let sourceBowl = null;
-    let sourceType = '';
-    const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
-    if (preparedIndex !== -1) {
-        sourceBowl = window.appData.preparedBowls[preparedIndex];
-        sourceType = 'prepared';
-        window.appData.preparedBowls.splice(preparedIndex, 1);
+    let sourceType = 'active';
+    
+    if (activeIndex !== -1) {
+        sourceBowl = window.appData.activeBowls[activeIndex];
+        window.appData.activeBowls.splice(activeIndex, 1);
     } else {
-        const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
-        if (activeIndex !== -1) {
-            sourceBowl = window.appData.activeBowls[activeIndex];
-            sourceType = 'active';
-            window.appData.activeBowls.splice(activeIndex, 1);
+        // If not in active, check prepared bowls
+        const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
+        if (preparedIndex !== -1) {
+            sourceBowl = window.appData.preparedBowls[preparedIndex];
+            sourceType = 'prepared';
         }
     }
     
     if (!sourceBowl) {
-        return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
+        return { message: "❌ Bowl not found in system: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
+    // Add to returned bowls
     const returnedBowl = {
         ...sourceBowl,
         returnedBy: window.appData.user,
@@ -431,6 +343,8 @@ function returnScan(code) {
     };
     
     window.appData.returnedBowls.push(returnedBowl);
+    
+    // Add to my scans
     window.appData.myScans.push({
         type: 'return',
         code: originalCode,
@@ -438,6 +352,7 @@ function returnScan(code) {
         timestamp: new Date().toISOString()
     });
     
+    // Add to scan history
     window.appData.scanHistory.unshift({
         type: 'return',
         code: originalCode,
@@ -446,9 +361,68 @@ function returnScan(code) {
         message: `Returned: ${originalCode} (from ${sourceType})`
     });
     
-    syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
+    // Sync to Firebase if available
+    if (typeof syncToFirebase === 'function') {
+        syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
+    }
     
     return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
+}
+
+// ========== DAILY RESET FUNCTIONS ==========
+function startDailyResetTimer() {
+    // Check every minute if it's 10PM for reset
+    setInterval(() => {
+        const now = new Date();
+        if (now.getHours() === 22 && now.getMinutes() === 0) {
+            resetDailyStatistics();
+        }
+    }, 60000);
+}
+
+function resetDailyStatistics() {
+    const today = getStandardizedDate();
+    
+    // Don't reset if already reset today
+    if (window.appData.lastCleanup === today) return;
+    
+    console.log('🔄 Resetting daily statistics at 10PM');
+    
+    // Move prepared bowls from overnight (10PM-10AM) to active bowls for next day
+    const overnightPrepared = window.appData.preparedBowls.filter(bowl => {
+        const bowlTime = new Date(bowl.timestamp);
+        const bowlHour = bowlTime.getHours();
+        return bowlHour >= 22 || bowlHour < 10; // Bowls prepared overnight
+    });
+    
+    // Convert prepared bowls to active bowls
+    overnightPrepared.forEach(bowl => {
+        const activeBowl = {
+            ...bowl,
+            status: 'ACTIVE',
+            preparedTimestamp: bowl.timestamp, // Keep original preparation time
+            timestamp: new Date().toISOString() // Update to current time
+        };
+        window.appData.activeBowls.push(activeBowl);
+    });
+    
+    // Clear statistics (but keep the data)
+    window.appData.myScans = window.appData.myScans.filter(scan => {
+        const scanTime = new Date(scan.timestamp);
+        const scanHour = scanTime.getHours();
+        return scanHour >= 22 || scanHour < 10; // Keep overnight scans
+    });
+    
+    window.appData.lastCleanup = today;
+    
+    // Sync to Firebase if available
+    if (typeof syncToFirebase === 'function') {
+        syncToFirebase().catch(() => console.log('Firebase sync failed after daily reset'));
+    }
+    
+    updateDisplay();
+    updateOvernightStats();
+    showMessage('✅ Daily statistics reset - Overnight bowls moved to active', 'success');
 }
 
 // ========== JSON PROCESSING ==========
@@ -510,22 +484,19 @@ function processJSONData() {
                 patchResults.matched += activeMatches.length;
             }
             
-            // Remove from prepared bowls and add to active
-            const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
-            if (preparedIndex !== -1) {
-                const preparedBowl = window.appData.preparedBowls[preparedIndex];
-                window.appData.activeBowls.push({
-                    ...preparedBowl,
-                    company: item.company,
-                    customer: item.customer,
-                    dish: item.dish || preparedBowl.dish
+            // Update prepared bowls
+            const preparedMatches = window.appData.preparedBowls.filter(bowl => bowl.code === originalCode);
+            if (preparedMatches.length > 0) {
+                preparedMatches.forEach(bowl => {
+                    bowl.company = item.company;
+                    bowl.customer = item.customer;
+                    bowl.dish = item.dish || bowl.dish;
                 });
-                window.appData.preparedBowls.splice(preparedIndex, 1);
-                patchResults.removedFromPrepared++;
+                patchResults.matched += preparedMatches.length;
             }
             
             // Create new active entry if not found anywhere
-            if (activeMatches.length === 0 && preparedIndex === -1) {
+            if (activeMatches.length === 0 && preparedMatches.length === 0) {
                 const newBowl = {
                     code: originalCode,
                     dish: item.dish,
@@ -535,8 +506,7 @@ function processJSONData() {
                     date: getStandardizedDate(),
                     time: new Date().toLocaleTimeString(),
                     timestamp: new Date().toISOString(),
-                    status: 'ASSIGNED_FROM_JSON',
-                    multipleCustomers: false
+                    status: 'ASSIGNED_FROM_JSON'
                 };
                 window.appData.activeBowls.push(newBowl);
                 patchResults.newActive++;
@@ -547,12 +517,15 @@ function processJSONData() {
         combineCustomerNamesByDish();
         
         updateDisplay();
-        syncToFirebase().catch(() => console.log('Firebase sync failed after JSON processing'));
+        
+        // Sync to Firebase if available
+        if (typeof syncToFirebase === 'function') {
+            syncToFirebase().catch(() => console.log('Firebase sync failed after JSON processing'));
+        }
         
         const resultMessage = `✅ JSON assignment completed:\n` +
                            `• Total codes: ${extractedData.length}\n` +
-                           `• Active updated: ${patchResults.matched}\n` +
-                           `• Moved from prepared: ${patchResults.removedFromPrepared}\n` +
+                           `• Bowls updated: ${patchResults.matched}\n` +
                            `• New active entries: ${patchResults.newActive}\n` +
                            `• Failed: ${patchResults.failed.length}`;
         
@@ -560,7 +533,7 @@ function processJSONData() {
         
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
-            `Found: ${extractedData.length} codes | Active Updated: ${patchResults.matched} | From Prepared: ${patchResults.removedFromPrepared} | New Active: ${patchResults.newActive} | Failed: ${patchResults.failed.length}`;
+            `Found: ${extractedData.length} codes | Bowls Updated: ${patchResults.matched} | New Active: ${patchResults.newActive} | Failed: ${patchResults.failed.length}`;
         
     } catch (error) {
         showMessage('❌ Error processing JSON data: ' + error.message, 'error');
@@ -606,31 +579,6 @@ function updateDishTimes(dishLetter, user) {
         window.appData.dishTimes[dishLetter].users.add(user);
         window.appData.dishTimes[dishLetter].count++;
     }
-    updateDishTimesDisplay();
-}
-
-function updateDishTimesDisplay() {
-    const container = document.getElementById('dishTimesList');
-    const dishTimes = window.appData.dishTimes;
-    
-    if (Object.keys(dishTimes).length === 0) {
-        container.innerHTML = '<p>No dish preparation data</p>';
-        return;
-    }
-    
-    let html = '';
-    Object.keys(dishTimes).sort().forEach(dishLetter => {
-        const data = dishTimes[dishLetter];
-        const users = Array.from(data.users).join(', ');
-        html += `
-            <div class="time-stats">
-                <strong>Dish ${dishLetter}:</strong> 
-                First: ${data.firstScan} | Last: ${data.lastScan} | 
-                Count: ${data.count} | Users: ${users}
-            </div>
-        `;
-    });
-    container.innerHTML = html;
 }
 
 // ========== DATA EXPORT FUNCTIONS ==========
@@ -712,60 +660,6 @@ function downloadCSV(csvData, filename) {
 }
 
 // ========== UTILITY FUNCTIONS ==========
-function clearStuckBowls() {
-    const today = getStandardizedDate();
-    const returnedCodes = window.appData.returnedBowls
-        .filter(bowl => bowl.returnDate === today)
-        .map(bowl => bowl.code);
-    
-    let removedActive = 0;
-    let removedPrepared = 0;
-    
-    window.appData.activeBowls = window.appData.activeBowls.filter(bowl => {
-        if (returnedCodes.includes(bowl.code)) {
-            removedActive++;
-            return false;
-        }
-        return true;
-    });
-    
-    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => {
-        if (returnedCodes.includes(bowl.code)) {
-            removedPrepared++;
-            return false;
-        }
-        return true;
-    });
-    
-    syncToFirebase().catch(() => console.log('Firebase sync failed after cleanup'));
-    updateDisplay();
-    
-    if (removedActive > 0 || removedPrepared > 0) {
-        showMessage(`✅ Cleared ${removedActive} active + ${removedPrepared} prepared stuck bowls`, 'success');
-    } else {
-        showMessage('ℹ️ No stuck bowls found', 'info');
-    }
-}
-
-function startDailyCleanupTimer() {
-    setInterval(() => {
-        const now = new Date();
-        if (now.getHours() === 19 && now.getMinutes() === 0) {
-            clearReturnData();
-        }
-    }, 60000);
-}
-
-function clearReturnData() {
-    const today = getStandardizedDate();
-    if (window.appData.lastCleanup === today) return;
-    window.appData.returnedBowls = [];
-    window.appData.lastCleanup = today;
-    syncToFirebase().catch(() => console.log('Firebase sync failed after cleanup'));
-    showMessage('✅ Return data cleared for new day', 'success');
-    updateDisplay();
-}
-
 function updateDisplay() {
     document.getElementById('userDropdown').disabled = false;
     document.getElementById('dishDropdown').disabled = false;
@@ -814,12 +708,21 @@ function updateOvernightStats() {
     let cycleStart, cycleEnd, cycleText;
     
     if (currentHour >= 22 || currentHour < 10) {
-        cycleStart = new Date(now); cycleStart.setHours(22, 0, 0, 0);
-        cycleEnd = new Date(now); cycleEnd.setDate(cycleEnd.getDate() + 1); cycleEnd.setHours(10, 0, 0, 0);
+        cycleStart = new Date(now); 
+        if (currentHour < 10) {
+            cycleStart.setDate(cycleStart.getDate() - 1);
+        }
+        cycleStart.setHours(22, 0, 0, 0);
+        cycleEnd = new Date(now); 
+        cycleEnd.setDate(cycleEnd.getDate() + 1); 
+        cycleEnd.setHours(10, 0, 0, 0);
         cycleText = `Tonight 10PM - Tomorrow 10AM`;
     } else {
-        cycleStart = new Date(now); cycleStart.setDate(cycleStart.getDate() - 1); cycleStart.setHours(22, 0, 0, 0);
-        cycleEnd = new Date(now); cycleEnd.setHours(10, 0, 0, 0);
+        cycleStart = new Date(now); 
+        cycleStart.setDate(cycleStart.getDate() - 1); 
+        cycleStart.setHours(22, 0, 0, 0);
+        cycleEnd = new Date(now); 
+        cycleEnd.setHours(10, 0, 0, 0);
         cycleText = `Last Night 10PM - Today 10AM`;
     }
     
@@ -907,6 +810,3 @@ window.processJSONData = processJSONData;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.clearStuckBowls = clearStuckBowls;
-window.forceSync = forceSync;
-window.reloadFromFirebase = reloadFromFirebase;
