@@ -3,373 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Complete System</title>
+    <title>ProGlove Scanner System</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
-        .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
-        .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
-        .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-        .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
-        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
-        .download-btn { background: #4285f4; color: white; }
-        .upload-btn { background: #34a853; color: white; }
-        .export-btn { background: #f57c00; color: white; }
-        .backup-btn { background: #ea4335; color: white; }
-        .sync-btn:disabled { background: #666; cursor: not-allowed; }
-        .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
-        .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .kitchen-btn { background: #34a853; color: white; }
-        .return-btn { background: #ea4335; color: white; }
-        .mode-btn.active { box-shadow: 0 0 0 3px white; }
-        .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
-        .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
-        .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .start-btn { background: #34a853; color: white; }
-        .stop-btn { background: #ea4335; color: white; }
-        .scan-btn:disabled { background: #666; cursor: not-allowed; }
-        .proglove-input { width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
-        .proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
-        .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
-        .feedback { padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; display: flex; align-items: center; justify-content: center; }
-        .success { background: #34a853; }
-        .error { background: #ea4335; }
-        .warning { background: #f57c00; }
-        .info { background: #4285f4; }
-        .hidden { display: none; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-value { font-size: 24px; font-weight: bold; }
-        .kitchen-stat { color: #34a853; }
-        .return-stat { color: #ea4335; }
-        .active-stat { color: #4285f4; }
-        .prep-stat { color: #f57c00; }
-        .response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
-        .local-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
-        .upload-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #4285f4; }
-        .cross-team-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
-        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        .data-label { font-weight: bold; }
-        .admin-section { border: 2px solid #f57c00; }
-        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
-        
-        /* Table Styles */
-        .data-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 10px;
-            font-size: 11px;
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
         }
-        .data-table th {
-            background: #4285f4;
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .file-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .step {
+            background: #e8f4fd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .btn {
+            display: inline-block;
+            background: #4CAF50;
             color: white;
-            padding: 6px;
-            text-align: center;
-            border: 1px solid #555;
-        }
-        .data-table td {
-            padding: 6px;
-            text-align: center;
-            border: 1px solid #555;
-            background: #333;
-        }
-        .dish-header { background: #34a853; font-weight: bold; }
-        
-        /* Color Coding */
-        .yellow-bg { background: #ffeb3b !important; color: #000 !important; }
-        .pink-bg { background: #e91e63 !important; color: white !important; }
-        .orange-bg { background: #ff9800 !important; color: white !important; }
-        .red-bg { background: #f44336 !important; color: white !important; }
-        .green-text { color: #4caf50 !important; font-weight: bold; }
-        .red-text { color: #f44336 !important; font-weight: bold; }
-        
-        /* JSON Upload */
-        .json-upload { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
-        .json-textarea { width: 100%; height: 120px; background: #444; color: white; border: 1px solid #666; border-radius: 5px; padding: 8px; font-family: monospace; font-size: 12px; }
-        
-        @keyframes pulse { 
-            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
-            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
-            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
-        }
-        @keyframes shake { 
-            0%, 100% { transform: translateX(0); } 
-            25% { transform: translateX(-5px); } 
-            75% { transform: translateX(5px); } 
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 5px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🧤 ProGlove Scanner - Complete System</h1>
-            <p>Real-time Tracking • Data Export • Daily Reset</p>
-        </div>
+        <h1>🍱 ProGlove Scanner System</h1>
+        <p>Your complete bowl tracking system with Python backend</p>
         
-        <div class="card">
-            <h3>📊 SYSTEM STATUS</h3>
-            <div class="system-status" id="systemStatus">
-                🔄 Connecting to cloud...
-            </div>
-            <div class="backup-status" id="backupStatus">
-                💾 Real-time sync active
+        <div class="step">
+            <h2>🚀 Quick Start</h2>
+            <p>Follow these steps to run your system:</p>
+        </div>
+
+        <div class="step">
+            <h3>📱 Step 1: Go to Replit</h3>
+            <a href="https://replit.com" class="btn" target="_blank">Open Replit.com</a>
+            <p>Create free account if you don't have one</p>
+        </div>
+
+        <div class="step">
+            <h3>🐍 Step 2: Create Python Repl</h3>
+            <p>Click "Create repl" → Choose "Python" → Name it "proglove-scanner"</p>
+        </div>
+
+        <div class="step">
+            <h3>📥 Step 3: Download All Files</h3>
+            <p>Copy and paste this code in Replit to download all files automatically:</p>
+            <div class="code">
+import requests<br>
+<br>
+files = {<br>
+&nbsp;&nbsp;'data_models.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/data_models.py',<br>
+&nbsp;&nbsp;'file_manager.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/file_manager.py',<br>
+&nbsp;&nbsp;'scanner_operations.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/scanner_operations.py',<br>
+&nbsp;&nbsp;'json_processor.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/json_processor.py',<br>
+&nbsp;&nbsp;'analytics.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/analytics.py',<br>
+&nbsp;&nbsp;'main_app.py': 'https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/main_app.py'<br>
+}<br>
+<br>
+for filename, url in files.items():<br>
+&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;response = requests.get(url)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;with open(filename, 'w') as f:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f.write(response.text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(f"✅ Downloaded {filename}")<br>
+&nbsp;&nbsp;except Exception as e:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(f"❌ Failed to download {filename}: {e}")<br>
+<br>
+print("🎉 All files downloaded! Run: python main_app.py")
             </div>
         </div>
 
-        <div class="card">
-            <h3>📱 SELECT MODE</h3>
-            <div class="mode-buttons">
-                <button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
-                <button class="mode-btn return-btn" onclick="setMode('return')" id="returnBtn">🔄 RETURN</button>
-            </div>
+        <div class="step">
+            <h3>🎯 Step 4: Run the System</h3>
+            <p>After files are downloaded, run this command:</p>
+            <div class="code">python main_app.py</div>
         </div>
-        
-        <div class="card">
-            <h3>👤 SELECT USER</h3>
-            <select class="dropdown" id="userDropdown" onchange="selectUser()">
-                <option value="">-- Select User --</option>
-            </select>
-        </div>
-        
-        <div class="card hidden" id="dishSection">
-            <h3>📝 SELECT DISH LETTER</h3>
-            <select class="dropdown" id="dishDropdown" onchange="selectDishLetter()">
-                <option value="">-- Select Dish Letter --</option>
-            </select>
-        </div>
-        
-        <!-- SCANNING SECTION -->
-        <div class="card" id="scanSection">
-            <h3>🔍 SCANNING CONTROLS</h3>
-            <div class="scan-controls">
-                <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+
+        <h2>📁 Your Project Files</h2>
+        <div class="file-list">
+            <div class="file-item">
+                <strong>data_models.py</strong> - Bowl data structures
             </div>
-            
-            <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
-            
-            <div class="response-time">
-                Response time: <span id="responseTimeValue">0</span>ms
+            <div class="file-item">
+                <strong>file_manager.py</strong> - Save/load data operations
             </div>
-            
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-label">Active Bowls</div>
-                    <div class="stat-value active-stat" id="activeCount">0</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label" id="prepLabel">Prepared Today</div>
-                    <div class="stat-value prep-stat" id="prepCount">0</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">My Scans Today</div>
-                    <div class="stat-value kitchen-stat" id="myScansCount">0</div>
-                </div>
+            <div class="file-item">
+                <strong>scanner_operations.py</strong> - Scan processing logic
             </div>
-            
-            <div class="feedback info" id="feedback">
-                ✅ System ready - Select mode and user to start
+            <div class="file-item">
+                <strong>json_processor.py</strong> - Customer assignment
+            </div>
+            <div class="file-item">
+                <strong>analytics.py</strong> - Missing bowls tracking
+            </div>
+            <div class="file-item">
+                <strong>main_app.py</strong> - Main application
             </div>
         </div>
 
-        <!-- OVERNIGHT STATISTICS TABLE -->
-        <div class="card">
-            <h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
-            <div class="local-data">
-                <strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
-            </div>
-            <div id="overnightStats">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Dish</th>
-                            <th>User</th>
-                            <th>Bowls</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                        </tr>
-                    </thead>
-                    <tbody id="overnightStatsBody">
-                        <tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <h2>🔗 Direct File Links</h2>
+        <p>View raw code of each file:</p>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/data_models.py" class="btn" target="_blank">data_models.py</a>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/file_manager.py" class="btn" target="_blank">file_manager.py</a>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/scanner_operations.py" class="btn" target="_blank">scanner_operations.py</a>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/json_processor.py" class="btn" target="_blank">json_processor.py</a>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/analytics.py" class="btn" target="_blank">analytics.py</a>
+        <a href="https://raw.githubusercontent.com/berlinkitchen123-blip/proglove-scanner/main/main_app.py" class="btn" target="_blank">main_app.py</a>
 
-        <!-- DATA EXPORT SECTION -->
-        <div class="card admin-section">
-            <h3>📤 DATA EXPORT</h3>
-            <div class="sync-controls">
-                <button class="sync-btn export-btn" onclick="exportActiveBowls()" id="exportActiveBtn">
-                    📥 EXPORT ACTIVE BOWLS
-                </button>
-                <button class="sync-btn export-btn" onclick="exportReturnData()" id="exportReturnBtn">
-                    📥 EXPORT RETURN DATA
-                </button>
-                <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
-                    🔄 LOAD FROM CLOUD
-                </button>
-            </div>
-            <div class="local-data" id="exportInfo">
-                <strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
-            </div>
-        </div>
-
-        <!-- JSON DATA PASTE SECTION -->
-        <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
-            <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
-[
-  {
-    "vyt_code": "VYT12345",
-    "company": "Company Name", 
-    "customer": "Customer Name",
-    "dish": "A"
-  }
-]
-
-Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
-                <div class="sync-controls">
-                    <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
-                    <button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
-                </div>
-            </div>
-            <div class="local-data" id="jsonStatus">
-                <strong>JSON Status:</strong> No data loaded
-            </div>
-            <div class="local-data" id="patchResults" style="display: none;">
-                <strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
-                <div id="failedMatches" style="margin-top: 5px;"></div>
-            </div>
+        <div style="margin-top: 30px; padding: 20px; background: #e8f5e8; border-radius: 5px;">
+            <h3>💡 Need Help?</h3>
+            <p>If any file has errors, you can:</p>
+            <ol>
+                <li>Go to GitHub repository</li>
+                <li>Click on the problematic file</li>
+                <li>Click "Edit" (pencil icon)</li>
+                <li>Replace with correct code</li>
+                <li>Commit changes</li>
+            </ol>
         </div>
     </div>
-
-    <!-- Firebase Configuration -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
-            authDomain: "proglove-scanner.firebaseapp.com",
-            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "proglove-scanner",
-            storageBucket: "proglove-scanner.firebasestorage.app",
-            messagingSenderId: "177575768177",
-            appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
-        };
-
-        let app;
-        let database;
-
-        function initializeFirebase() {
-            try {
-                app = initializeApp(firebaseConfig);
-                database = getDatabase(app);
-                setupFirebaseListeners();
-                
-                showMessage('✅ Cloud connected • Real-time sync active', 'success');
-                document.getElementById('systemStatus').textContent = '✅ Cloud connected • Real-time sync active';
-                
-            } catch (error) {
-                console.log('Firebase initialization failed:', error);
-                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
-            }
-        }
-
-        function setupFirebaseListeners() {
-            if (!database) return;
-
-            const appDataRef = ref(database, 'appData');
-            onValue(appDataRef, (snapshot) => {
-                const firebaseAppData = snapshot.val();
-                if (firebaseAppData) {
-                    // IMPORTANT: Load ALL data from Firebase
-                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
-                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
-                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
-                    window.appData.myScans = firebaseAppData.myScans || [];
-                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
-                    window.appData.customerData = firebaseAppData.customerData || [];
-                    
-                    updateDisplay();
-                    updateOvernightStats();
-                    saveToStorage();
-                    
-                    console.log('✅ Data loaded from Firebase:', {
-                        activeBowls: window.appData.activeBowls.length,
-                        preparedBowls: window.appData.preparedBowls.length,
-                        returnedBowls: window.appData.returnedBowls.length
-                    });
-                }
-            });
-        }
-
-        async function syncToFirebase() {
-            if (!database) {
-                throw new Error('Firebase not available');
-            }
-            
-            try {
-                const backupData = {
-                    activeBowls: [...window.appData.activeBowls],
-                    preparedBowls: [...window.appData.preparedBowls],
-                    returnedBowls: [...window.appData.returnedBowls],
-                    myScans: [...window.appData.myScans],
-                    scanHistory: [...window.appData.scanHistory],
-                    customerData: [...window.appData.customerData],
-                    lastSync: new Date().toISOString()
-                };
-                
-                await set(ref(database, 'appData'), backupData);
-                return true;
-            } catch (error) {
-                console.log('Firebase sync failed:', error);
-                throw error;
-            }
-        }
-
-        async function loadFromFirebase() {
-            if (!database) {
-                showMessage('❌ Firebase not available', 'error');
-                return;
-            }
-            
-            try {
-                const appDataRef = ref(database, 'appData');
-                const snapshot = await get(appDataRef);
-                const data = snapshot.val();
-                
-                if (data) {
-                    window.appData.activeBowls = data.activeBowls || [];
-                    window.appData.preparedBowls = data.preparedBowls || [];
-                    window.appData.returnedBowls = data.returnedBowls || [];
-                    window.appData.myScans = data.myScans || [];
-                    window.appData.scanHistory = data.scanHistory || [];
-                    window.appData.customerData = data.customerData || [];
-                    
-                    updateDisplay();
-                    updateOvernightStats();
-                    saveToStorage();
-                    
-                    showMessage('✅ Data loaded from cloud', 'success');
-                } else {
-                    showMessage('ℹ️ No data found in cloud', 'info');
-                }
-            } catch (error) {
-                showMessage('❌ Error loading from cloud', 'error');
-            }
-        }
-
-        window.initializeFirebase = initializeFirebase;
-        window.syncToFirebase = syncToFirebase;
-        window.loadFromFirebase = loadFromFirebase;
-    </script>
-
-    <!-- Main Application Logic -->
-    <script src="code.js"></script>
 </body>
 </html>
