@@ -5,58 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ProGlove Scanner System</title>
     <style>
-        :root {
-            --primary: #2c3e50;
-            --secondary: #3498db;
-            --success: #27ae60;
-            --warning: #f39c12;
-            --danger: #e74c3c;
-            --light: #ecf0f1;
-            --dark: #34495e;
-        }
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
         }
         
         body {
-            background-color: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
+            background-color: #f0f2f5;
+            padding: 20px;
         }
         
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
         }
         
         header {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: #2c3e50;
             color: white;
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         
         h1 {
-            font-size: 2.2rem;
             margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        h2 {
-            font-size: 1.5rem;
-            margin-bottom: 15px;
-            color: var(--primary);
-            border-bottom: 2px solid var(--secondary);
-            padding-bottom: 5px;
         }
         
         .card {
@@ -64,8 +39,7 @@
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border-left: 4px solid var(--secondary);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
         .mode-selector {
@@ -75,49 +49,40 @@
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            font-size: 14px;
         }
         
         .btn-primary {
-            background-color: var(--secondary);
+            background: #3498db;
             color: white;
         }
         
         .btn-success {
-            background-color: var(--success);
-            color: white;
-        }
-        
-        .btn-warning {
-            background-color: var(--warning);
+            background: #27ae60;
             color: white;
         }
         
         .btn-danger {
-            background-color: var(--danger);
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #f39c12;
             color: white;
         }
         
         .btn.active {
-            transform: scale(1.05);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            background: #2980b9;
         }
         
         .btn:disabled {
-            background-color: #bdc3c7;
+            background: #bdc3c7;
             cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
         }
         
         .form-group {
@@ -127,28 +92,20 @@
         label {
             display: block;
             margin-bottom: 5px;
-            font-weight: 600;
-            color: var(--dark);
+            font-weight: bold;
         }
         
         select, input {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border 0.3s;
-        }
-        
-        select:focus, input:focus {
-            border-color: var(--secondary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+            border-radius: 5px;
+            font-size: 14px;
         }
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -158,45 +115,37 @@
             border-radius: 8px;
             padding: 15px;
             text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            border-top: 4px solid var(--secondary);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
         .stat-value {
-            font-size: 2rem;
+            font-size: 24px;
             font-weight: bold;
-            color: var(--primary);
             margin: 10px 0;
-        }
-        
-        .stat-label {
-            font-size: 0.9rem;
-            color: #7f8c8d;
         }
         
         .feedback {
             padding: 15px;
-            border-radius: 6px;
+            border-radius: 5px;
             margin: 15px 0;
-            font-weight: 600;
         }
         
         .success {
-            background-color: rgba(39, 174, 96, 0.1);
-            border-left: 4px solid var(--success);
-            color: var(--success);
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
         
         .error {
-            background-color: rgba(231, 76, 60, 0.1);
-            border-left: 4px solid var(--danger);
-            color: var(--danger);
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
         
         .info {
-            background-color: rgba(52, 152, 219, 0.1);
-            border-left: 4px solid var(--secondary);
-            color: var(--secondary);
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
         }
         
         .hidden {
@@ -204,21 +153,20 @@
         }
         
         .scanning-active {
-            border: 2px solid var(--success);
-            animation: pulse 2s infinite;
+            border: 2px solid #27ae60;
+            animation: pulse 1s infinite;
         }
         
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(39, 174, 96, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); }
+            0% { border-color: #27ae60; }
+            50% { border-color: #2ecc71; }
+            100% { border-color: #27ae60; }
         }
         
         .export-section {
             display: flex;
             gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         table {
@@ -228,112 +176,79 @@
         }
         
         th, td {
-            padding: 12px 15px;
+            padding: 10px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
         
         th {
-            background-color: var(--light);
-            font-weight: 600;
-            color: var(--dark);
-        }
-        
-        tr:hover {
-            background-color: rgba(52, 152, 219, 0.05);
+            background: #f8f9fa;
         }
         
         .red-text {
-            color: var(--danger);
+            color: #e74c3c;
             font-weight: bold;
         }
         
         .green-text {
-            color: var(--success);
+            color: #27ae60;
             font-weight: bold;
         }
         
         .dish-header {
             font-weight: bold;
-            background-color: rgba(52, 152, 219, 0.1);
+            background: #ecf0f1;
         }
         
         .json-section {
-            background-color: #f8f9fa;
-            border-radius: 8px;
+            background: #f8f9fa;
+            border-radius: 5px;
             padding: 15px;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         textarea {
             width: 100%;
-            min-height: 150px;
-            padding: 12px;
+            min-height: 120px;
+            padding: 10px;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 5px;
             font-family: monospace;
-            font-size: 0.9rem;
-            resize: vertical;
+            font-size: 12px;
         }
         
         .patch-results {
             margin-top: 15px;
             padding: 15px;
-            border-radius: 6px;
-            background-color: #f8f9fa;
-            border-left: 4px solid var(--warning);
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 30px;
-            padding: 20px;
-            color: #7f8c8d;
-            font-size: 0.9rem;
-        }
-        
-        @media (max-width: 768px) {
-            .mode-selector {
-                flex-direction: column;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-            
-            .export-section {
-                flex-direction: column;
-            }
+            background: #fff3cd;
+            border-radius: 5px;
+            border: 1px solid #ffeaa7;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🧤 ProGlove Scanner System</h1>
-            <p>Complete bowl tracking solution for kitchen and return operations</p>
+            <h1>ProGlove Scanner System</h1>
+            <p>Complete bowl tracking solution</p>
         </header>
         
         <div class="card">
-            <h2>🔘 Operation Mode</h2>
+            <h2>Operation Mode</h2>
             <div class="mode-selector">
-                <button id="kitchenBtn" class="btn btn-primary" onclick="setMode('kitchen')">
-                    🍳 Kitchen Mode
-                </button>
-                <button id="returnBtn" class="btn btn-primary" onclick="setMode('return')">
-                    📦 Return Mode
-                </button>
+                <button id="kitchenBtn" class="btn btn-primary" onclick="setMode('kitchen')">Kitchen Mode</button>
+                <button id="returnBtn" class="btn btn-primary" onclick="setMode('return')">Return Mode</button>
             </div>
             
             <div class="form-group">
-                <label for="userDropdown">👤 Select User:</label>
+                <label for="userDropdown">Select User:</label>
                 <select id="userDropdown" onchange="selectUser()">
                     <option value="">-- Select User --</option>
                 </select>
             </div>
             
             <div id="dishSection" class="form-group hidden">
-                <label for="dishDropdown">📝 Select Dish Letter:</label>
+                <label for="dishDropdown">Select Dish Letter:</label>
                 <select id="dishDropdown" onchange="selectDishLetter()">
                     <option value="">-- Select Dish Letter --</option>
                 </select>
@@ -342,19 +257,19 @@
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Active Bowls</div>
+                <div>Active Bowls</div>
                 <div id="activeCount" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="prepLabel">Prepared Today</div>
+                <div id="prepLabel">Prepared Today</div>
                 <div id="prepCount" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">My Scans Today</div>
+                <div>My Scans Today</div>
                 <div id="myScansCount" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Response Time</div>
+                <div>Response Time</div>
                 <div id="responseTimeValue" class="stat-value">0ms</div>
             </div>
         </div>
@@ -364,24 +279,20 @@
         </div>
         
         <div class="card">
-            <h2>🔍 Scanning Control</h2>
+            <h2>Scanning Control</h2>
             <div id="scanSection" class="form-group">
                 <label for="progloveInput">Scan VYT Code:</label>
-                <input type="text" id="progloveInput" placeholder="Click START SCANNING..." autocomplete="off">
+                <input type="text" id="progloveInput" placeholder="Click START SCANNING...">
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button id="startBtn" class="btn btn-success" onclick="startScanning()">
-                        ▶ START SCANNING
-                    </button>
-                    <button id="stopBtn" class="btn btn-danger" onclick="stopScanning()" disabled>
-                        ⏹ STOP SCANNING
-                    </button>
+                    <button id="startBtn" class="btn btn-success" onclick="startScanning()">START SCANNING</button>
+                    <button id="stopBtn" class="btn btn-danger" onclick="stopScanning()" disabled>STOP SCANNING</button>
                 </div>
             </div>
         </div>
         
         <div class="card">
-            <h2>📊 Overnight Statistics</h2>
-            <div class="stat-label" id="cycleInfo">Current Cycle: Tonight 10PM - Tomorrow 10AM</div>
+            <h2>Overnight Statistics</h2>
+            <div id="cycleInfo">Current Cycle: Tonight 10PM - Tomorrow 10AM</div>
             <table>
                 <thead>
                     <tr>
@@ -401,49 +312,37 @@
         </div>
         
         <div class="card">
-            <h2>📋 Active Bowls</h2>
+            <h2>Active Bowls</h2>
             <div id="activeBowlsList">
                 <p>No active bowls</p>
             </div>
         </div>
         
         <div class="card">
-            <h2>🔄 JSON Data Patch</h2>
+            <h2>JSON Data Patch</h2>
             <div class="json-section">
-                <p>Paste JSON data to update bowl information with company and customer details:</p>
+                <p>Paste JSON data to update bowl information:</p>
                 <textarea id="jsonData" placeholder='Paste JSON data here...'></textarea>
-                <button class="btn btn-warning" onclick="processJSONData()" style="margin-top: 10px;">
-                    🔄 Process JSON Data
-                </button>
+                <button class="btn btn-warning" onclick="processJSONData()" style="margin-top: 10px;">Process JSON Data</button>
                 
                 <div id="patchResults" class="patch-results" style="display: none;">
                     <div id="patchSummary" style="font-weight: bold; margin-bottom: 10px;"></div>
                     <div id="failedMatches"></div>
                 </div>
                 
-                <div id="jsonStatus" style="margin-top: 10px; font-style: italic;"></div>
+                <div id="jsonStatus" style="margin-top: 10px;"></div>
             </div>
         </div>
         
         <div class="card">
-            <h2>📤 Data Export</h2>
-            <p id="exportInfo"><strong>Data Status:</strong> No data available for export</p>
+            <h2>Data Export</h2>
+            <p id="exportInfo">Data Status: No data available</p>
             <div class="export-section">
-                <button class="btn btn-primary" onclick="exportActiveBowls()">
-                    📥 Export Active Bowls
-                </button>
-                <button class="btn btn-primary" onclick="exportReturnData()">
-                    📥 Export Return Data
-                </button>
-                <button class="btn btn-success" onclick="exportAllData()">
-                    💾 Export All Data
-                </button>
+                <button class="btn btn-primary" onclick="exportActiveBowls()">Export Active Bowls</button>
+                <button class="btn btn-primary" onclick="exportReturnData()">Export Return Data</button>
+                <button class="btn btn-success" onclick="exportAllData()">Export All Data</button>
             </div>
         </div>
-        
-        <footer>
-            <p>ProGlove Scanner System v2.0 | Data automatically saved to local storage</p>
-        </footer>
     </div>
 
     <script>
@@ -493,25 +392,7 @@
             updateOvernightStats();
             startDailyCleanupTimer();
             
-            const progloveInput = document.getElementById('progloveInput');
-            
-            // FIXED: Better scan input handling
-            progloveInput.addEventListener('input', handleScanInput);
-            
-            // Additional event listener for keydown to catch Enter/Tab
-            progloveInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                    e.preventDefault();
-                    const scanValue = this.value.trim();
-                    if (scanValue.length >= 6) {
-                        console.log(`🔍 Processing scan (Enter/Tab): ${scanValue}`);
-                        processScan(scanValue);
-                        this.value = '';
-                    }
-                }
-                updateLastActivity();
-            });
-            
+            document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
             document.addEventListener('keydown', updateLastActivity);
         });
@@ -520,29 +401,20 @@
             window.appData.lastActivity = Date.now();
         }
 
-        // FIXED: Handle scan input with proper clearing
+        // FIXED SCAN INPUT HANDLER
         function handleScanInput(e) {
             if (!window.appData.scanning) return;
             
             const scanValue = e.target.value.trim();
-            
-            // Check if we have a complete scan (VYT codes are usually 8+ characters)
-            if (scanValue.length >= 8) {
-                console.log(`🔍 Processing scan: ${scanValue}`);
-                
-                // Process the scan FIRST
+            if (scanValue.length >= 2) {
+                console.log('Processing scan:', scanValue);
                 processScan(scanValue);
                 
-                // FIXED: Clear input immediately after processing
-                e.target.value = '';
-                
-                // Small delay to ensure input is ready for next scan
+                // FIX: Clear input properly after processing
                 setTimeout(() => {
-                    e.target.focus(); // Keep focus on input
-                    console.log('✅ Input cleared and ready for next scan');
+                    e.target.value = '';
                 }, 100);
             }
-            
             updateLastActivity();
         }
 
@@ -749,29 +621,20 @@
             return '';
         }
 
-        // FIXED: Daily Cleanup Timer (7AM Statistics Clear)
+        // Daily Cleanup Timer (7PM Return Data Clear)
         function startDailyCleanupTimer() {
-            // Run immediately to set up
-            checkForCleanup();
-            
-            // Check every minute
-            setInterval(checkForCleanup, 60000);
-        }
-
-        function checkForCleanup() {
-            const now = new Date();
-            const today = getStandardizedDate();
-            
-            // FIXED: Clear at 7:00 AM instead of 7:00 PM
-            if (now.getHours() === 7 && now.getMinutes() === 0) {
-                if (window.appData.lastCleanup !== today) {
+            setInterval(() => {
+                const now = new Date();
+                if (now.getHours() === 19 && now.getMinutes() === 0) {
                     clearReturnData();
                 }
-            }
+            }, 60000);
         }
 
         function clearReturnData() {
             const today = getStandardizedDate();
+            if (window.appData.lastCleanup === today) return;
+            
             window.appData.returnedBowls = [];
             window.appData.lastCleanup = today;
             saveToStorage();
@@ -1360,37 +1223,6 @@
             document.getElementById('exportInfo').innerHTML = `
                 <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
             `;
-            
-            // Update active bowls list
-            updateActiveBowlsList();
-        }
-
-        function updateActiveBowlsList() {
-            const container = document.getElementById('activeBowlsList');
-            
-            if (window.appData.activeBowls.length === 0) {
-                container.innerHTML = '<p>No active bowls</p>';
-                return;
-            }
-            
-            let html = '<table><thead><tr><th>Code</th><th>Dish</th><th>Company</th><th>Customer</th><th>User</th><th>Date</th></tr></thead><tbody>';
-            
-            window.appData.activeBowls.forEach(bowl => {
-                const customerClass = getCustomerNameColor(bowl);
-                html += `
-                    <tr>
-                        <td>${bowl.code}</td>
-                        <td>${bowl.dish}</td>
-                        <td>${bowl.company}</td>
-                        <td class="${customerClass}">${bowl.customer}</td>
-                        <td>${bowl.user}</td>
-                        <td>${bowl.date}</td>
-                    </tr>
-                `;
-            });
-            
-            html += '</tbody></table>';
-            container.innerHTML = html;
         }
 
         function showMessage(text, type) {
