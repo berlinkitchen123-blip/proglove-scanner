@@ -46,6 +46,20 @@ function detectVytCode(input) {
     return null;
 }
 
+// Helper function to extract company from uniqueIdentifier
+function extractCompanyFromUniqueIdentifier(uniqueIdentifier) {
+    if (!uniqueIdentifier) return "Unknown";
+    
+    // Example: "cm-1-Bahnhofstr - degewo-2025-10-13" → "Bahnhofstr - degewo"
+    const parts = uniqueIdentifier.split('-');
+    if (parts.length >= 3) {
+        // Join parts from index 2 to second-last (excluding date)
+        return parts.slice(2, -1).join(' ').trim();
+    }
+    
+    return uniqueIdentifier;
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -65,7 +79,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// UPDATED JSON Data Processing - KEEP URLs EXACT, MULTIPLE CUSTOMERS = RED FONT
+// UPDATED JSON Data Processing - Extract from your actual JSON structure
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -78,62 +92,74 @@ function processJSONData() {
     try {
         const jsonData = JSON.parse(jsonText);
         
-        if (!Array.isArray(jsonData)) {
-            throw new Error('JSON should be an array of objects');
-        }
+        console.log('🔍 Starting JSON extraction from delivery data...');
         
-        console.log('🔍 Starting JSON patch process...');
-        console.log('JSON records to process:', jsonData.length);
-        console.log('Active bowls before patch:', window.appData.activeBowls.length);
-        
+        const extractedData = [];
         const patchResults = {
             matched: 0,
             failed: []
         };
         
-        // STEP 1: Process each VYT code from JSON data - KEEP URLs EXACT
-        jsonData.forEach(customer => {
-            // Extract VYT code from multiple possible field names - KEEP EXACT
-            const vytCode = customer.vyt_code || customer.vytcode || customer.code || customer.VYT_code || customer.VYTCODE;
-            
-            if (!vytCode) {
-                patchResults.failed.push({
-                    vyt_code: 'MISSING_CODE',
-                    customer: customer.customer || 'Unknown',
-                    company: customer.company || 'Unknown',
-                    reason: 'No VYT code found in JSON record'
-                });
-                return;
-            }
-            
-            const exactVytCode = vytCode.toString().trim(); // KEEP EXACT FORMAT
+        // STEP 1: Extract data from your JSON structure
+        if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+            jsonData.boxes.forEach(box => {
+                const company = extractCompanyFromUniqueIdentifier(box.uniqueIdentifier);
+                
+                if (box.dishes && Array.isArray(box.dishes)) {
+                    box.dishes.forEach(dish => {
+                        if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                            dish.bowlCodes.forEach(bowlCode => {
+                                if (bowlCode && dish.users && dish.users.length > 0) {
+                                    // Get all customer names for this dish
+                                    const allCustomers = dish.users.map(user => user.username).filter(name => name);
+                                    const customerNames = allCustomers.join(', ');
+                                    
+                                    extractedData.push({
+                                        vyt_code: bowlCode,
+                                        company: company,
+                                        customer: customerNames,
+                                        dish: dish.label || '',
+                                        multipleCustomers: allCustomers.length > 1
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        console.log('📊 Extracted data:', extractedData);
+        console.log('Active bowls before patch:', window.appData.activeBowls.length);
+        
+        // STEP 2: Process each extracted VYT code
+        extractedData.forEach(customer => {
+            const exactVytCode = customer.vyt_code.toString().trim();
             console.log(`Looking for bowl matching: ${exactVytCode}`);
             
-            // STEP 2: Find ALL active bowls with this EXACT VYT code
+            // Find ALL active bowls with this EXACT VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
-                return bowl.code === exactVytCode; // EXACT MATCH
+                return bowl.code === exactVytCode;
             });
             
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${exactVytCode}`);
                 
-                // STEP 3: Patch company and customer name to all matching bowls
+                // Patch the data to all matching bowls
                 matchingBowls.forEach(bowl => {
-                    // Store original values for logging
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
                     
-                    // Patch the data from JSON
                     bowl.company = customer.company || "Unknown";
                     bowl.customer = customer.customer || "Unknown";
-                    bowl.dish = customer.dish || bowl.dish; // Update dish if provided
+                    bowl.dish = customer.dish || bowl.dish;
+                    bowl.multipleCustomers = customer.multipleCustomers;
                     
                     console.log(`🔄 Patched bowl ${bowl.code}: Company "${oldCompany}" → "${bowl.company}" | Customer "${oldCustomer}" → "${bowl.customer}"`);
                 });
                 
                 patchResults.matched += matchingBowls.length;
             } else {
-                // No active bowl found for this VYT code
                 console.log(`❌ No active bowl found for VYT code: ${exactVytCode}`);
                 patchResults.failed.push({
                     vyt_code: exactVytCode,
@@ -143,11 +169,6 @@ function processJSONData() {
                 });
             }
         });
-        
-        // STEP 4: After individual patching, combine customer names for same dish + COLOR CODING
-        if (patchResults.matched > 0) {
-            combineCustomerNamesByDish();
-        }
         
         // Update display and save
         updateDisplay();
@@ -161,12 +182,12 @@ function processJSONData() {
         }
         
         // Show results
-        showMessage(`✅ JSON patch completed: ${patchResults.matched} bowls updated, ${patchResults.failed.length} failed matches`, 'success');
+        showMessage(`✅ JSON processing completed: ${extractedData.length} VYT codes extracted, ${patchResults.matched} bowls updated`, 'success');
         
         // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
-            `Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length} VYT codes`;
+            `Extracted: ${extractedData.length} VYT codes | Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length}`;
         
         const failedDiv = document.getElementById('failedMatches');
         if (patchResults.failed.length > 0) {
@@ -180,7 +201,7 @@ function processJSONData() {
         }
         
         document.getElementById('jsonStatus').innerHTML = 
-            `<strong>JSON Status:</strong> ${jsonData.length} customer records processed, ${patchResults.matched} bowls patched`;
+            `<strong>JSON Status:</strong> ${extractedData.length} VYT codes extracted from delivery data, ${patchResults.matched} bowls patched`;
         
         console.log('📊 Final patch results:', patchResults);
         
