@@ -664,7 +664,7 @@ function returnScan(code) {
     };
 }
 
-// Overnight Statistics Table - Merge sessions for same user+dish
+// Overnight Statistics Table - Group by Dish + User, show total counts
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
     const cycleInfo = document.getElementById('cycleInfo');
@@ -722,14 +722,11 @@ function updateOvernightStats() {
             sessionMap[key] = {
                 dish: scan.dish,
                 user: scan.user,
-                scans: [scan],
                 count: 1,
-                startTime: scan.timestamp,
-                lastScanTime: scan.timestamp
+                startTime: scan.timestamp
             };
         } else {
             // Merge into existing session for same user+dish
-            sessionMap[key].scans.push(scan);
             sessionMap[key].count++;
             
             // Update start time if this scan is earlier
@@ -737,12 +734,6 @@ function updateOvernightStats() {
             const currentStartTime = new Date(sessionMap[key].startTime);
             if (scanTime < currentStartTime) {
                 sessionMap[key].startTime = scan.timestamp;
-            }
-            
-            // Update last scan time if this scan is later
-            const currentLastTime = new Date(sessionMap[key].lastScanTime);
-            if (scanTime > currentLastTime) {
-                sessionMap[key].lastScanTime = scan.timestamp;
             }
         }
     });
