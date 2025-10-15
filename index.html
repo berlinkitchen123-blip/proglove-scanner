@@ -3,977 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner and JSON Import System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase SDKs (v8 CDNs for existing Realtime Database logic) -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <title>ProGlove Scanner - Complete System</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
-        .container { max-width: 1200px; }
-        .btn-mode { transition: all 0.2s; padding: 0.75rem 1.5rem; }
-        .btn-mode.active { background-color: #10b981; color: white; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.4); }
-        .feedback { padding: 0.75rem; border-radius: 0.5rem; margin-top: 1rem; font-weight: 600; }
-        .feedback.success { background-color: #d1fae5; color: #059669; }
-        .feedback.error { background-color: #fee2e2; color: #ef4444; }
-        .feedback.warning { background-color: #fffbeb; color: #f59e0b; }
-        .feedback.info { background-color: #e0f2fe; color: #0ea5e9; }
-        .scanner-card { transition: all 0.3s; }
-        .scanner-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-        .scanner-card.active { border-color: #10b981; }
-        input[type="text"]:focus, textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); }
-        .error { animation: shake 0.5s; border-color: #ef4444 !important; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
+        .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
+        .header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
+        .card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .download-btn { background: #4285f4; color: white; }
+        .upload-btn { background: #34a853; color: white; }
+        .export-btn { background: #f57c00; color: white; }
+        .backup-btn { background: #ea4335; color: white; }
+        .sync-btn:disabled { background: #666; cursor: not-allowed; }
+        .system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
+        .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .kitchen-btn { background: #34a853; color: white; }
+        .return-btn { background: #ea4335; color: white; }
+        .mode-btn.active { box-shadow: 0 0 0 3px white; }
+        .dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
+        .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .start-btn { background: #34a853; color: white; }
+        .stop-btn { background: #ea4335; color: white; }
+        .scan-btn:disabled { background: #666; cursor: not-allowed; }
+        .proglove-input { width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
+        .proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
+        .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
+        .feedback { padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+        .success { background: #34a853; }
+        .error { background: #ea4335; }
+        .warning { background: #f57c00; }
+        .info { background: #4285f4; }
+        .hidden { display: none; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; }
+        .kitchen-stat { color: #34a853; }
+        .return-stat { color: #ea4335; }
+        .active-stat { color: #4285f4; }
+        .prep-stat { color: #f57c00; }
+        .response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
+        .local-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
+        .upload-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #4285f4; }
+        .cross-team-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .data-label { font-weight: bold; }
+        .admin-section { border: 2px solid #f57c00; }
+        .backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+        
+        /* Table Styles */
+        .data-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px;
+            font-size: 11px;
+        }
+        .data-table th {
+            background: #4285f4;
+            color: white;
+            padding: 6px;
+            text-align: center;
+            border: 1px solid #555;
+        }
+        .data-table td {
+            padding: 6px;
+            text-align: center;
+            border: 1px solid #555;
+            background: #333;
+        }
+        .dish-header { background: #34a853; font-weight: bold; }
+        
+        /* Color Coding */
+        .yellow-bg { background: #ffeb3b !important; color: #000 !important; }
+        .pink-bg { background: #e91e63 !important; color: white !important; }
+        .orange-bg { background: #ff9800 !important; color: white !important; }
+        .red-bg { background: #f44336 !important; color: white !important; }
+        .green-text { color: #4caf50 !important; font-weight: bold; }
+        .red-text { color: #f44336 !important; font-weight: bold; }
+        
+        /* JSON Upload */
+        .json-upload { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .json-textarea { width: 100%; height: 120px; background: #444; color: white; border: 1px solid #666; border-radius: 5px; padding: 8px; font-family: monospace; font-size: 12px; }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
+        }
+        @keyframes shake { 
+            0%, 100% { transform: translateX(0); } 
+            25% { transform: translateX(-5px); } 
+            75% { transform: translateX(5px); } 
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
-    <div class="container mx-auto">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            ProGlove Bowl System
-        </h1>
-
-        <!-- Mode Selection -->
-        <div class="flex space-x-4 mb-8">
-            <button id="kitchenBtn" class="btn-mode bg-indigo-500 text-white rounded-lg shadow-lg hover:bg-indigo-600" onclick="setMode('kitchen')">Kitchen Mode</button>
-            <button id="returnBtn" class="btn-mode bg-indigo-500 text-white rounded-lg shadow-lg hover:bg-indigo-600" onclick="setMode('return')">Return Mode</button>
-        </div>
-
-        <div id="feedback" class="feedback hidden" role="alert"></div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- 1. Scanner Card -->
-            <div id="scannerCard" class="scanner-card bg-white p-6 rounded-xl shadow-2xl border-2 border-gray-100 lg:col-span-1">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                        <path fill-rule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                    </svg>
-                    Scanning Input
-                </h2>
-                
-                <!-- User Selection -->
-                <div class="mb-4">
-                    <label for="userDropdown" class="block text-sm font-medium text-gray-600 mb-1">Current User</label>
-                    <select id="userDropdown" onchange="selectUser()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50"></select>
-                </div>
-                
-                <!-- Dish Selection (Hidden by default, shown in Kitchen mode) -->
-                <div id="dishSection" class="mb-6 hidden">
-                    <label for="dishDropdown" class="block text-sm font-medium text-gray-600 mb-1">Dish Letter</label>
-                    <select id="dishDropdown" onchange="selectDishLetter()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50"></select>
-                </div>
-
-                <!-- Scan Button -->
-                <div class="flex space-x-2 mb-4">
-                    <button id="scanBtn" class="w-full bg-green-500 text-white py-2 rounded-lg font-bold hover:bg-green-600 transition-colors shadow-md" onclick="startScanning()">Start Scanning</button>
-                    <button class="w-full bg-red-500 text-white py-2 rounded-lg font-bold hover:bg-red-600 transition-colors shadow-md" onclick="stopScanning()">Stop Scanning</button>
-                </div>
-
-                <!-- Input Field -->
-                <div class="mb-4">
-                    <label for="progloveInput" class="block text-sm font-medium text-gray-600 mb-1">Scan VYT Code Here</label>
-                    <input type="text" id="progloveInput" placeholder="Scan VYT code..." class="w-full p-3 border-4 border-dashed border-gray-300 rounded-xl text-lg font-mono focus:border-indigo-400" disabled>
-                </div>
-                
-                <div class="text-xs text-gray-500 flex justify-between">
-                    <span>Response Time: <span id="responseTimeValue">0ms</span></span>
-                    <span>Last Activity: <span id="lastActivityDisplay">--</span></span>
-                </div>
-            </div>
-            <!-- The remaining 2 columns are empty on large screens -->
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧤 ProGlove Scanner - Complete System</h1>
+            <p>Real-time Tracking • Data Export • Daily Reset</p>
         </div>
         
-        <!-- 3. Dashboard and Stats -->
-        <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Summary Stats -->
-            <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">Daily Summary</h2>
-                <div class="space-y-2 text-sm">
-                    <p>Total Prepared: <span id="prepCount" class="font-bold text-blue-600">0</span></p>
-                    <p>Active Bowls: <span id="activeCount" class="font-bold text-yellow-600">0</span></p>
-                    <p id="prepLabel">Returned Today: <span id="returnCount" class="font-bold text-green-600">0</span></p>
-                    <p class="text-xs text-gray-500 mt-2">Last Cloud Sync: <span id="lastSyncDisplay">--</span></p>
-                    <p class="text-xs text-gray-500">Last Cleanup: <span id="lastCleanupDisplay">--</span></p>
-                </div>
+        <div class="card">
+            <h3>📊 SYSTEM STATUS</h3>
+            <div class="system-status" id="systemStatus">
+                🔄 Connecting to cloud...
             </div>
-
-            <!-- Overnight Stats Display -->
-            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">Statistics Display (Deleted Daily)</h2>
-                <p id="cycleInfo" class="text-sm text-red-600 mb-4"></p>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dish</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Scan</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Scan</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Users</th>
-                            </tr>
-                        </thead>
-                        <tbody id="overnightStatsBody" class="bg-white divide-y divide-gray-200 text-sm">
-                            <tr><td colspan="5" class="px-3 py-2 text-center text-gray-500">Awaiting data...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="backup-status" id="backupStatus">
+                💾 Real-time sync active
             </div>
         </div>
 
-        <!-- 2. Data Import Card (JSON Paste) - MOVED TO BOTTOM -->
-        <div id="importCard" class="mt-8 scanner-card bg-white p-6 rounded-xl shadow-2xl border-2 border-indigo-200">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm10 5.414V16H6V4h4.586L14 7.414zM10 12a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                </svg>
-                Data Import & Assignment (JSON)
-            </h2>
+        <div class="card">
+            <h3>📱 SELECT MODE</h3>
+            <div class="mode-buttons">
+                <button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
+                <button class="mode-btn return-btn" onclick="setMode('return')" id="returnBtn">🔄 RETURN</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>👤 SELECT USER</h3>
+            <select class="dropdown" id="userDropdown" onchange="selectUser()">
+                <option value="">-- Select User --</option>
+            </select>
+        </div>
+        
+        <div class="card hidden" id="dishSection">
+            <h3>📝 SELECT DISH LETTER</h3>
+            <select class="dropdown" id="dishDropdown" onchange="selectDishLetter()">
+                <option value="">-- Select Dish Letter --</option>
+            </select>
+        </div>
+        
+        <!-- SCANNING SECTION -->
+        <div class="card" id="scanSection">
+            <h3>🔍 SCANNING CONTROLS</h3>
+            <div class="scan-controls">
+                <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
+                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+            </div>
             
-            <p class="text-sm text-gray-500 mb-4">
-                Paste an array of bowl objects (with `code`, `company`, `customer`, and `dish` fields) below to update existing records and re-activate prepared bowls.
-            </p>
-
-            <textarea id="jsonInput" rows="6" placeholder='[{"code": "VYT-1234", "company": "Siemens", "customer": "Alice", "dish": "A"}, ...]' class="w-full p-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-indigo-500"></textarea>
-
-            <button class="w-full mt-4 bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-lg" onclick="handleJsonImport()">
-                Process & Assign Data
-            </button>
+            <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
+            
+            <div class="response-time">
+                Response time: <span id="responseTimeValue">0</span>ms
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Active Bowls</div>
+                    <div class="stat-value active-stat" id="activeCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label" id="prepLabel">Prepared Today</div>
+                    <div class="stat-value prep-stat" id="prepCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">My Scans Today</div>
+                    <div class="stat-value kitchen-stat" id="myScansCount">0</div>
+                </div>
+            </div>
+            
+            <div class="feedback info" id="feedback">
+                ✅ System ready - Select mode and user to start
+            </div>
         </div>
 
+        <!-- OVERNIGHT STATISTICS TABLE -->
+        <div class="card">
+            <h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
+            <div class="local-data">
+                <strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
+            </div>
+            <div id="overnightStats">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Dish</th>
+                            <th>User</th>
+                            <th>Bowls</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overnightStatsBody">
+                        <tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        <!-- 4. Export Controls -->
-        <div class="mt-8 p-6 bg-gray-100 rounded-xl shadow-inner border border-gray-300">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">Data Management</h2>
-            <div class="flex flex-wrap gap-4">
-                <button class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors shadow-md" onclick="exportActiveBowls()">Export Active Bowls (JSON)</button>
-                <button class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors shadow-md" onclick="exportReturnData()">Export Return Data (JSON)</button>
-                <button class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors shadow-md" onclick="exportAllData()">Export ALL Data (JSON)</button>
+        <!-- DATA EXPORT SECTION -->
+        <div class="card admin-section">
+            <h3>📤 DATA EXPORT</h3>
+            <div class="sync-controls">
+                <button class="sync-btn export-btn" onclick="exportActiveBowls()" id="exportActiveBtn">
+                    📥 EXPORT ACTIVE BOWLS
+                </button>
+                <button class="sync-btn export-btn" onclick="exportReturnData()" id="exportReturnBtn">
+                    📥 EXPORT RETURN DATA
+                </button>
+                <button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
+                    🔄 LOAD FROM CLOUD
+                </button>
+            </div>
+            <div class="local-data" id="exportInfo">
+                <strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
+            </div>
+        </div>
+
+        <!-- JSON DATA PASTE SECTION -->
+        <div class="card">
+            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+            <div class="json-upload">
+                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
+[
+  {
+    "vyt_code": "VYT12345",
+    "company": "Company Name", 
+    "customer": "Customer Name",
+    "dish": "A"
+  }
+]
+
+Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
+                <div class="sync-controls">
+                    <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
+                    <button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
+                </div>
+            </div>
+            <div class="local-data" id="jsonStatus">
+                <strong>JSON Status:</strong> No data loaded
+            </div>
+            <div class="local-data" id="patchResults" style="display: none;">
+                <strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
+                <div id="failedMatches" style="margin-top: 5px;"></div>
             </div>
         </div>
     </div>
 
-    <!-- The complete JavaScript logic block -->
-    <script>
-        // ProGlove Scanner - Complete System (Firebase Primary)
+    <!-- Firebase Configuration -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
-        // Global Firebase instances
-        let firebaseApp = null;
-        let firebaseAuth = null;
-        let firebaseDB = null;
-
-        // NOTE: All time-based logic (Kitchen Window, Reset, Deletion) is locked to Europe/Berlin (Germany Time).
-
-        window.appData = {
-            mode: null, user: null, dishLetter: null, scanning: false,
-            myScans: [], activeBowls: [], preparedBowls: [], returnedBowls: [],
-            scanHistory: [], customerData: [], dishTimes: {}, 
-            lastActivity: null, 
-            lastCleanup: null, lastSync: null, lastReturnCleanup: null
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
+            authDomain: "proglove-scanner.firebaseapp.com",
+            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "proglove-scanner",
+            storageBucket: "proglove-scanner.firebasestorage.app",
+            messagingSenderId: "177575768177",
+            appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
         };
 
-        const USERS = [
-            {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
-            {name: "Jash", role: "Kitchen"}, {name: "Joes", role: "Kitchen"},
-            {name: "Mary", role: "Kitchen"}, {name: "Rushal", role: "Kitchen"},
-            {name: "Sreekanth", role: "Kitchen"}, {name: "Sultan", role: "Return"},
-            {name: "Riyaz", role: "Return"}, {name: "Alan", role: "Return"},
-            {name: "Adesh", role: "Return"}
-        ];
-
-        // Utility functions
-        function getStandardizedDate() {
-            return new Date().toISOString().split('T')[0];
-        }
-
-        function extractDateFromISO(timestamp) {
-            if (!timestamp) return null;
-            try {
-                return new Date(timestamp).toISOString().split('T')[0];
-            } catch (e) {
-                return null; 
-            }
-        }
-
-        function formatDisplayDate(isoString) {
-            if (!isoString) return '--';
-            try {
-                const date = new Date(isoString);
-                return date.toLocaleString('en-GB', { 
-                    year: 'numeric', month: 'short', day: 'numeric', 
-                    hour: '2-digit', minute: '2-digit', second: '2-digit' 
-                });
-            } catch (e) {
-                return '--';
-            }
-        }
-
-        function getGermanyHour() {
-            try {
-                const date = new Date();
-                const formatter = new Intl.DateTimeFormat('en-US', {
-                    hour: '2-digit',
-                    hourCycle: 'h23', 
-                    timeZone: 'Europe/Berlin'
-                });
-                return parseInt(formatter.format(date));
-            } catch (e) {
-                console.error('Time zone error, falling back to local hour. Please check Intl support.', e);
-                return new Date().getHours(); 
-            }
-        }
-
-        function isKitchenTime() {
-            const hour = getGermanyHour();
-            // Kitchen mode forced between 10 PM (22) and 10 AM (10) Germany time
-            return hour >= 22 || hour < 10;
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Scanner System Starting...');
-            initializeFirebase(); 
-        });
+        let app;
+        let database;
 
         function initializeFirebase() {
             try {
-                const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-                if (!firebaseConfigString || typeof firebase === 'undefined') {
-                    console.error('Firebase configuration or SDK is missing. Falling back to local storage.');
-                    loadFromStorage();
-                    initializeDataArrays();
-                    initializeUI();
-                    showMessage('⚠️ Configuration missing or SDK failed to load, using local storage.', 'warning');
-                    return;
-                }
-
-                const firebaseConfig = JSON.parse(firebaseConfigString);
-
-                if (!firebase.apps.length) {
-                    firebaseApp = firebase.initializeApp(firebaseConfig);
-                } else {
-                    firebaseApp = firebase.app();
-                }
-
-                firebaseAuth = firebase.auth();
-                firebaseDB = firebase.database();
+                app = initializeApp(firebaseConfig);
+                database = getDatabase(app);
+                setupFirebaseListeners();
                 
-                // Authentication Logic (V8 Syntax)
-                firebaseAuth.onAuthStateChanged(user => {
-                    if (user) {
-                        console.log('✅ User authenticated:', user.uid);
-                        loadFromFirebase();
-                    } else if (initialAuthToken) {
-                        // Try signing in with custom token
-                        firebaseAuth.signInWithCustomToken(initialAuthToken)
-                            .then(() => {
-                                console.log('✅ Signed in with custom token.');
-                            })
-                            .catch((error) => {
-                                console.error('Custom token sign-in failed, signing in anonymously:', error.message);
-                                firebaseAuth.signInAnonymously();
-                            });
-                    } else {
-                        // Sign in anonymously if no token is available
-                        firebaseAuth.signInAnonymously()
-                            .then(() => {
-                                console.log('✅ Signed in anonymously.');
-                            })
-                            .catch((error) => {
-                                console.error('Anonymous sign-in failed:', error.message);
-                                loadFromStorage();
-                                initializeDataArrays();
-                                initializeUI();
-                                showMessage('❌ Auth failed, using local storage.', 'error');
-                            });
-                    }
-                });
+                showMessage('✅ Cloud connected • Real-time sync active', 'success');
+                document.getElementById('systemStatus').textContent = '✅ Cloud connected • Real-time sync active';
                 
             } catch (error) {
-                console.error('Firebase initialization failed:', error);
-                loadFromStorage();
-                initializeDataArrays();
-                initializeUI();
-                showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
+                console.log('Firebase initialization failed:', error);
+                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
             }
         }
 
-        function loadFromFirebase() {
-            try {
-                if (!firebaseDB) {
-                    console.error("Database instance not available.");
-                    return;
-                }
-                // Set up real-time listener to the global data node
-                firebaseDB.ref('progloveData').on('value', (snapshot) => {
-                    if (snapshot.exists()) {
-                        const firebaseData = snapshot.val();
-                        window.appData = { ...window.appData, ...firebaseData };
-                        initializeDataArrays(); 
-                        console.log('✅ Data loaded from Firebase');
-                        showMessage('✅ Connected to Cloud', 'success');
-                    } else {
-                        // If node doesn't exist, use local data and push it up once.
-                        initializeDataArrays(); 
-                        syncToFirebase(); // Attempt to push current (local) state to Firebase
-                        showMessage('✅ Cloud connected (node empty, initialized local data)', 'info');
-                    }
-                    initializeUI();
-                }, (error) => {
-                    // --- THIS IS THE CRITICAL ERROR CHECK BLOCK ---
-                    console.error('Firebase Realtime Database connection error:', error);
-                    
-                    let message = '⚠️ Using local storage (Realtime DB read failed)';
-                    if (error.code === 'PERMISSION_DENIED') {
-                        message = '❌ Permission Denied! Check your Realtime Database Security Rules for "progloveData" path.';
-                    }
-                    
-                    loadFromStorage();
-                    initializeDataArrays();
-                    initializeUI();
-                    showMessage(message, 'error');
-                    // --- END OF CRITICAL ERROR CHECK BLOCK ---
-                });
-            } catch (error) {
-                console.error('Firebase error in loadFromFirebase:', error);
-                loadFromStorage();
-                initializeDataArrays();
-                initializeUI();
-            }
-        }
+        function setupFirebaseListeners() {
+            if (!database) return;
 
-        function syncToFirebase() {
-            try {
-                // Only sync if DB is initialized and a user is authenticated
-                if (!firebaseDB || !firebaseAuth.currentUser) {
+            const appDataRef = ref(database, 'appData');
+            onValue(appDataRef, (snapshot) => {
+                const firebaseAppData = snapshot.val();
+                if (firebaseAppData) {
+                    // IMPORTANT: Load ALL data from Firebase
+                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
+                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
+                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
+                    window.appData.myScans = firebaseAppData.myScans || [];
+                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
+                    window.appData.customerData = firebaseAppData.customerData || [];
+                    
+                    updateDisplay();
+                    updateOvernightStats();
                     saveToStorage();
-                    return;
-                }
-                firebaseDB.ref('progloveData').set(window.appData)
-                    .then(() => {
-                        window.appData.lastSync = new Date().toISOString();
-                        console.log('✅ Data synced to Firebase');
-                    })
-                    .catch((error) => {
-                        console.error('Firebase sync failed:', error);
-                        saveToStorage();
-                        showMessage('❌ Cloud Sync Failed (Using Local Backup)', 'error');
+                    
+                    console.log('✅ Data loaded from Firebase:', {
+                        activeBowls: window.appData.activeBowls.length,
+                        preparedBowls: window.appData.preparedBowls.length,
+                        returnedBowls: window.appData.returnedBowls.length
                     });
-            } catch (error) {
-                console.error('Sync error:', error);
-                saveToStorage();
-            }
-        }
-
-        function saveToStorage() {
-            try {
-                localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-            } catch (error) {
-                console.error('Local storage save failed:', error);
-            }
-        }
-
-        function loadFromStorage() {
-            try {
-                const saved = localStorage.getItem('proglove_data');
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    window.appData = { ...window.appData, ...parsed };
-                    console.log('📁 Data loaded from local storage (backup)');
                 }
-            } catch (error) {
-                console.error('Local storage load failed:', error);
-                initializeDataArrays();
+            });
+        }
+
+        async function syncToFirebase() {
+            if (!database) {
+                throw new Error('Firebase not available');
             }
-        }
-
-        function initializeDataArrays() {
-            if (!window.appData.myScans) window.appData.myScans = [];
-            if (!window.appData.activeBowls) window.appData.activeBowls = [];
-            if (!window.appData.preparedBowls) window.appData.preparedBowls = [];
-            if (!window.appData.returnedBowls) window.appData.returnedBowls = [];
-            if (!window.appData.scanHistory) window.appData.scanHistory = [];
-            if (!window.appData.customerData) window.appData.customerData = [];
-            if (!window.appData.dishTimes) window.appData.dishTimes = {};
-        }
-
-        function initializeUI() {
-            if (document.getElementById('userDropdown').options.length <= 1) {
-                initializeUsers();
-            }
-            updateDisplay();
-            updateOvernightStats();
-            startDailyResetTimer();
-            startSyncTimer(); 
             
-            document.getElementById('progloveInput').addEventListener('input', handleScanInput);
-            document.addEventListener('click', updateLastActivity);
-            document.addEventListener('keydown', updateLastActivity);
-
-            // FIX: Ensure the default mode is set only after all UI elements are initialized
-            if (!window.appData.mode) {
-                 setMode('kitchen'); 
-            }
-        }
-
-        function startSyncTimer() {
-            // Keep the sync timer logic for robust, regular updates
-            setInterval(() => {
-                syncToFirebase(); // Attempt sync every 30 seconds
-                document.getElementById('lastSyncDisplay').textContent = formatDisplayDate(window.appData.lastSync);
-            }, 30000); 
-        }
-
-        function updateLastActivity() {
-            window.appData.lastActivity = new Date().toISOString(); 
-            document.getElementById('lastActivityDisplay').textContent = formatDisplayDate(window.appData.lastActivity);
-        }
-
-        function handleScanInput(e) {
-            if (!window.appData.scanning) return;
-            const input = e.target;
-            const scanValue = input.value.trim();
-            
-            const fullCode = scanValue.toUpperCase().trim();
-            
-            if (fullCode.includes('VYT')) { 
-                input.value = '';
-                if (!window.appData.user) {
-                    showMessage('❌ Select user first', 'error');
-                    return;
-                }
+            try {
+                const backupData = {
+                    activeBowls: [...window.appData.activeBowls],
+                    preparedBowls: [...window.appData.preparedBowls],
+                    returnedBowls: [...window.appData.returnedBowls],
+                    myScans: [...window.appData.myScans],
+                    scanHistory: [...window.appData.scanHistory],
+                    customerData: [...window.appData.customerData],
+                    lastSync: new Date().toISOString()
+                };
                 
-                processScan(fullCode); 
+                await set(ref(database, 'appData'), backupData);
+                return true;
+            } catch (error) {
+                console.log('Firebase sync failed:', error);
+                throw error;
             }
-            updateLastActivity();
         }
 
-        function initializeUsers() {
-            const dropdown = document.getElementById('userDropdown');
-            if (!dropdown) return;
-            
-            dropdown.innerHTML = '<option value="">-- Select User --</option>';
-            USERS.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.name;
-                option.textContent = user.name + (user.role ? ` (${user.role})` : '');
-                dropdown.appendChild(option);
-            });
-        }
-
-        function setMode(mode) {
-            window.appData.mode = mode;
-            window.appData.user = null;
-            window.appData.dishLetter = null;
-            window.appData.scanning = false;
-            
-            document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
-            document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
-            document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
-            document.getElementById('userDropdown').value = '';
-            // Only attempt to access dishDropdown if it exists and is relevant
-            const dishDropdown = document.getElementById('dishDropdown');
-            if (dishDropdown) dishDropdown.value = '';
-
-            document.getElementById('progloveInput').value = '';
-            
-            loadUsers();
-            updateStatsLabels();
-            updateDisplay();
-            showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
-        }
-
-        function updateStatsLabels() {
-            const label = document.getElementById('prepLabel');
-            if (label) label.textContent = window.appData.mode === 'kitchen' ? 'Prepared Today' : 'Returned Today';
-        }
-
-        function loadUsers() {
-            const dropdown = document.getElementById('userDropdown');
-            if (!dropdown) return;
-            
-            dropdown.innerHTML = '<option value="">-- Select User --</option>';
-            const users = window.appData.mode === 'kitchen' ? 
-                USERS.filter(u => u.role === 'Kitchen') : 
-                USERS.filter(u => u.role === 'Return');
-            
-            users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.name;
-                option.textContent = user.name;
-                dropdown.appendChild(option);
-            });
-        }
-
-        function loadDishLetters() {
-            const dropdown = document.getElementById('dishDropdown');
-            if (!dropdown) return;
-            
-            dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
-            // This defines the list of available dish letters: A-Z followed by 1, 2, 3, 4.
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'.split('').forEach(char => {
-                const option = document.createElement('option');
-                option.value = char;
-                option.textContent = char;
-                dropdown.appendChild(option);
-            });
-        }
-
-        function selectDishLetter() {
-            const dropdown = document.getElementById('dishDropdown');
-            if (!dropdown) return;
-            
-            window.appData.dishLetter = dropdown.value;
-            if (window.appData.dishLetter) {
-                showMessage(`📝 Dish ${window.appData.dishLetter}`, 'success');
-            }
-            updateDisplay();
-        }
-
-        function startScanning() {
-            if (!window.appData.user) {
-                showMessage('❌ Select user first', 'error');
+        async function loadFromFirebase() {
+            if (!database) {
+                showMessage('❌ Firebase not available', 'error');
                 return;
-            }
-            if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
-                showMessage('❌ Select dish letter first', 'error');
-                return;
-            }
-            window.appData.scanning = true;
-            updateDisplay();
-            document.getElementById('progloveInput').focus(); 
-            showMessage(`🎯 SCANNING ACTIVE - Cloud Sync`, 'success');
-        }
-
-        function stopScanning() {
-            window.appData.scanning = false;
-            syncToFirebase();
-            updateDisplay();
-            showMessage(`⏹ Scanning stopped - Cloud Sync Complete`, 'info');
-        }
-
-        function processScan(code) {
-            const startTime = Date.now();
-            let result;
-            
-            let actualMode = window.appData.mode; 
-
-            // FORCING RULE: Kitchen mode forced between 10 PM - 10 AM (Germany Time)
-            if (isKitchenTime()) {
-                actualMode = 'kitchen';
             }
             
             try {
-                if (actualMode === 'kitchen') {
-                    if (!window.appData.user) {
-                         return { message: "❌ KITCHEN MODE: Select user first", type: "error", responseTime: 0 };
-                    }
-                    const dish = window.appData.dishLetter || "AUTO";
-                    result = kitchenScan(code, dish);
-                } else if (actualMode === 'return') {
-                     if (!window.appData.user) {
-                         return { message: "❌ RETURN MODE: Select user first", type: "error", responseTime: 0 };
-                    }
-                    result = returnScan(code);
+                const appDataRef = ref(database, 'appData');
+                const snapshot = await get(appDataRef);
+                const data = snapshot.val();
+                
+                if (data) {
+                    window.appData.activeBowls = data.activeBowls || [];
+                    window.appData.preparedBowls = data.preparedBowls || [];
+                    window.appData.returnedBowls = data.returnedBowls || [];
+                    window.appData.myScans = data.myScans || [];
+                    window.appData.scanHistory = data.scanHistory || [];
+                    window.appData.customerData = data.customerData || [];
+                    
+                    updateDisplay();
+                    updateOvernightStats();
+                    saveToStorage();
+                    
+                    showMessage('✅ Data loaded from cloud', 'success');
                 } else {
-                    return { message: "❌ Select a mode first.", type: "error", responseTime: 0 };
+                    showMessage('ℹ️ No data found in cloud', 'info');
                 }
-
             } catch (error) {
-                console.error("Error during scan process:", error);
-                result = { message: "System error: " + error.message, type: "error", responseTime: 0 };
-            }
-            
-            const responseTimeEl = document.getElementById('responseTimeValue');
-            if(responseTimeEl) responseTimeEl.textContent = (Date.now() - startTime) + 'ms';
-
-            showMessage(result.message, result.type);
-            
-            if (result.type === 'error') {
-                const input = document.getElementById('progloveInput');
-                if (input) {
-                    input.classList.add('error');
-                    setTimeout(() => input.classList.remove('error'), 2000);
-                }
-            }
-            
-            updateDisplay();
-            updateOvernightStats();
-            syncToFirebase(); 
-            return result;
-        }
-
-
-        function kitchenScan(code, dish) {
-            const startTime = Date.now();
-            const today = getStandardizedDate();
-            
-            if (!window.appData.preparedBowls) window.appData.preparedBowls = [];
-            
-            if (window.appData.preparedBowls.some(bowl => bowl.code === code && extractDateFromISO(bowl.timestamp) === today)) {
-                return { message: "❌ Already prepared: " + code.split('/').pop(), type: "error", responseTime: Date.now() - startTime };
-            }
-            
-            // Remove from active list if it was mistakenly prepared twice
-            window.appData.activeBowls = (window.appData.activeBowls || []).filter(bowl => bowl.code !== code);
-            
-            const newBowl = {
-                code: code, 
-                dish: dish, 
-                user: window.appData.user,
-                // Assigning default placeholder values for metadata
-                company: "Unknown", 
-                customer: "Unknown", 
-                date: today,
-                time: new Date().toLocaleTimeString(), 
-                timestamp: new Date().toISOString(), 
-                status: 'PREPARED'
-            };
-            
-            window.appData.preparedBowls.push(newBowl);
-            
-            window.appData.myScans.push({type: 'kitchen', code: code, dish: dish, user: window.appData.user, timestamp: new Date().toISOString()});
-            
-            updateDishTimes(dish, window.appData.user);
-            
-            return { message: `✅ PREPARED: ${code.split('/').pop()} (Dish ${dish})`, type: "success", responseTime: Date.now() - startTime };
-        }
-
-        function returnScan(code) {
-            const startTime = Date.now();
-            const today = getStandardizedDate();
-            
-            if (!window.appData.returnedBowls) window.appData.returnedBowls = [];
-            
-            if (window.appData.returnedBowls.some(bowl => bowl.code === code && extractDateFromISO(bowl.timestamp) === today)) {
-                return { message: "⚠️ Already returned today: " + code.split('/').pop(), type: "warning", responseTime: Date.now() - startTime };
-            }
-            
-            // Check if it was ever prepared today (or in prepared list)
-            const preparedBowl = (window.appData.preparedBowls || []).find(bowl => bowl.code === code);
-            
-            if (!preparedBowl) {
-                 return { message: "⚠️ Bowl not found in prepared list (Manual return log only)", type: "warning", responseTime: Date.now() - startTime };
-            }
-
-            // Remove from prepared list (since it's now returned)
-            window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => bowl.code !== code);
-            
-            const returnedBowl = {
-                code: code,
-                dish: preparedBowl.dish, 
-                user: window.appData.user,
-                preparedBy: preparedBowl.user,
-                company: preparedBowl.company,
-                customer: preparedBowl.customer,
-                returnTime: new Date().toLocaleTimeString(), 
-                timestamp: new Date().toISOString(),
-                returnDate: today,
-                status: 'RETURNED'
-            };
-            
-            window.appData.returnedBowls.push(returnedBowl);
-            
-            window.appData.myScans.push({type: 'return', code: code, user: window.appData.user, timestamp: new Date().toISOString()});
-            
-            return { message: `♻️ RETURNED: ${code.split('/').pop()} (Dish ${preparedBowl.dish})`, type: "success", responseTime: Date.now() - startTime };
-        }
-
-
-        function handleJsonImport() {
-            const jsonInput = document.getElementById('jsonInput').value.trim();
-            if (!jsonInput) {
-                showMessage('❌ Paste JSON data first.', 'error');
-                return;
-            }
-
-            let bowls;
-            try {
-                bowls = JSON.parse(jsonInput);
-                if (!Array.isArray(bowls)) {
-                    throw new Error("JSON is not an array.");
-                }
-            } catch (e) {
-                showMessage(`❌ Invalid JSON format: ${e.message}`, 'error');
-                return;
-            }
-
-            let updatedCount = 0;
-            let activatedCount = 0;
-            const today = getStandardizedDate();
-
-            bowls.forEach(importedBowl => {
-                if (!importedBowl.code || !importedBowl.dish || !importedBowl.company || !importedBowl.customer) {
-                    console.warn("Skipping invalid bowl object:", importedBowl);
-                    return;
-                }
-                
-                const code = importedBowl.code.toUpperCase().trim();
-                
-                // 1. Update customerData/metadata
-                const existingCustomer = (window.appData.customerData || []).find(c => c.code === code);
-                if (existingCustomer) {
-                    existingCustomer.company = importedBowl.company;
-                    existingCustomer.customer = importedBowl.customer;
-                    updatedCount++;
-                } else {
-                    window.appData.customerData.push({
-                        code: code,
-                        company: importedBowl.company,
-                        customer: importedBowl.customer,
-                        // dish here is just for reference, primary dish comes from kitchen scan
-                        referenceDish: importedBowl.dish 
-                    });
-                    updatedCount++;
-                }
-
-                // 2. Automatically "prepare" or re-activate the bowl if it's not already prepared today
-                const isPreparedToday = (window.appData.preparedBowls || []).some(
-                    pb => pb.code === code && extractDateFromISO(pb.timestamp) === today
-                );
-                
-                if (!isPreparedToday) {
-                    // Treat this import as if the kitchen prepared it with placeholder user/time
-                    window.appData.preparedBowls.push({
-                        code: code, 
-                        dish: importedBowl.dish, 
-                        user: "Imported",
-                        company: importedBowl.company, 
-                        customer: importedBowl.customer, 
-                        date: today,
-                        time: new Date().toLocaleTimeString(), 
-                        timestamp: new Date().toISOString(), 
-                        status: 'PREPARED'
-                    });
-                    activatedCount++;
-                }
-            });
-
-            // Clean up the JSON input field after successful import
-            document.getElementById('jsonInput').value = '';
-            
-            showMessage(`✅ Data Imported: ${updatedCount} records processed. ${activatedCount} bowls activated/re-prepared.`, 'success');
-            
-            updateDisplay();
-            syncToFirebase();
-        }
-
-
-        function updateDishTimes(dish, user) {
-            if (!window.appData.dishTimes) window.appData.dishTimes = {};
-            if (!window.appData.dishTimes[dish]) {
-                window.appData.dishTimes[dish] = { count: 0, firstScan: new Date().toISOString(), users: {} };
-            }
-            
-            const dishStat = window.appData.dishTimes[dish];
-            dishStat.count++;
-            dishStat.lastScan = new Date().toISOString();
-            
-            if (!dishStat.users[user]) {
-                dishStat.users[user] = 0;
-            }
-            dishStat.users[user]++;
-        }
-
-        function updateDisplay() {
-            // Update Scanner Card status
-            const scannerCard = document.getElementById('scannerCard');
-            const inputField = document.getElementById('progloveInput');
-            
-            if (scannerCard) scannerCard.classList.toggle('active', window.appData.scanning);
-            if (inputField) inputField.disabled = !window.appData.scanning;
-
-            // Update user/dish dropdowns based on state
-            const userDropdown = document.getElementById('userDropdown');
-            if (userDropdown && userDropdown.value !== window.appData.user) userDropdown.value = window.appData.user || '';
-            
-            const dishDropdown = document.getElementById('dishDropdown');
-            if (dishDropdown && dishDropdown.value !== window.appData.dishLetter) dishDropdown.value = window.appData.dishLetter || '';
-
-
-            // Update Summary Stats
-            const today = getStandardizedDate();
-
-            const preparedToday = (window.appData.preparedBowls || []).filter(
-                bowl => extractDateFromISO(bowl.timestamp) === today
-            ).length;
-            
-            const returnedToday = (window.appData.returnedBowls || []).filter(
-                bowl => extractDateFromISO(bowl.timestamp) === today
-            ).length;
-
-            const prepCountEl = document.getElementById('prepCount');
-            const returnCountEl = document.getElementById('returnCount');
-            const activeCountEl = document.getElementById('activeCount');
-
-            if (prepCountEl) prepCountEl.textContent = preparedToday;
-            if (returnCountEl) returnCountEl.textContent = returnedToday;
-            if (activeCountEl) activeCountEl.textContent = preparedToday - returnedToday; 
-            
-            const lastActivityEl = document.getElementById('lastActivityDisplay');
-            const lastSyncEl = document.getElementById('lastSyncDisplay');
-            const lastCleanupEl = document.getElementById('lastCleanupDisplay');
-
-            if (lastActivityEl) lastActivityEl.textContent = formatDisplayDate(window.appData.lastActivity);
-            if (lastSyncEl) lastSyncEl.textContent = formatDisplayDate(window.appData.lastSync);
-            if (lastCleanupEl) lastCleanupEl.textContent = formatDisplayDate(window.appData.lastCleanup);
-            
-            updateStatsLabels();
-        }
-
-        function updateOvernightStats() {
-            const tbody = document.getElementById('overnightStatsBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '';
-            
-            const dishEntries = Object.entries(window.appData.dishTimes).sort((a, b) => b[1].count - a[1].count);
-
-            if (dishEntries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-2 text-center text-gray-500">No dish statistics recorded today.</td></tr>';
-                return;
-            }
-            
-            dishEntries.forEach(([dish, stats]) => {
-                const userList = Object.entries(stats.users)
-                    .sort((a, b) => b[1] - a[1]) 
-                    .map(([user, count]) => `${user} (${count})`)
-                    .join(', ');
-
-                const row = `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-3 py-2 font-bold text-gray-900">${dish}</td>
-                        <td class="px-3 py-2">${stats.count}</td>
-                        <td class="px-3 py-2 text-xs">${formatDisplayDate(stats.firstScan)}</td>
-                        <td class="px-3 py-2 text-xs">${formatDisplayDate(stats.lastScan)}</td>
-                        <td class="px-3 py-2 text-xs text-gray-600">${userList}</td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
-            
-            // Update cycle info based on time logic
-            const hour = getGermanyHour();
-            const cycleInfo = document.getElementById('cycleInfo');
-            if (cycleInfo) {
-                if (isKitchenTime()) {
-                    cycleInfo.textContent = `FORCED KITCHEN WINDOW ACTIVE (Germany time: ${hour}:00 - Next reset at 10:00)`;
-                    cycleInfo.classList.add('text-red-600');
-                    cycleInfo.classList.remove('text-green-600');
-                } else {
-                    cycleInfo.textContent = `Normal operation (Germany time: ${hour}:00 - Kitchen window opens at 22:00)`;
-                    cycleInfo.classList.add('text-green-600');
-                    cycleInfo.classList.remove('text-red-600');
-                }
+                showMessage('❌ Error loading from cloud', 'error');
             }
         }
 
-
-        function startDailyResetTimer() {
-            // Checks for cleanup every hour and performs it if conditions are met
-            setInterval(checkAndPerformCleanup, 3600000); // Check every hour
-            checkAndPerformCleanup(); // Run immediately on load
-        }
-
-        function checkAndPerformCleanup() {
-            const today = getStandardizedDate();
-            
-            // Perform cleanup if we haven't today AND if it is past 10 AM Germany time (after kitchen window closes)
-            if (window.appData.lastCleanup !== today && getGermanyHour() >= 10) {
-                performDailyCleanup();
-            }
-            
-            // Only perform Return data cleanup if it hasn't been done today and it is after 1 AM Germany time
-            if (window.appData.lastReturnCleanup !== today && getGermanyHour() >= 1) {
-                performReturnDataCleanup();
-            }
-        }
-
-        function performDailyCleanup() {
-            console.log('--- PERFORMING DAILY CLEANUP ---');
-            
-            // 1. Reset prepared bowls and stats (data that needs to be fresh daily)
-            window.appData.preparedBowls = [];
-            window.appData.dishTimes = {};
-            
-            // 2. Archive scan history (optional, keeping it simple by only resetting)
-            window.appData.scanHistory = []; 
-            window.appData.myScans = [];
-            
-            // 3. Update cleanup timestamp
-            window.appData.lastCleanup = getStandardizedDate(); 
-
-            showMessage('🧹 Daily data reset complete (Prepared bowls, Stats).', 'info');
-            syncToFirebase();
-        }
-        
-        function performReturnDataCleanup() {
-            console.log('--- PERFORMING RETURN DATA CLEANUP ---');
-            
-            // Keep only the returns from today
-            const today = getStandardizedDate();
-            const returnsToKeep = (window.appData.returnedBowls || []).filter(
-                bowl => extractDateFromISO(bowl.timestamp) === today
-            );
-            window.appData.returnedBowls = returnsToKeep;
-            
-            window.appData.lastReturnCleanup = today;
-            
-            showMessage('🧹 Old return data archived/cleaned.', 'info');
-            syncToFirebase();
-        }
-
-        function showMessage(message, type = 'info') {
-            const feedbackElement = document.getElementById('feedback');
-            if (!feedbackElement) return;
-
-            feedbackElement.textContent = message;
-            feedbackElement.className = `feedback ${type} block`;
-            
-            // Hide after 5 seconds unless it's an error
-            if (type !== 'error') {
-                setTimeout(() => {
-                    feedbackElement.classList.add('hidden');
-                }, 5000);
-            }
-        }
-
-        // --- EXPORT FUNCTIONS ---
-        function downloadJson(data, filename) {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", filename);
-            document.body.appendChild(downloadAnchorNode); 
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        }
-
-        function exportActiveBowls() {
-            const activeBowls = (window.appData.preparedBowls || []).filter(
-                pb => !(window.appData.returnedBowls || []).some(rb => rb.code === pb.code && extractDateFromISO(rb.timestamp) === getStandardizedDate())
-            );
-            downloadJson(activeBowols, `active_bowls_${getStandardizedDate()}.json`);
-            showMessage('⬇️ Active Bowls data exported.', 'info');
-        }
-
-        function exportReturnData() {
-             const returnedBowls = (window.appData.returnedBowls || []).filter(
-                rb => extractDateFromISO(rb.timestamp) === getStandardizedDate()
-            );
-            downloadJson(returnedBowls, `returned_data_${getStandardizedDate()}.json`);
-            showMessage('⬇️ Return data exported.', 'info');
-        }
-
-        function exportAllData() {
-            downloadJson(window.appData, `proglove_full_backup_${getStandardizedDate()}.json`);
-            showMessage('⬇️ Full System Backup exported.', 'info');
-        }
+        window.initializeFirebase = initializeFirebase;
+        window.syncToFirebase = syncToFirebase;
+        window.loadFromFirebase = loadFromFirebase;
     </script>
+
+    <!-- Main Application Logic -->
+    <script src="code.js"></script>
 </body>
 </html>
