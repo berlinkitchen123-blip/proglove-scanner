@@ -344,10 +344,12 @@ function returnScan(code) {
     const today = getStandardizedDate();
     
     console.log('🔄 returnScan STARTED with:', originalCode);
+    console.log('🔍 Current user:', window.appData.user);
     
     try {
         // Check if already returned today
-        if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
+        const alreadyReturned = window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today);
+        if (alreadyReturned) {
             return { message: "❌ Already returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
         }
         
@@ -360,7 +362,6 @@ function returnScan(code) {
             sourceBowl = window.appData.preparedBowls[preparedIndex];
             sourceType = 'prepared';
             window.appData.preparedBowls.splice(preparedIndex, 1);
-            console.log('📦 Found in prepared bowls, removed from prepared');
         } 
         // Then check active bowls
         else {
@@ -369,7 +370,6 @@ function returnScan(code) {
                 sourceBowl = window.appData.activeBowls[activeIndex];
                 sourceType = 'active';
                 window.appData.activeBowls.splice(activeIndex, 1);
-                console.log('📦 Found in active bowls, removed from active');
             }
         }
         
@@ -377,7 +377,7 @@ function returnScan(code) {
             return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
         }
         
-        // 🎯 SAFELY CREATE returned bowl - don't use spread if sourceBowl is corrupted
+        // Create returned bowl entry
         const returnedBowl = {
             code: sourceBowl.code || originalCode,
             dish: sourceBowl.dish || "Unknown",
@@ -396,7 +396,6 @@ function returnScan(code) {
         };
         
         window.appData.returnedBowls.push(returnedBowl);
-        console.log('✅ Added to returned bowls');
         
         // Add to my scans
         window.appData.myScans.push({
@@ -420,12 +419,10 @@ function returnScan(code) {
             syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
         }
         
-        console.log('🔄 returnScan COMPLETED SUCCESSFULLY');
         return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
         
     } catch (error) {
         console.error('❌ returnScan ERROR:', error);
-        console.error('Error details:', error.message, error.stack);
         return { message: "❌ System error during return: " + error.message, type: "error", responseTime: Date.now() - startTime };
     }
 }
