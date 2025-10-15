@@ -1,4 +1,4 @@
-// ProGlove Scanner - Complete System
+// ProGlove Scanner - Complete System (Firebase Cloud Sync)
 window.appData = {
     mode: null, user: null, dishLetter: null, scanning: false,
     myScans: [], activeBowls: [], preparedBowls: [], returnedBowls: [],
@@ -24,8 +24,87 @@ function isKitchenTime() {
     return hour >= 22 || hour < 10;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    loadFromStorage();
+// Initialize Firebase and load data
+function initializeFirebase() {
+    try {
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
+            authDomain: "proglove-scanner.firebaseapp.com",
+            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "proglove-scanner",
+            storageBucket: "proglove-scanner.firebasestorage.app",
+            messagingSenderId: "177575768177",
+            appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // Load data from Firebase
+        loadFromFirebase();
+        
+    } catch (error) {
+        console.error('Firebase initialization failed:', error);
+        // Fallback to localStorage
+        loadFromStorage();
+        initializeUI();
+        showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
+        document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
+    }
+}
+
+// Load data from Firebase (PRIMARY)
+function loadFromFirebase() {
+    try {
+        const db = firebase.database();
+        const appDataRef = db.ref('progloveData');
+        
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+            console.log('Firebase connection timeout');
+            loadFromStorage();
+            initializeUI();
+            showMessage('⚠️ Offline mode - Cloud connection failed', 'warning');
+            document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Connection Timeout';
+        }, 10000);
+
+        appDataRef.on('value', (snapshot) => {
+            clearTimeout(connectionTimeout);
+            
+            if (snapshot.exists()) {
+                const firebaseData = snapshot.val();
+                window.appData = { ...window.appData, ...firebaseData };
+                console.log('✅ Data loaded from Firebase');
+                showMessage('✅ Connected to Cloud • Real-time sync active', 'success');
+                document.getElementById('systemStatus').textContent = '✅ Cloud Connected • Real-time Sync';
+                document.getElementById('backupStatus').textContent = '💾 Cloud sync active';
+            } else {
+                // No data in Firebase, try localStorage
+                loadFromStorage();
+                showMessage('✅ Cloud connected (no data yet)', 'info');
+                document.getElementById('systemStatus').textContent = '✅ Cloud Connected • No Data Yet';
+            }
+            initializeUI();
+        }, (error) => {
+            clearTimeout(connectionTimeout);
+            console.error('Firebase load error:', error);
+            // Fallback to localStorage
+            loadFromStorage();
+            initializeUI();
+            showMessage('⚠️ Using local storage', 'warning');
+            document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Load Error';
+        });
+    } catch (error) {
+        console.error('Firebase error:', error);
+        loadFromStorage();
+        initializeUI();
+    }
+}
+
+// Initialize UI after data is loaded
+function initializeUI() {
     initializeUsers();
     updateDisplay();
     updateOvernightStats();
@@ -34,6 +113,85 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('progloveInput').addEventListener('input', handleScanInput);
     document.addEventListener('click', updateLastActivity);
     document.addEventListener('keydown', updateLastActivity);
+}
+
+// Sync to Firebase (PRIMARY storage)
+function syncToFirebase() {
+    try {
+        const db = firebase.database();
+        const backupData = {
+            activeBowls: [...window.appData.activeBowls],
+            preparedBowls: [...window.appData.preparedBowls],
+            returnedBowls: [...window.appData.returnedBowls],
+            myScans: [...window.appData.myScans],
+            scanHistory: [...window.appData.scanHistory],
+            customerData: [...window.appData.customerData],
+            dishTimes: {...window.appData.dishTimes},
+            lastCleanup: window.appData.lastCleanup,
+            lastSync: new Date().toISOString()
+        };
+        
+        db.ref('progloveData').set(backupData)
+            .then(() => {
+                window.appData.lastSync = new Date().toISOString();
+                console.log('✅ Data synced to Firebase');
+            })
+            .catch((error) => {
+                console.error('Firebase sync failed:', error);
+                // Save to localStorage as backup
+                saveToStorage();
+            });
+    } catch (error) {
+        console.error('Sync error:', error);
+        saveToStorage();
+    }
+}
+
+// Load from Firebase manually
+function loadFromFirebaseManual() {
+    showMessage('🔄 Loading from cloud...', 'info');
+    loadFromFirebase();
+}
+
+// localStorage is now only a BACKUP
+function saveToStorage() {
+    try {
+        localStorage.setItem('proglove_data', JSON.stringify(window.appData));
+    } catch (error) {
+        console.error('Local storage save failed:', error);
+    }
+}
+
+function loadFromStorage() {
+    try {
+        const saved = localStorage.getItem('proglove_data');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            window.appData = { ...window.appData, ...parsed };
+            console.log('📁 Data loaded from local storage (backup)');
+        }
+    } catch (error) {
+        console.error('Local storage load failed:', error);
+        // Initialize empty arrays if everything fails
+        initializeDataArrays();
+    }
+}
+
+function initializeDataArrays() {
+    // Ensure all arrays exist
+    if (!window.appData.myScans) window.appData.myScans = [];
+    if (!window.appData.activeBowls) window.appData.activeBowls = [];
+    if (!window.appData.preparedBowls) window.appData.preparedBowls = [];
+    if (!window.appData.returnedBowls) window.appData.returnedBowls = [];
+    if (!window.appData.scanHistory) window.appData.scanHistory = [];
+    if (!window.appData.customerData) window.appData.customerData = [];
+    if (!window.appData.dishTimes) window.appData.dishTimes = {};
+}
+
+// Start the application
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Scanner System Starting...');
+    initializeFirebase(); // Initialize Firebase FIRST
 });
 
 function updateLastActivity() {
@@ -62,6 +220,8 @@ function handleScanInput(e) {
 
 function initializeUsers() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
     USERS.forEach(user => {
         const option = document.createElement('option');
@@ -87,7 +247,7 @@ function setMode(mode) {
     loadUsers();
     updateStatsLabels();
     updateDisplay();
-    showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
+    showMessage(`📱 ${mode.toUpperCase()} mode - Cloud Sync`, 'info');
 }
 
 function updateStatsLabels() {
@@ -97,10 +257,13 @@ function updateStatsLabels() {
 
 function loadUsers() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
     const users = window.appData.mode === 'kitchen' ? 
         USERS.filter(u => u.role === 'Kitchen') : 
         USERS.filter(u => u.role === 'Return');
+    
     users.forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
@@ -111,6 +274,8 @@ function loadUsers() {
 
 function selectUser() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     window.appData.user = dropdown.value;
     if (window.appData.user) {
         showMessage(`✅ ${window.appData.user} selected`, 'success');
@@ -124,6 +289,8 @@ function selectUser() {
 
 function loadDishLetters() {
     const dropdown = document.getElementById('dishDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'.split('').forEach(char => {
         const option = document.createElement('option');
@@ -135,6 +302,8 @@ function loadDishLetters() {
 
 function selectDishLetter() {
     const dropdown = document.getElementById('dishDropdown');
+    if (!dropdown) return;
+    
     window.appData.dishLetter = dropdown.value;
     if (window.appData.dishLetter) {
         showMessage(`📝 Dish ${window.appData.dishLetter}`, 'success');
@@ -154,7 +323,7 @@ function startScanning() {
     window.appData.scanning = true;
     updateDisplay();
     document.getElementById('progloveInput').focus();
-    showMessage(`🎯 SCANNING ACTIVE`, 'success');
+    showMessage(`🎯 SCANNING ACTIVE - Cloud Sync`, 'success');
 }
 
 function stopScanning() {
@@ -185,7 +354,7 @@ function processScan(code) {
     
     updateDisplay();
     updateOvernightStats();
-    saveToStorage();
+    syncToFirebase(); // PRIMARY SYNC
     return result;
 }
 
@@ -197,7 +366,11 @@ function kitchenScan(code) {
         return { message: "❌ Already prepared: " + code, type: "error", responseTime: Date.now() - startTime };
     }
     
-    window.appData.activeBowls = window.appData.activeBowls.filter(bowl => bowl.code !== code);
+    // Only remove from activeBowls if it exists there
+    const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
+    if (activeIndex !== -1) {
+        window.appData.activeBowls.splice(activeIndex, 1);
+    }
     
     const newBowl = {
         code: code, dish: window.appData.dishLetter || "AUTO", user: window.appData.user,
@@ -209,7 +382,6 @@ function kitchenScan(code) {
     window.appData.myScans.push({type: 'kitchen', code: code, dish: window.appData.dishLetter, user: window.appData.user, timestamp: new Date().toISOString()});
     
     updateDishTimes(window.appData.dishLetter, window.appData.user);
-    saveToStorage();
     
     return { message: `✅ ${window.appData.dishLetter} Prepared: ${code}`, type: "success", responseTime: Date.now() - startTime };
 }
@@ -273,8 +445,6 @@ function returnScan(code) {
     const activeAfter = window.appData.activeBowls.length;
     const countChange = sourceType === 'active' ? ` (Active: ${activeBefore} → ${activeAfter})` : ' (From Prepared)';
     
-    saveToStorage();
-    
     return { 
         message: `✅ Returned: ${code}${countChange}`, 
         type: "success", 
@@ -318,9 +488,9 @@ function resetDailyStatistics() {
     });
     
     window.appData.lastCleanup = today;
-    saveToStorage();
+    syncToFirebase();
     updateDisplay();
-    showMessage('✅ Daily reset', 'success');
+    showMessage('✅ Daily reset - Cloud Sync', 'success');
 }
 
 function updateDisplay() {
@@ -385,7 +555,6 @@ function updateOvernightStats() {
         
         cycleInfo.textContent = cycleText;
         
-        // Safe filtering with null checks
         const overnightScans = (window.appData.myScans || []).filter(scan => {
             if (!scan || !scan.timestamp) return false;
             try {
@@ -459,32 +628,173 @@ function updateOvernightStats() {
     }
 }
 
-function saveToStorage() {
-    try {
-        localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-    } catch (error) {
-        console.error('Error saving to storage:', error);
-    }
-}
-
-function loadFromStorage() {
-    try {
-        const saved = localStorage.getItem('proglove_data');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            window.appData = {...window.appData, ...parsed};
-        }
-    } catch (error) {
-        console.error('Error loading from storage:', error);
-    }
-}
-
 function showMessage(text, type) {
     const element = document.getElementById('feedback');
     if (element) {
         element.textContent = text;
         element.className = 'feedback ' + type;
     }
+}
+
+// JSON IMPORT FUNCTIONS - FOR YOUR SPECIFIC JSON STRUCTURE
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    const jsonStatus = document.getElementById('jsonStatus');
+    const patchResults = document.getElementById('patchResults');
+    const patchSummary = document.getElementById('patchSummary');
+    const failedMatches = document.getElementById('failedMatches');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        const results = patchCustomerData(jsonData);
+        
+        // Update JSON status
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} VYT codes`;
+        
+        // Show patch results
+        patchResults.style.display = 'block';
+        patchSummary.innerHTML = `
+            ✅ ${results.matched} bowls updated | 
+            ❌ ${results.failed} failed matches |
+            🆕 ${results.created} new bowls created
+        `;
+        
+        // Show failed matches
+        if (results.failedCodes.length > 0) {
+            failedMatches.innerHTML = `
+                <strong>No matching bowls found for:</strong> ${results.failedCodes.slice(0, 10).join(', ')}${results.failedCodes.length > 10 ? '...' : ''}
+            `;
+        } else {
+            failedMatches.innerHTML = '';
+        }
+        
+        if (results.matched > 0 || results.created > 0) {
+            showMessage(`✅ Updated ${results.matched} bowls + Created ${results.created} new bowls`, 'success');
+            saveToStorage();
+            syncToFirebase();
+        } else {
+            showMessage('❌ No VYT codes found in JSON data', 'error');
+        }
+        
+    } catch (error) {
+        showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Invalid JSON format`;
+    }
+}
+
+function patchCustomerData(jsonData) {
+    let matched = 0;
+    let failed = 0;
+    let created = 0;
+    let total = 0;
+    const failedCodes = [];
+    
+    // Extract all VYT codes from your complex JSON structure
+    const vytCodes = [];
+    
+    if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+        jsonData.boxes.forEach(box => {
+            if (box.dishes && Array.isArray(box.dishes)) {
+                box.dishes.forEach(dish => {
+                    if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                        dish.bowlCodes.forEach(bowlCode => {
+                            if (bowlCode && bowlCode.trim()) {
+                                vytCodes.push({
+                                    code: bowlCode.trim().toUpperCase(),
+                                    company: jsonData.name || "Unknown Company",
+                                    customer: dish.name || "Unknown Dish",
+                                    dish: dish.label || "Unknown",
+                                    boxType: box.type || "Unknown"
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    total = vytCodes.length;
+    
+    vytCodes.forEach(item => {
+        const vytCodeUrl = item.code;
+        const company = item.company;
+        const customer = item.customer;
+        const dish = item.dish;
+        
+        if (!vytCodeUrl) {
+            failed++;
+            failedCodes.push('Empty VYT code');
+            return;
+        }
+        
+        // Search in active bowls - EXACT URL MATCH
+        let bowlFound = false;
+        
+        // Check active bowls first - exact URL match
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => 
+            bowl.code === vytCodeUrl
+        );
+        
+        if (activeIndex !== -1) {
+            // Update existing bowl
+            window.appData.activeBowls[activeIndex] = {
+                ...window.appData.activeBowls[activeIndex],
+                company: company || window.appData.activeBowls[activeIndex].company,
+                customer: customer || window.appData.activeBowls[activeIndex].customer,
+                dish: dish || window.appData.activeBowls[activeIndex].dish
+            };
+            bowlFound = true;
+            matched++;
+        } 
+        // Check prepared bowls
+        else {
+            const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === vytCodeUrl
+            );
+            
+            if (preparedIndex !== -1) {
+                window.appData.preparedBowls[preparedIndex] = {
+                    ...window.appData.preparedBowls[preparedIndex],
+                    company: company || window.appData.preparedBowls[preparedIndex].company,
+                    customer: customer || window.appData.preparedBowls[preparedIndex].customer,
+                    dish: dish || window.appData.preparedBowls[preparedIndex].dish
+                };
+                bowlFound = true;
+                matched++;
+            }
+        }
+        
+        if (!bowlFound) {
+            // Create new bowl if not found
+            const newBowl = {
+                code: vytCodeUrl,
+                company: company || "Unknown Company",
+                customer: customer || "Unknown Customer", 
+                dish: dish || "Unknown",
+                status: 'ACTIVE',
+                timestamp: new Date().toISOString(),
+                date: getStandardizedDate(),
+                source: 'json_import'
+            };
+            
+            window.appData.activeBowls.push(newBowl);
+            created++;
+        }
+    });
+    
+    return {
+        matched,
+        failed,
+        created,
+        total,
+        failedCodes
+    };
 }
 
 // Export functions
@@ -536,18 +846,6 @@ function exportAllData() {
     }
 }
 
-function processJsonData(data) {
-    try {
-        if (typeof data === 'string') {
-            data = JSON.parse(data);
-        }
-        return data;
-    } catch (error) {
-        console.error('Error processing JSON data:', error);
-        return null;
-    }
-}
-
 // Global functions
 window.setMode = setMode;
 window.selectUser = selectUser;
@@ -558,3 +856,5 @@ window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
 window.processJsonData = processJsonData;
+window.loadFromFirebaseManual = loadFromFirebaseManual;
+window.syncToFirebase = syncToFirebase;
