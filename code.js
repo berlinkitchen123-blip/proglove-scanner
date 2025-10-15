@@ -40,7 +40,6 @@ function getStandardizedDate(dateString = null) {
         }
         return date.toISOString().split('T')[0];
     } catch (error) {
-        console.error('❌ Date conversion error:', error);
         return new Date().toISOString().split('T')[0];
     }
 }
@@ -50,45 +49,21 @@ function isKitchenTime() {
         const currentHour = new Date().getHours();
         return currentHour >= 22 || currentHour < 10;
     } catch (error) {
-        console.error('❌ Time check error:', error);
         return false;
     }
 }
 
-// ========== SYSTEM DEBUG & VALIDATION ==========
-function validateSystem() {
-    try {
-        const errors = [];
-        
-        if (!window.appData) errors.push("❌ appData not initialized");
-        if (!Array.isArray(window.appData.activeBowls)) errors.push("❌ activeBowls not array");
-        if (!Array.isArray(window.appData.preparedBowls)) errors.push("❌ preparedBowls not array");
-        if (!Array.isArray(window.appData.returnedBowls)) errors.push("❌ returnedBowls not array");
-        if (!Array.isArray(window.appData.myScans)) errors.push("❌ myScans not array");
-        
-        if (errors.length > 0) {
-            console.error('SYSTEM VALIDATION ERRORS:', errors);
-            return false;
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('❌ validateSystem error:', error);
-        return false;
-    }
-}
-
-function debugSystem() {
-    console.log('=== SYSTEM DEBUG ===');
-    console.log('User:', window.appData.user);
-    console.log('Mode:', window.appData.mode);
-    console.log('Dish Letter:', window.appData.dishLetter);
-    console.log('Scanning:', window.appData.scanning);
-    console.log('Active bowls:', window.appData.activeBowls.length);
-    console.log('Prepared bowls:', window.appData.preparedBowls.length);
-    console.log('Returned bowls:', window.appData.returnedBowls.length);
-    console.log('My scans:', window.appData.myScans.length);
-    console.log('====================');
+// ========== SYSTEM DEBUG ==========
+function showDebugInfo() {
+    const debugInfo = `
+ACTIVE: ${window.appData.activeBowls.length}
+PREPARED: ${window.appData.preparedBowls.length} 
+RETURNED: ${window.appData.returnedBowls.length}
+USER: ${window.appData.user || 'None'}
+MODE: ${window.appData.mode || 'None'}
+SCANNING: ${window.appData.scanning}
+    `;
+    console.log(debugInfo);
 }
 
 // Initialize System
@@ -97,11 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     try {
         loadFromStorage();
-        if (!validateSystem()) {
-            console.warn('⚠️ System validation failed, resetting data...');
-            resetSystemData();
-        }
-        
         initializeUsers();
         updateDisplay();
         updateOvernightStats();
@@ -117,41 +87,17 @@ document.addEventListener('DOMContentLoaded', function() {
             initializeFirebase();
         }
         
-        console.log('✅ System initialized successfully');
         showMessage('✅ System ready', 'success');
         
     } catch (error) {
-        console.error('❌ System initialization failed:', error);
         showMessage('❌ System initialization failed', 'error');
     }
 });
 
-function resetSystemData() {
-    window.appData = {
-        mode: null,
-        user: null,
-        dishLetter: null,
-        scanning: false,
-        myScans: [],
-        activeBowls: [],
-        preparedBowls: [],
-        returnedBowls: [],
-        scanHistory: [],
-        customerData: [],
-        dishTimes: {},
-        lastActivity: Date.now(),
-        lastCleanup: null,
-        lastSync: null
-    };
-    saveToStorage();
-}
-
 function updateLastActivity() {
     try {
         window.appData.lastActivity = Date.now();
-    } catch (error) {
-        console.error('❌ updateLastActivity error:', error);
-    }
+    } catch (error) {}
 }
 
 function startEmergencyCleanup() {
@@ -159,13 +105,10 @@ function startEmergencyCleanup() {
         setInterval(() => {
             const input = document.getElementById('progloveInput');
             if (input && input.value.length > 50) {
-                console.log('🔄 Emergency input reset');
                 input.value = '';
             }
         }, 2000);
-    } catch (error) {
-        console.error('❌ Emergency cleanup error:', error);
-    }
+    } catch (error) {}
 }
 
 function handleScanInput(e) {
@@ -175,16 +118,9 @@ function handleScanInput(e) {
         const input = e.target;
         const scanValue = input.value.trim();
         
-        console.log('🔍 SCAN INPUT:', scanValue);
-        
-        // Check if we have a valid VYT code
         if (scanValue.length >= 6 && (scanValue.includes('vyt') || scanValue.includes('VYT'))) {
-            console.log('✅ VALID SCAN DETECTED');
-            
-            // Clear input immediately
             input.value = '';
             
-            // Validate system state before processing
             if (!window.appData.user) {
                 showMessage('❌ Please select user first', 'error');
                 return;
@@ -195,26 +131,16 @@ function handleScanInput(e) {
                 return;
             }
             
-            // Process the scan
-            const result = processScan(scanValue);
-            console.log('📊 Scan result:', result);
-            
+            processScan(scanValue);
         } else if (scanValue.length > 20) {
-            // Clear garbage input
-            console.log('🔄 Clearing long input:', scanValue);
             input.value = '';
         }
         
         updateLastActivity();
         
     } catch (error) {
-        console.error('❌ HANDLE SCAN INPUT ERROR:', error);
-        console.error('Error details:', error.message, error.stack);
-        
-        // Clear the input field on error
         const input = document.getElementById('progloveInput');
         if (input) input.value = '';
-        
         showMessage('❌ Scan error - please try again', 'error');
     }
 }
@@ -223,10 +149,7 @@ function handleScanInput(e) {
 function initializeUsers() {
     try {
         const dropdown = document.getElementById('userDropdown');
-        if (!dropdown) {
-            console.error('❌ userDropdown not found');
-            return;
-        }
+        if (!dropdown) return;
         
         dropdown.innerHTML = '<option value="">-- Select User --</option>';
         USERS.forEach(user => {
@@ -235,24 +158,16 @@ function initializeUsers() {
             option.textContent = user.name + (user.role ? ` (${user.role})` : '');
             dropdown.appendChild(option);
         });
-    } catch (error) {
-        console.error('❌ initializeUsers error:', error);
-    }
+    } catch (error) {}
 }
 
 function setMode(mode) {
     try {
-        if (mode !== 'kitchen' && mode !== 'return') {
-            console.error('❌ Invalid mode:', mode);
-            return;
-        }
-        
         window.appData.mode = mode;
         window.appData.user = null;
         window.appData.dishLetter = null;
         window.appData.scanning = false;
         
-        // Update UI safely
         const kitchenBtn = document.getElementById('kitchenBtn');
         const returnBtn = document.getElementById('returnBtn');
         const dishSection = document.getElementById('dishSection');
@@ -274,7 +189,6 @@ function setMode(mode) {
         
         showMessage(`📱 ${mode.toUpperCase()} mode selected`, 'info');
     } catch (error) {
-        console.error('❌ setMode error:', error);
         showMessage('❌ Mode selection error', 'error');
     }
 }
@@ -285,9 +199,7 @@ function updateStatsLabels() {
         if (prepLabel) {
             prepLabel.textContent = window.appData.mode === 'kitchen' ? 'Prepared Today' : 'Returned Today';
         }
-    } catch (error) {
-        console.error('❌ updateStatsLabels error:', error);
-    }
+    } catch (error) {}
 }
 
 function loadUsers() {
@@ -310,9 +222,7 @@ function loadUsers() {
             option.textContent = user.name;
             dropdown.appendChild(option);
         });
-    } catch (error) {
-        console.error('❌ loadUsers error:', error);
-    }
+    } catch (error) {}
 }
 
 function selectUser() {
@@ -332,7 +242,6 @@ function selectUser() {
         updateDisplay();
         updateLastActivity();
     } catch (error) {
-        console.error('❌ selectUser error:', error);
         showMessage('❌ User selection error', 'error');
     }
 }
@@ -355,9 +264,7 @@ function loadDishLetters() {
             option.textContent = number;
             dropdown.appendChild(option);
         });
-    } catch (error) {
-        console.error('❌ loadDishLetters error:', error);
-    }
+    } catch (error) {}
 }
 
 function selectDishLetter() {
@@ -372,7 +279,6 @@ function selectDishLetter() {
         updateDisplay();
         updateLastActivity();
     } catch (error) {
-        console.error('❌ selectDishLetter error:', error);
         showMessage('❌ Dish selection error', 'error');
     }
 }
@@ -398,7 +304,6 @@ function startScanning() {
         updateLastActivity();
         showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
     } catch (error) {
-        console.error('❌ startScanning error:', error);
         showMessage('❌ Start scanning error', 'error');
     }
 }
@@ -410,20 +315,16 @@ function stopScanning() {
         updateLastActivity();
         showMessage(`⏹ Scanning stopped`, 'info');
     } catch (error) {
-        console.error('❌ stopScanning error:', error);
         showMessage('❌ Stop scanning error', 'error');
     }
 }
 
 function processScan(code) {
-    console.log('🔍 Processing scan:', code);
-    
     let result;
     try {
         let actualMode = window.appData.mode;
         if (isKitchenTime()) {
             actualMode = 'kitchen';
-            console.log('⏰ Auto-switched to KITCHEN mode');
         }
         
         if (actualMode === 'kitchen') {
@@ -431,10 +332,7 @@ function processScan(code) {
         } else {
             result = returnScan(code);
         }
-        
-        console.log('✅ Scan result:', result);
     } catch (error) {
-        console.error('❌ processScan error:', error);
         result = { message: "System error: " + error.message, type: "error", responseTime: 0 };
     }
     
@@ -458,9 +356,7 @@ function processScan(code) {
         updateOvernightStats();
         updateLastActivity();
         
-    } catch (uiError) {
-        console.error('❌ UI update error after scan:', uiError);
-    }
+    } catch (uiError) {}
     
     return result;
 }
@@ -471,7 +367,6 @@ function kitchenScan(code) {
     const today = getStandardizedDate();
     
     try {
-        // Check if already prepared today
         const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
             bowl.code === originalCode && bowl.date === today);
         
@@ -479,10 +374,8 @@ function kitchenScan(code) {
             return { message: "❌ Already prepared today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
         }
         
-        // Remove from active if exists
         window.appData.activeBowls = window.appData.activeBowls.filter(bowl => bowl.code !== originalCode);
         
-        // Add to prepared
         const newPreparedBowl = {
             code: originalCode,
             dish: window.appData.dishLetter || "AUTO",
@@ -515,14 +408,13 @@ function kitchenScan(code) {
         });
         
         if (typeof syncToFirebase === 'function') {
-            syncToFirebase().catch(() => console.log('Firebase sync failed'));
+            syncToFirebase().catch(() => {});
         }
         
         return { message: `✅ ${window.appData.dishLetter} Prepared: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
         
     } catch (error) {
-        console.error('❌ kitchenScan error:', error);
-        return { message: "❌ Kitchen scan error: " + error.message, type: "error", responseTime: Date.now() - startTime };
+        return { message: "❌ Kitchen scan error", type: "error", responseTime: Date.now() - startTime };
     }
 }
 
@@ -532,12 +424,10 @@ function returnScan(code) {
     const today = getStandardizedDate();
     
     try {
-        // Validate user
         if (!window.appData.user) {
             return { message: "❌ Please select user first", type: "error", responseTime: Date.now() - startTime };
         }
         
-        // Check if already returned today
         const alreadyReturned = window.appData.returnedBowls.some(bowl => 
             bowl.code === originalCode && bowl.returnDate === today);
         
@@ -548,14 +438,18 @@ function returnScan(code) {
         let sourceBowl = null;
         let sourceType = '';
         
-        // Check prepared bowls
+        // Store counts before removal
+        const activeBefore = window.appData.activeBowls.length;
+        const preparedBefore = window.appData.preparedBowls.length;
+        
+        // Check prepared bowls first
         const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
         if (preparedIndex !== -1) {
             sourceBowl = window.appData.preparedBowls[preparedIndex];
             sourceType = 'prepared';
             window.appData.preparedBowls.splice(preparedIndex, 1);
         } 
-        // Check active bowls
+        // Check active bowls second
         else {
             const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
             if (activeIndex !== -1) {
@@ -606,15 +500,28 @@ function returnScan(code) {
             message: `Returned: ${originalCode}`
         });
         
+        // 🔥 CRITICAL: Force immediate display update
+        updateDisplay();
+        updateOvernightStats();
+        
+        // Show debug info in message
+        const activeAfter = window.appData.activeBowls.length;
+        const debugMsg = sourceType === 'active' ? 
+            ` (Active: ${activeBefore} → ${activeAfter})` : 
+            ` (From ${sourceType})`;
+        
         if (typeof syncToFirebase === 'function') {
-            syncToFirebase().catch(() => console.log('Firebase sync failed'));
+            syncToFirebase().catch(() => {});
         }
         
-        return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
+        return { 
+            message: `✅ Returned: ${originalCode}${debugMsg}`, 
+            type: "success", 
+            responseTime: Date.now() - startTime 
+        };
         
     } catch (error) {
-        console.error('❌ returnScan error:', error);
-        return { message: "❌ Return scan error: " + error.message, type: "error", responseTime: Date.now() - startTime };
+        return { message: "❌ Return scan error", type: "error", responseTime: Date.now() - startTime };
     }
 }
 
@@ -638,9 +545,7 @@ function updateDishTimes(dishLetter, user) {
             }
             window.appData.dishTimes[dishLetter].count++;
         }
-    } catch (error) {
-        console.error('❌ updateDishTimes error:', error);
-    }
+    } catch (error) {}
 }
 
 // ========== DAILY RESET FUNCTIONS ==========
@@ -652,9 +557,7 @@ function startDailyResetTimer() {
                 resetDailyStatistics();
             }
         }, 60000);
-    } catch (error) {
-        console.error('❌ startDailyResetTimer error:', error);
-    }
+    } catch (error) {}
 }
 
 function resetDailyStatistics() {
@@ -681,15 +584,13 @@ function resetDailyStatistics() {
         window.appData.lastCleanup = today;
         
         if (typeof syncToFirebase === 'function') {
-            syncToFirebase().catch(() => console.log('Firebase sync failed'));
+            syncToFirebase().catch(() => {});
         }
         
         updateDisplay();
         updateOvernightStats();
         showMessage('✅ Daily statistics reset', 'success');
-    } catch (error) {
-        console.error('❌ resetDailyStatistics error:', error);
-    }
+    } catch (error) {}
 }
 
 // ========== DATA EXPORT FUNCTIONS ==========
@@ -702,7 +603,6 @@ function exportAllData() {
         let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
         csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
         
-        // Prepared bowls
         csvContent += "PREPARED BOWLS (TODAY)\n";
         csvContent += "VYT Code,Dish Letter,Prepared By,Date,Time,Company,Customer\n";
         todayPrepared.forEach(bowl => {
@@ -710,7 +610,6 @@ function exportAllData() {
         });
         csvContent += "\n";
         
-        // Active bowls
         csvContent += "ACTIVE BOWLS\n";
         csvContent += "VYT Code,Dish Letter,Prepared By,Date,Time,Company,Customer,Status\n";
         window.appData.activeBowls.forEach(bowl => {
@@ -718,7 +617,6 @@ function exportAllData() {
         });
         csvContent += "\n";
         
-        // Returned bowls
         csvContent += "RETURNED BOWLS (TODAY)\n";
         csvContent += "VYT Code,Dish Letter,Returned By,Return Date,Return Time,Original Prepared By,Company,Customer\n";
         todayReturns.forEach(bowl => {
@@ -728,7 +626,6 @@ function exportAllData() {
         downloadCSV(csvContent, `proglove_data_${today}.csv`);
         showMessage('✅ All data exported', 'success');
     } catch (error) {
-        console.error('❌ exportAllData error:', error);
         showMessage('❌ Export error', 'error');
     }
 }
@@ -744,7 +641,6 @@ function exportActiveBowls() {
         downloadCSV(csvData, 'active_bowls.csv');
         showMessage('✅ Active bowls exported', 'success');
     } catch (error) {
-        console.error('❌ exportActiveBowls error:', error);
         showMessage('❌ Export error', 'error');
     }
 }
@@ -762,7 +658,6 @@ function exportReturnData() {
         downloadCSV(csvData, 'return_data.csv');
         showMessage('✅ Return data exported', 'success');
     } catch (error) {
-        console.error('❌ exportReturnData error:', error);
         showMessage('❌ Export error', 'error');
     }
 }
@@ -773,7 +668,6 @@ function convertToCSV(data, fields) {
         const rows = data.map(item => fields.map(field => `"${item[field] || ''}"`).join(','));
         return [headers, ...rows].join('\n');
     } catch (error) {
-        console.error('❌ convertToCSV error:', error);
         return '';
     }
 }
@@ -788,7 +682,6 @@ function downloadCSV(csvData, filename) {
         a.click();
         window.URL.revokeObjectURL(url);
     } catch (error) {
-        console.error('❌ downloadCSV error:', error);
         showMessage('❌ Download error', 'error');
     }
 }
@@ -796,7 +689,6 @@ function downloadCSV(csvData, filename) {
 // ========== UTILITY FUNCTIONS ==========
 function updateDisplay() {
     try {
-        // Update button states
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const userDropdown = document.getElementById('userDropdown');
@@ -825,7 +717,6 @@ function updateDisplay() {
             }
         }
         
-        // Update statistics
         const today = getStandardizedDate();
         const userTodayScans = window.appData.myScans.filter(scan => 
             scan.user === window.appData.user && getStandardizedDate(scan.timestamp) === today).length;
@@ -843,9 +734,7 @@ function updateDisplay() {
         if (exportInfo) exportInfo.innerHTML = 
             `<strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} | Prepared: ${preparedToday} | Returns: ${returnedToday}`;
             
-    } catch (error) {
-        console.error('❌ updateDisplay error:', error);
-    }
+    } catch (error) {}
 }
 
 function updateOvernightStats() {
@@ -919,17 +808,13 @@ function updateOvernightStats() {
             });
         }
         statsBody.innerHTML = html;
-    } catch (error) {
-        console.error('❌ updateOvernightStats error:', error);
-    }
+    } catch (error) {}
 }
 
 function saveToStorage() {
     try {
         localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-    } catch (error) {
-        console.error('❌ saveToStorage error:', error);
-    }
+    } catch (error) {}
 }
 
 function loadFromStorage() {
@@ -939,9 +824,7 @@ function loadFromStorage() {
             const data = JSON.parse(saved);
             window.appData = { ...window.appData, ...data };
         }
-    } catch (error) {
-        console.error('❌ loadFromStorage error:', error);
-    }
+    } catch (error) {}
 }
 
 function showMessage(text, type) {
@@ -951,9 +834,7 @@ function showMessage(text, type) {
             element.textContent = text;
             element.className = 'feedback ' + type;
         }
-    } catch (error) {
-        console.error('❌ showMessage error:', error);
-    }
+    } catch (error) {}
 }
 
 // ========== GLOBAL FUNCTIONS ==========
@@ -962,9 +843,7 @@ window.selectUser = selectUser;
 window.selectDishLetter = selectDishLetter;
 window.startScanning = startScanning;
 window.stopScanning = stopScanning;
-window.processJSONData = processJSONData;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.debugSystem = debugSystem;
-window.validateSystem = validateSystem;
+window.showDebugInfo = showDebugInfo;
