@@ -414,6 +414,11 @@
             document.getElementById('progloveInput').addEventListener('input', handleScanInput);
             document.addEventListener('click', updateLastActivity);
             document.addEventListener('keydown', updateLastActivity);
+
+            // FIX: Ensure the default mode is set only after all UI elements are initialized
+            if (!window.appData.mode) {
+                 setMode('kitchen'); 
+            }
         }
 
         function startSyncTimer() {
@@ -471,7 +476,10 @@
             document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
             document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
             document.getElementById('userDropdown').value = '';
-            document.getElementById('dishDropdown').value = '';
+            // Only attempt to access dishDropdown if it exists and is relevant
+            const dishDropdown = document.getElementById('dishDropdown');
+            if (dishDropdown) dishDropdown.value = '';
+
             document.getElementById('progloveInput').value = '';
             
             loadUsers();
@@ -500,21 +508,6 @@
                 option.textContent = user.name;
                 dropdown.appendChild(option);
             });
-        }
-
-        function selectUser() {
-            const dropdown = document.getElementById('userDropdown');
-            if (!dropdown) return;
-            
-            window.appData.user = dropdown.value;
-            if (window.appData.user) {
-                showMessage(`✅ ${window.appData.user} selected`, 'success');
-                if (window.appData.mode === 'kitchen') {
-                    document.getElementById('dishSection').classList.remove('hidden');
-                    loadDishLetters();
-                }
-            }
-            updateDisplay();
         }
 
         function loadDishLetters() {
@@ -596,13 +589,17 @@
                 result = { message: "System error: " + error.message, type: "error", responseTime: 0 };
             }
             
-            document.getElementById('responseTimeValue').textContent = (Date.now() - startTime) + 'ms';
+            const responseTimeEl = document.getElementById('responseTimeValue');
+            if(responseTimeEl) responseTimeEl.textContent = (Date.now() - startTime) + 'ms';
+
             showMessage(result.message, result.type);
             
             if (result.type === 'error') {
                 const input = document.getElementById('progloveInput');
-                input.classList.add('error');
-                setTimeout(() => input.classList.remove('error'), 2000);
+                if (input) {
+                    input.classList.add('error');
+                    setTimeout(() => input.classList.remove('error'), 2000);
+                }
             }
             
             updateDisplay();
@@ -788,12 +785,12 @@
             const scannerCard = document.getElementById('scannerCard');
             const inputField = document.getElementById('progloveInput');
             
-            scannerCard.classList.toggle('active', window.appData.scanning);
-            inputField.disabled = !window.appData.scanning;
+            if (scannerCard) scannerCard.classList.toggle('active', window.appData.scanning);
+            if (inputField) inputField.disabled = !window.appData.scanning;
 
             // Update user/dish dropdowns based on state
             const userDropdown = document.getElementById('userDropdown');
-            if (userDropdown.value !== window.appData.user) userDropdown.value = window.appData.user || '';
+            if (userDropdown && userDropdown.value !== window.appData.user) userDropdown.value = window.appData.user || '';
             
             const dishDropdown = document.getElementById('dishDropdown');
             if (dishDropdown && dishDropdown.value !== window.appData.dishLetter) dishDropdown.value = window.appData.dishLetter || '';
@@ -810,19 +807,29 @@
                 bowl => extractDateFromISO(bowl.timestamp) === today
             ).length;
 
-            document.getElementById('prepCount').textContent = preparedToday;
-            document.getElementById('returnCount').textContent = returnedToday;
-            document.getElementById('activeCount').textContent = preparedToday - returnedToday; 
+            const prepCountEl = document.getElementById('prepCount');
+            const returnCountEl = document.getElementById('returnCount');
+            const activeCountEl = document.getElementById('activeCount');
+
+            if (prepCountEl) prepCountEl.textContent = preparedToday;
+            if (returnCountEl) returnCountEl.textContent = returnedToday;
+            if (activeCountEl) activeCountEl.textContent = preparedToday - returnedToday; 
             
-            document.getElementById('lastActivityDisplay').textContent = formatDisplayDate(window.appData.lastActivity);
-            document.getElementById('lastSyncDisplay').textContent = formatDisplayDate(window.appData.lastSync);
-            document.getElementById('lastCleanupDisplay').textContent = formatDisplayDate(window.appData.lastCleanup);
+            const lastActivityEl = document.getElementById('lastActivityDisplay');
+            const lastSyncEl = document.getElementById('lastSyncDisplay');
+            const lastCleanupEl = document.getElementById('lastCleanupDisplay');
+
+            if (lastActivityEl) lastActivityEl.textContent = formatDisplayDate(window.appData.lastActivity);
+            if (lastSyncEl) lastSyncEl.textContent = formatDisplayDate(window.appData.lastSync);
+            if (lastCleanupEl) lastCleanupEl.textContent = formatDisplayDate(window.appData.lastCleanup);
             
             updateStatsLabels();
         }
 
         function updateOvernightStats() {
             const tbody = document.getElementById('overnightStatsBody');
+            if (!tbody) return;
+
             tbody.innerHTML = '';
             
             const dishEntries = Object.entries(window.appData.dishTimes).sort((a, b) => b[1].count - a[1].count);
@@ -853,14 +860,16 @@
             // Update cycle info based on time logic
             const hour = getGermanyHour();
             const cycleInfo = document.getElementById('cycleInfo');
-            if (isKitchenTime()) {
-                cycleInfo.textContent = `FORCED KITCHEN WINDOW ACTIVE (Germany time: ${hour}:00 - Next reset at 10:00)`;
-                cycleInfo.classList.add('text-red-600');
-                cycleInfo.classList.remove('text-green-600');
-            } else {
-                cycleInfo.textContent = `Normal operation (Germany time: ${hour}:00 - Kitchen window opens at 22:00)`;
-                cycleInfo.classList.add('text-green-600');
-                cycleInfo.classList.remove('text-red-600');
+            if (cycleInfo) {
+                if (isKitchenTime()) {
+                    cycleInfo.textContent = `FORCED KITCHEN WINDOW ACTIVE (Germany time: ${hour}:00 - Next reset at 10:00)`;
+                    cycleInfo.classList.add('text-red-600');
+                    cycleInfo.classList.remove('text-green-600');
+                } else {
+                    cycleInfo.textContent = `Normal operation (Germany time: ${hour}:00 - Kitchen window opens at 22:00)`;
+                    cycleInfo.classList.add('text-green-600');
+                    cycleInfo.classList.remove('text-red-600');
+                }
             }
         }
 
@@ -921,6 +930,8 @@
 
         function showMessage(message, type = 'info') {
             const feedbackElement = document.getElementById('feedback');
+            if (!feedbackElement) return;
+
             feedbackElement.textContent = message;
             feedbackElement.className = `feedback ${type} block`;
             
@@ -947,7 +958,7 @@
             const activeBowls = (window.appData.preparedBowls || []).filter(
                 pb => !(window.appData.returnedBowls || []).some(rb => rb.code === pb.code && extractDateFromISO(rb.timestamp) === getStandardizedDate())
             );
-            downloadJson(activeBowls, `active_bowls_${getStandardizedDate()}.json`);
+            downloadJson(activeBowols, `active_bowls_${getStandardizedDate()}.json`);
             showMessage('⬇️ Active Bowls data exported.', 'info');
         }
 
@@ -963,12 +974,6 @@
             downloadJson(window.appData, `proglove_full_backup_${getStandardizedDate()}.json`);
             showMessage('⬇️ Full System Backup exported.', 'info');
         }
-
-        // Initialize mode on load
-        window.onload = () => {
-             // Default to kitchen mode for most operations
-            setMode('kitchen'); 
-        };
     </script>
 </body>
 </html>
