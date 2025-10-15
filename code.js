@@ -41,6 +41,44 @@ const firebaseConfig = {
     appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
 };
 
+// Update the loadFromFirebase function to show more details
+function loadFromFirebase() {
+    try {
+        const db = firebase.database();
+        const appDataRef = db.ref('progloveData');
+        
+        console.log('🔄 Attempting to load from Firebase...');
+        showMessage('🔄 Loading from cloud...', 'info');
+        
+        appDataRef.once('value').then((snapshot) => {
+            if (snapshot.exists()) {
+                const firebaseData = snapshot.val();
+                console.log('✅ Firebase data found:', firebaseData);
+                
+                window.appData = { ...window.appData, ...firebaseData };
+                showMessage(`✅ Cloud data loaded: ${firebaseData.activeBowls?.length || 0} active bowls`, 'success');
+                
+                cleanupIncompleteBowls();
+            } else {
+                console.log('❌ No data found in Firebase');
+                showMessage('❌ No cloud data found', 'warning');
+                loadFromStorage();
+            }
+            initializeUI();
+        }).catch((error) => {
+            console.error('Firebase load error:', error);
+            showMessage('❌ Cloud load failed: ' + error.message, 'error');
+            loadFromStorage();
+            initializeUI();
+        });
+    } catch (error) {
+        console.error('Firebase error:', error);
+        showMessage('❌ Firebase error: ' + error.message, 'error');
+        loadFromStorage();
+        initializeUI();
+    }
+};
+
 // Initialize Firebase
 function initializeFirebase() {
     try {
@@ -62,7 +100,7 @@ function initializeFirebase() {
         initializeUI();
         showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
     }
-}
+};
 
 // Load data from Firebase
 function loadFromFirebase() {
@@ -93,7 +131,7 @@ function loadFromFirebase() {
         loadFromStorage();
         initializeUI();
     }
-}
+};
 
 // Sync to Firebase
 function syncToFirebase() {
@@ -125,7 +163,7 @@ function syncToFirebase() {
         console.error('Sync error:', error);
         saveToStorage();
     }
-}
+};
 
 // Clean up VYT codes without company details
 function cleanupIncompleteBowls() {
