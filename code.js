@@ -368,9 +368,16 @@ function returnScan(code) {
             return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
         }
         
-        // Create returned bowl entry
+        // 🎯 SAFELY CREATE returned bowl - don't use spread if sourceBowl is corrupted
         const returnedBowl = {
-            ...sourceBowl,
+            code: sourceBowl.code || originalCode,
+            dish: sourceBowl.dish || "Unknown",
+            user: sourceBowl.user || "Unknown",
+            company: sourceBowl.company || "Unknown",
+            customer: sourceBowl.customer || "Unknown",
+            date: sourceBowl.date || today,
+            time: sourceBowl.time || new Date().toLocaleTimeString(),
+            timestamp: sourceBowl.timestamp || new Date().toISOString(),
             returnedBy: window.appData.user,
             returnDate: today,
             returnTime: new Date().toLocaleTimeString(),
@@ -409,6 +416,7 @@ function returnScan(code) {
         
     } catch (error) {
         console.error('❌ returnScan ERROR:', error);
+        console.error('Error details:', error.message, error.stack);
         return { message: "❌ System error during return: " + error.message, type: "error", responseTime: Date.now() - startTime };
     }
 }
