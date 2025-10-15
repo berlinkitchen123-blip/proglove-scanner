@@ -42,6 +42,14 @@ function isKitchenTime() {
     return currentHour >= 22 || currentHour < 10; // 10PM-10AM
 }
 
+function startAutoRefresh() {
+    // Refresh display every 2 seconds to show latest data
+    setInterval(() => {
+        updateDisplay();
+        updateOvernightStats();
+    }, 2000);
+}
+
 // Initialize System
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
@@ -50,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDisplay();
     updateOvernightStats();
     startDailyResetTimer();
+    startAutoRefresh();
     
     document.getElementById('progloveInput').addEventListener('input', handleScanInput);
     document.addEventListener('click', updateLastActivity);
