@@ -595,7 +595,7 @@ function showMessage(text, type) {
     }
 }
 
-// JSON IMPORT FUNCTIONS - MATCHES URL TO URL
+// JSON IMPORT FUNCTIONS - FOR YOUR SPECIFIC JSON STRUCTURE
 function processJsonData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonStatus = document.getElementById('jsonStatus');
@@ -613,30 +613,31 @@ function processJsonData() {
         const results = patchCustomerData(jsonData);
         
         // Update JSON status
-        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} items`;
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} VYT codes`;
         
         // Show patch results
         patchResults.style.display = 'block';
         patchSummary.innerHTML = `
             ✅ ${results.matched} bowls updated | 
-            ❌ ${results.failed} failed matches
+            ❌ ${results.failed} failed matches |
+            🆕 ${results.created} new bowls created
         `;
         
         // Show failed matches
         if (results.failedCodes.length > 0) {
             failedMatches.innerHTML = `
-                <strong>No matching bowls found for:</strong> ${results.failedCodes.join(', ')}
+                <strong>No matching bowls found for:</strong> ${results.failedCodes.slice(0, 10).join(', ')}${results.failedCodes.length > 10 ? '...' : ''}
             `;
         } else {
             failedMatches.innerHTML = '';
         }
         
-        if (results.matched > 0) {
-            showMessage(`✅ Updated ${results.matched} bowls with customer data`, 'success');
+        if (results.matched > 0 || results.created > 0) {
+            showMessage(`✅ Updated ${results.matched} bowls + Created ${results.created} new bowls`, 'success');
             saveToStorage();
             if (typeof syncToFirebase === 'function') syncToFirebase();
         } else {
-            showMessage('❌ No matching bowls found for the provided VYT codes', 'error');
+            showMessage('❌ No VYT codes found in JSON data', 'error');
         }
         
     } catch (error) {
@@ -648,25 +649,46 @@ function processJsonData() {
 function patchCustomerData(jsonData) {
     let matched = 0;
     let failed = 0;
+    let created = 0;
     let total = 0;
     const failedCodes = [];
     
-    if (!Array.isArray(jsonData)) {
-        throw new Error('JSON data must be an array');
+    // Extract all VYT codes from your complex JSON structure
+    const vytCodes = [];
+    
+    if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+        jsonData.boxes.forEach(box => {
+            if (box.dishes && Array.isArray(box.dishes)) {
+                box.dishes.forEach(dish => {
+                    if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                        dish.bowlCodes.forEach(bowlCode => {
+                            if (bowlCode && bowlCode.trim()) {
+                                vytCodes.push({
+                                    code: bowlCode.trim().toUpperCase(),
+                                    company: jsonData.name || "Unknown Company",
+                                    customer: dish.name || "Unknown Dish",
+                                    dish: dish.label || "Unknown",
+                                    boxType: box.type || "Unknown"
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
     }
     
-    total = jsonData.length;
+    total = vytCodes.length;
     
-    jsonData.forEach(item => {
-        // VYT code is URL format from JSON
-        const vytCodeUrl = item.vyt_code || item.code;
+    vytCodes.forEach(item => {
+        const vytCodeUrl = item.code;
         const company = item.company;
         const customer = item.customer;
         const dish = item.dish;
         
         if (!vytCodeUrl) {
             failed++;
-            failedCodes.push('Missing VYT code URL');
+            failedCodes.push('Empty VYT code');
             return;
         }
         
@@ -708,29 +730,27 @@ function patchCustomerData(jsonData) {
         }
         
         if (!bowlFound) {
-        // Create new bowl if not found
-        const newBowl = {
-            code: vytCodeUrl,
-            company: company || "Unknown",
-            customer: customer || "Unknown", 
-            dish: dish || "Unknown",
-            status: 'ACTIVE',
-            timestamp: new Date().toISOString(),
-            date: getStandardizedDate(),
-            source: 'json_import'
-        };
-    
-        window.appData.activeBowls.push(newBowl);
-        matched++; // Count this as matched since we created it
-     } else {
-        failed++;
-        failedCodes.push(vytCodeUrl);
-     }
+            // Create new bowl if not found
+            const newBowl = {
+                code: vytCodeUrl,
+                company: company || "Unknown Company",
+                customer: customer || "Unknown Customer", 
+                dish: dish || "Unknown",
+                status: 'ACTIVE',
+                timestamp: new Date().toISOString(),
+                date: getStandardizedDate(),
+                source: 'json_import'
+            };
+            
+            window.appData.activeBowls.push(newBowl);
+            created++;
+        }
     });
     
     return {
         matched,
         failed,
+        created,
         total,
         failedCodes
     };
