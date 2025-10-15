@@ -708,9 +708,24 @@ function patchCustomerData(jsonData) {
         }
         
         if (!bowlFound) {
-            failed++;
-            failedCodes.push(vytCodeUrl);
-        }
+        // Create new bowl if not found
+        const newBowl = {
+            code: vytCodeUrl,
+            company: company || "Unknown",
+            customer: customer || "Unknown", 
+            dish: dish || "Unknown",
+            status: 'ACTIVE',
+            timestamp: new Date().toISOString(),
+            date: getStandardizedDate(),
+            source: 'json_import'
+        };
+    
+        window.appData.activeBowls.push(newBowl);
+        matched++; // Count this as matched since we created it
+     } else {
+        failed++;
+        failedCodes.push(vytCodeUrl);
+     }
     });
     
     return {
