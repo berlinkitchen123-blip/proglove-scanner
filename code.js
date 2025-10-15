@@ -27,6 +27,12 @@ function isKitchenTime() {
 // Initialize Firebase and load data
 function initializeFirebase() {
     try {
+        // Check if Firebase is available
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase not loaded');
+            throw new Error('Firebase SDK not loaded');
+        }
+
         const firebaseConfig = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -42,6 +48,7 @@ function initializeFirebase() {
             firebase.initializeApp(firebaseConfig);
         }
 
+        console.log('✅ Firebase initialized successfully');
         // Load data from Firebase
         loadFromFirebase();
         
@@ -188,24 +195,58 @@ function initializeDataArrays() {
     if (!window.appData.dishTimes) window.appData.dishTimes = {};
 }
 
+// Load Firebase SDK dynamically
+function loadFirebaseSDK() {
+    return new Promise((resolve, reject) => {
+        // Check if Firebase is already loaded
+        if (typeof firebase !== 'undefined') {
+            console.log('Firebase already loaded');
+            resolve();
+            return;
+        }
+
+        // Load Firebase App
+        const scriptApp = document.createElement('script');
+        scriptApp.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js';
+        scriptApp.onload = function() {
+            console.log('Firebase App loaded');
+            // Load Firebase Database
+            const scriptDatabase = document.createElement('script');
+            scriptDatabase.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js';
+            scriptDatabase.onload = function() {
+                console.log('Firebase Database loaded');
+                resolve();
+            };
+            scriptDatabase.onerror = function() {
+                reject(new Error('Failed to load Firebase Database'));
+            };
+            document.head.appendChild(scriptDatabase);
+        };
+        scriptApp.onerror = function() {
+            reject(new Error('Failed to load Firebase App'));
+        };
+        document.head.appendChild(scriptApp);
+    });
+}
+
 // Start the application
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Scanner System Starting...');
+    
     // Load Firebase SDK first, then initialize
-    if (typeof firebase === 'undefined') {
-        console.log('Firebase not loaded, loading script...');
-        const script = document.createElement('script');
-        script.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js';
-        script.onload = function() {
-            const authScript = document.createElement('script');
-            authScript.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js';
-            authScript.onload = initializeFirebase;
-            document.head.appendChild(authScript);
-        };
-        document.head.appendChild(script);
-    } else {
-        initializeFirebase();
-    }
+    loadFirebaseSDK()
+        .then(() => {
+            console.log('✅ Firebase SDK loaded successfully');
+            initializeFirebase();
+        })
+        .catch((error) => {
+            console.error('❌ Failed to load Firebase SDK:', error);
+            // Fallback to local storage
+            loadFromStorage();
+            initializeUI();
+            showMessage('⚠️ Using local storage (Firebase SDK failed to load)', 'warning');
+            document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
+        });
 });
 
 function updateLastActivity() {
@@ -427,7 +468,7 @@ function kitchenScan(code) {
     updateDishTimes(window.appData.dishLetter, window.appData.user);
     
     const message = sourceType === 'active' ? 
-        `✅ ${window.appData.dishLetter} Prepared: ${code} (from active)` : 
+        `✅ ${window.appData.dishLetter} Prepared: ${code} (from active - details cleared)` : 
         `✅ ${window.appData.dishLetter} Prepared: ${code} (new bowl)`;
     
     return { message: message, type: "success", responseTime: Date.now() - startTime };
@@ -512,24 +553,396 @@ function updateDishTimes(dishLetter, user) {
     }
 }
 
-// ... rest of your existing functions (startDailyResetTimer, resetDailyStatistics, updateDisplay, etc.) remain the same ...
+function startDailyResetTimer() {
+    setInterval(() => {
+        const now = new Date();
+        if (now.getHours() === 22 && now.getMinutes() === 0) {
+            resetDailyStatistics();
+        }
+    }, 60000);
+}
 
-// Start the application - UPDATED VERSION
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Scanner System Starting...');
-    // Load Firebase SDK first, then initialize
-    if (typeof firebase === 'undefined') {
-        console.log('Firebase not loaded, loading script...');
-        const script = document.createElement('script');
-        script.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js';
-        script.onload = function() {
-            const authScript = document.createElement('script');
-            authScript.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js';
-            authScript.onload = initializeFirebase;
-            document.head.appendChild(authScript);
-        };
-        document.head.appendChild(script);
-    } else {
-        initializeFirebase();
+function resetDailyStatistics() {
+    const today = getStandardizedDate();
+    if (window.appData.lastCleanup === today) return;
+    
+    const overnightPrepared = window.appData.preparedBowls.filter(bowl => {
+        const hour = new Date(bowl.timestamp).getHours();
+        return hour >= 22 || hour < 10;
+    });
+    
+    overnightPrepared.forEach(bowl => {
+        window.appData.activeBowls.push({...bowl, status: 'ACTIVE', preparedTimestamp: bowl.timestamp, timestamp: new Date().toISOString()});
+    });
+    
+    window.appData.lastCleanup = today;
+    syncToFirebase();
+    updateDisplay();
+    showMessage('✅ Daily reset - Cloud Sync', 'success');
+}
+
+function updateDisplay() {
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const input = document.getElementById('progloveInput');
+    const scanSection = document.getElementById('scanSection');
+    
+    const canScan = window.appData.user && !window.appData.scanning && 
+                   (window.appData.mode !== 'kitchen' || window.appData.dishLetter);
+    
+    if (startBtn) startBtn.disabled = !canScan;
+    if (stopBtn) stopBtn.disabled = !window.appData.scanning;
+    
+    if (input) {
+        input.placeholder = window.appData.scanning ? "Scan VYT code..." : "Click START SCANNING...";
+        input.disabled = !window.appData.scanning;
+        if (scanSection) {
+            scanSection.classList.toggle('scanning-active', window.appData.scanning);
+        }
     }
-});
+    
+    const today = getStandardizedDate();
+    const userScans = window.appData.myScans.filter(scan => 
+        scan.user === window.appData.user && getStandardizedDate(scan.timestamp) === today).length;
+    const prepared = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
+    const returned = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+    
+    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
+    document.getElementById('prepCount').textContent = window.appData.mode === 'kitchen' ? prepared : returned;
+    document.getElementById('myScansCount').textContent = userScans;
+    document.getElementById('exportInfo').innerHTML = 
+        `<strong>Data:</strong> Active: ${window.appData.activeBowls.length} | Prepared: ${prepared} | Returns: ${returned}`;
+}
+
+function updateOvernightStats() {
+    try {
+        const statsBody = document.getElementById('overnightStatsBody');
+        const cycleInfo = document.getElementById('cycleInfo');
+        if (!statsBody || !cycleInfo) return;
+        
+        const now = new Date();
+        const hour = now.getHours();
+        let cycleStart, cycleEnd, cycleText;
+        
+        if (hour >= 22 || hour < 10) {
+            cycleStart = new Date(now); 
+            if (hour < 10) cycleStart.setDate(cycleStart.getDate() - 1);
+            cycleStart.setHours(22, 0, 0, 0);
+            cycleEnd = new Date(now); 
+            cycleEnd.setDate(cycleEnd.getDate() + 1); 
+            cycleEnd.setHours(10, 0, 0, 0);
+            cycleText = `Tonight 10PM - Tomorrow 10AM`;
+        } else {
+            cycleStart = new Date(now); 
+            cycleStart.setDate(cycleStart.getDate() - 1); 
+            cycleStart.setHours(22, 0, 0, 0);
+            cycleEnd = new Date(now); 
+            cycleEnd.setHours(10, 0, 0, 0);
+            cycleText = `Last Night 10PM - Today 10AM`;
+        }
+        
+        cycleInfo.textContent = cycleText;
+        
+        const overnightScans = (window.appData.myScans || []).filter(scan => {
+            if (!scan || !scan.timestamp) return false;
+            try {
+                const scanTime = new Date(scan.timestamp);
+                return scanTime >= cycleStart && scanTime <= cycleEnd;
+            } catch (error) {
+                return false;
+            }
+        });
+        
+        const dishStats = {};
+        overnightScans.forEach(scan => {
+            const dish = (scan.dish || "Unknown");
+            const user = (scan.user || "Unknown");
+            const key = `${dish}-${user}`;
+            
+            if (!dishStats[key]) {
+                dishStats[key] = { 
+                    dish: dish, 
+                    user: user, 
+                    count: 0, 
+                    startTime: null, 
+                    endTime: null 
+                };
+            }
+            
+            dishStats[key].count++;
+            
+            try {
+                const scanTime = new Date(scan.timestamp);
+                if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
+                    dishStats[key].startTime = scan.timestamp;
+                }
+                if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
+                    dishStats[key].endTime = scan.timestamp;
+                }
+            } catch (error) {
+                // Skip time processing if date is invalid
+            }
+        });
+        
+        const statsArray = Object.values(dishStats).sort((a, b) => {
+            const dishA = a.dish || "Unknown";
+            const dishB = b.dish || "Unknown";
+            if (dishA !== dishB) return String(dishA).localeCompare(String(dishB));
+            
+            const timeA = a.startTime ? new Date(a.startTime) : new Date(0);
+            const timeB = b.startTime ? new Date(b.startTime) : new Date(0);
+            return timeA - timeB;
+        });
+        
+        let html = statsArray.length === 0 ? 
+            '<tr><td colspan="5" style="text-align: center;">No overnight scans</td></tr>' :
+            statsArray.map(stat => {
+                const start = stat.startTime ? 
+                    new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                const end = stat.endTime ? 
+                    new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                return `<tr>
+                    <td class="dish-header">${stat.dish}</td>
+                    <td>${stat.user}</td>
+                    <td>${stat.count}</td>
+                    <td>${start}</td>
+                    <td>${end}</td>
+                </tr>`;
+            }).join('');
+        
+        statsBody.innerHTML = html;
+    } catch (error) {
+        console.error('Error in updateOvernightStats:', error);
+    }
+}
+
+function showMessage(text, type) {
+    const element = document.getElementById('feedback');
+    if (element) {
+        element.textContent = text;
+        element.className = 'feedback ' + type;
+    }
+}
+
+// JSON IMPORT FUNCTIONS - FOR YOUR SPECIFIC JSON STRUCTURE
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    const jsonStatus = document.getElementById('jsonStatus');
+    const patchResults = document.getElementById('patchResults');
+    const patchSummary = document.getElementById('patchSummary');
+    const failedMatches = document.getElementById('failedMatches');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        const results = patchCustomerData(jsonData);
+        
+        // Update JSON status
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} VYT codes`;
+        
+        // Show patch results
+        patchResults.style.display = 'block';
+        patchSummary.innerHTML = `
+            ✅ ${results.matched} bowls updated | 
+            ❌ ${results.failed} failed matches |
+            🆕 ${results.created} new bowls created
+        `;
+        
+        // Show failed matches
+        if (results.failedCodes.length > 0) {
+            failedMatches.innerHTML = `
+                <strong>No matching bowls found for:</strong> ${results.failedCodes.slice(0, 10).join(', ')}${results.failedCodes.length > 10 ? '...' : ''}
+            `;
+        } else {
+            failedMatches.innerHTML = '';
+        }
+        
+        if (results.matched > 0 || results.created > 0) {
+            showMessage(`✅ Updated ${results.matched} bowls + Created ${results.created} new bowls`, 'success');
+            saveToStorage();
+            syncToFirebase();
+        } else {
+            showMessage('❌ No VYT codes found in JSON data', 'error');
+        }
+        
+    } catch (error) {
+        showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Invalid JSON format`;
+    }
+}
+
+function patchCustomerData(jsonData) {
+    let matched = 0;
+    let failed = 0;
+    let created = 0;
+    let total = 0;
+    const failedCodes = [];
+    
+    // Extract all VYT codes from your complex JSON structure
+    const vytCodes = [];
+    
+    if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+        jsonData.boxes.forEach(box => {
+            if (box.dishes && Array.isArray(box.dishes)) {
+                box.dishes.forEach(dish => {
+                    if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                        dish.bowlCodes.forEach(bowlCode => {
+                            if (bowlCode && bowlCode.trim()) {
+                                vytCodes.push({
+                                    code: bowlCode.trim().toUpperCase(),
+                                    company: jsonData.name || "Unknown Company",
+                                    customer: dish.name || "Unknown Dish",
+                                    dish: dish.label || "Unknown",
+                                    boxType: box.type || "Unknown"
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    total = vytCodes.length;
+    
+    vytCodes.forEach(item => {
+        const vytCodeUrl = item.code;
+        const company = item.company;
+        const customer = item.customer;
+        const dish = item.dish;
+        
+        if (!vytCodeUrl) {
+            failed++;
+            failedCodes.push('Empty VYT code');
+            return;
+        }
+        
+        // Search in active bowls - EXACT URL MATCH
+        let bowlFound = false;
+        
+        // Check active bowls first - exact URL match
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => 
+            bowl.code === vytCodeUrl
+        );
+        
+        if (activeIndex !== -1) {
+            // Update existing bowl
+            window.appData.activeBowls[activeIndex] = {
+                ...window.appData.activeBowls[activeIndex],
+                company: company || window.appData.activeBowls[activeIndex].company,
+                customer: customer || window.appData.activeBowls[activeIndex].customer,
+                dish: dish || window.appData.activeBowls[activeIndex].dish
+            };
+            bowlFound = true;
+            matched++;
+        } 
+        // Check prepared bowls
+        else {
+            const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === vytCodeUrl
+            );
+            
+            if (preparedIndex !== -1) {
+                window.appData.preparedBowls[preparedIndex] = {
+                    ...window.appData.preparedBowls[preparedIndex],
+                    company: company || window.appData.preparedBowls[preparedIndex].company,
+                    customer: customer || window.appData.preparedBowls[preparedIndex].customer,
+                    dish: dish || window.appData.preparedBowls[preparedIndex].dish
+                };
+                bowlFound = true;
+                matched++;
+            }
+        }
+        
+        if (!bowlFound) {
+            // Create new bowl if not found
+            const newBowl = {
+                code: vytCodeUrl,
+                company: company || "Unknown Company",
+                customer: customer || "Unknown Customer", 
+                dish: dish || "Unknown",
+                status: 'ACTIVE',
+                timestamp: new Date().toISOString(),
+                date: getStandardizedDate(),
+                source: 'json_import'
+            };
+            
+            window.appData.activeBowls.push(newBowl);
+            created++;
+        }
+    });
+    
+    return {
+        matched,
+        failed,
+        created,
+        total,
+        failedCodes
+    };
+}
+
+// Export functions
+function exportActiveBowls() {
+    try {
+        const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `active-bowls-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ Active bowls exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
+}
+
+function exportReturnData() {
+    try {
+        const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `return-data-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ Return data exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
+}
+
+function exportAllData() {
+    try {
+        const dataStr = JSON.stringify(window.appData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `proglove-data-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ All data exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
+}
+
+// Global functions
+window.setMode = setMode;
+window.selectUser = selectUser;
+window.selectDishLetter = selectDishLetter;
+window.startScanning = startScanning;
+window.stopScanning = stopScanning;
+window.exportActiveBowls = exportActiveBowls;
+window.exportReturnData = exportReturnData;
+window.exportAllData = exportAllData;
+window.processJsonData = processJsonData;
+window.loadFromFirebaseManual = loadFromFirebaseManual;
+window.syncToFirebase = syncToFirebase;
