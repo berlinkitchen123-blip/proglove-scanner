@@ -1,5 +1,4 @@
 // ProGlove Scanner - Complete System
-// ProGlove Scanner - Complete System (Firebase Primary)
 window.appData = {
 mode: null, user: null, dishLetter: null, scanning: false,
 myScans: [], activeBowls: [], preparedBowls: [], returnedBowls: [],
@@ -26,74 +25,7 @@ return hour >= 22 || hour < 10;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadFromStorage();
-    console.log('🚀 Scanner System Starting...');
-    initializeFirebase(); // Initialize Firebase FIRST
-});
-
-// Initialize Firebase and load data
-function initializeFirebase() {
-    try {
-        // Your Firebase config
-        const firebaseConfig = {
-            apiKey: "your-api-key",
-            authDomain: "your-project.firebaseapp.com",
-            databaseURL: "https://your-project.firebaseio.com",
-            projectId: "your-project",
-            storageBucket: "your-project.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "your-app-id"
-        };
-
-        // Initialize Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-
-        // Load data from Firebase
-        loadFromFirebase();
-        
-    } catch (error) {
-        console.error('Firebase initialization failed:', error);
-        // Fallback to localStorage
-        loadFromStorage();
-        initializeUI();
-        showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
-    }
-}
-
-// Load data from Firebase (PRIMARY)
-function loadFromFirebase() {
-    try {
-        const db = firebase.database();
-        db.ref('progloveData').on('value', (snapshot) => {
-            if (snapshot.exists()) {
-                const firebaseData = snapshot.val();
-                window.appData = { ...window.appData, ...firebaseData };
-                console.log('✅ Data loaded from Firebase');
-                showMessage('✅ Connected to Cloud', 'success');
-            } else {
-                // No data in Firebase, try localStorage
-                loadFromStorage();
-                showMessage('✅ Cloud connected (no data yet)', 'info');
-            }
-            initializeUI();
-        }, (error) => {
-            console.error('Firebase load error:', error);
-            // Fallback to localStorage
-            loadFromStorage();
-            initializeUI();
-            showMessage('⚠️ Using local storage', 'warning');
-        });
-    } catch (error) {
-        console.error('Firebase error:', error);
-        loadFromStorage();
-        initializeUI();
-    }
-}
-
-// Initialize UI after data is loaded
-function initializeUI() {
+loadFromStorage();
 initializeUsers();
 updateDisplay();
 updateOvernightStats();
@@ -102,63 +34,9 @@ startDailyResetTimer();
 document.getElementById('progloveInput').addEventListener('input', handleScanInput);
 document.addEventListener('click', updateLastActivity);
 document.addEventListener('keydown', updateLastActivity);
+    
+    if (typeof initializeFirebase === 'function') initializeFirebase();
 });
-}
-
-// Sync to Firebase (PRIMARY storage)
-function syncToFirebase() {
-    try {
-        const db = firebase.database();
-        db.ref('progloveData').set(window.appData)
-            .then(() => {
-                window.appData.lastSync = new Date().toISOString();
-                console.log('✅ Data synced to Firebase');
-            })
-            .catch((error) => {
-                console.error('Firebase sync failed:', error);
-                // Save to localStorage as backup
-                saveToStorage();
-            });
-    } catch (error) {
-        console.error('Sync error:', error);
-        saveToStorage();
-    }
-}
-
-// localStorage is now only a BACKUP
-function saveToStorage() {
-    try {
-        localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-    } catch (error) {
-        console.error('Local storage save failed:', error);
-    }
-}
-
-function loadFromStorage() {
-    try {
-        const saved = localStorage.getItem('proglove_data');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            window.appData = { ...window.appData, ...parsed };
-            console.log('📁 Data loaded from local storage (backup)');
-        }
-    } catch (error) {
-        console.error('Local storage load failed:', error);
-        // Initialize empty arrays if everything fails
-        initializeDataArrays();
-    }
-}
-
-function initializeDataArrays() {
-    // Ensure all arrays exist
-    if (!window.appData.myScans) window.appData.myScans = [];
-    if (!window.appData.activeBowls) window.appData.activeBowls = [];
-    if (!window.appData.preparedBowls) window.appData.preparedBowls = [];
-    if (!window.appData.returnedBowls) window.appData.returnedBowls = [];
-    if (!window.appData.scanHistory) window.appData.scanHistory = [];
-    if (!window.appData.customerData) window.appData.customerData = [];
-    if (!window.appData.dishTimes) window.appData.dishTimes = {};
-}
 
 function updateLastActivity() {
 window.appData.lastActivity = Date.now();
@@ -186,8 +64,6 @@ updateLastActivity();
 
 function initializeUsers() {
 const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    
 dropdown.innerHTML = '<option value="">-- Select User --</option>';
 USERS.forEach(user => {
 const option = document.createElement('option');
@@ -213,8 +89,7 @@ document.getElementById('progloveInput').value = '';
 loadUsers();
 updateStatsLabels();
 updateDisplay();
-    showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
-    showMessage(`📱 ${mode.toUpperCase()} mode - Cloud Sync`, 'info');
+showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
 }
 
 function updateStatsLabels() {
@@ -224,13 +99,10 @@ if (label) label.textContent = window.appData.mode === 'kitchen' ? 'Prepared Tod
 
 function loadUsers() {
 const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    
 dropdown.innerHTML = '<option value="">-- Select User --</option>';
 const users = window.appData.mode === 'kitchen' ? 
 USERS.filter(u => u.role === 'Kitchen') : 
 USERS.filter(u => u.role === 'Return');
-    
 users.forEach(user => {
 const option = document.createElement('option');
 option.value = user.name;
@@ -241,8 +113,6 @@ dropdown.appendChild(option);
 
 function selectUser() {
 const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    
 window.appData.user = dropdown.value;
 if (window.appData.user) {
 showMessage(`✅ ${window.appData.user} selected`, 'success');
@@ -256,8 +126,6 @@ updateDisplay();
 
 function loadDishLetters() {
 const dropdown = document.getElementById('dishDropdown');
-    if (!dropdown) return;
-    
 dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'.split('').forEach(char => {
 const option = document.createElement('option');
@@ -269,8 +137,6 @@ dropdown.appendChild(option);
 
 function selectDishLetter() {
 const dropdown = document.getElementById('dishDropdown');
-    if (!dropdown) return;
-    
 window.appData.dishLetter = dropdown.value;
 if (window.appData.dishLetter) {
 showMessage(`📝 Dish ${window.appData.dishLetter}`, 'success');
@@ -290,8 +156,7 @@ return;
 window.appData.scanning = true;
 updateDisplay();
 document.getElementById('progloveInput').focus();
-    showMessage(`🎯 SCANNING ACTIVE`, 'success');
-    showMessage(`🎯 SCANNING ACTIVE - Cloud Sync`, 'success');
+showMessage(`🎯 SCANNING ACTIVE`, 'success');
 }
 
 function stopScanning() {
@@ -323,7 +188,6 @@ setTimeout(() => input.classList.remove('error'), 2000);
 updateDisplay();
 updateOvernightStats();
     saveToStorage();
-    syncToFirebase(); // PRIMARY SYNC
 return result;
 }
 
@@ -346,7 +210,8 @@ time: new Date().toLocaleTimeString(), timestamp: new Date().toISOString(), stat
 window.appData.preparedBowls.push(newBowl);
 window.appData.myScans.push({type: 'kitchen', code: code, dish: window.appData.dishLetter, user: window.appData.user, timestamp: new Date().toISOString()});
 
-updateDishTimes(window.appData.dishLetter, window.appData.user);
+    if (typeof syncToFirebase === 'function') syncToFirebase();
+    updateDishTimes(window.appData.dishLetter, window.appData.user);
     saveToStorage();
 
 return { message: `✅ ${window.appData.dishLetter} Prepared: ${code}`, type: "success", responseTime: Date.now() - startTime };
@@ -368,21 +233,32 @@ let sourceBowl = null;
 let sourceType = '';
 const activeBefore = window.appData.activeBowls.length;
 
-// FIRST check in activeBowls (this is where bowls should be returned from)
-const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
-if (activeIndex !== -1) {
-sourceBowl = window.appData.activeBowls[activeIndex];
-sourceType = 'active';
-// REMOVE from activeBowls - THIS IS THE KEY FIX
-window.appData.activeBowls.splice(activeIndex, 1);
-}
-// THEN check in preparedBowls (as fallback)
-else {
-const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === code);
-if (preparedIndex !== -1) {
-sourceBowl = window.appData.preparedBowls[preparedIndex];
-sourceType = 'prepared';
-window.appData.preparedBowls.splice(preparedIndex, 1);
+    const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === code);
+    if (preparedIndex !== -1) {
+        sourceBowl = window.appData.preparedBowls[preparedIndex];
+        sourceType = 'prepared';
+        window.appData.preparedBowls.splice(preparedIndex, 1);
+    } else {
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
+        if (activeIndex !== -1) {
+            sourceBowl = window.appData.activeBowls[activeIndex];
+            sourceType = 'active';
+            window.appData.activeBowls.splice(activeIndex, 1);
+    // FIRST check in activeBowls (this is where bowls should be returned from)
+    const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === code);
+    if (activeIndex !== -1) {
+        sourceBowl = window.appData.activeBowls[activeIndex];
+        sourceType = 'active';
+        // REMOVE from activeBowls - THIS IS THE KEY FIX
+        window.appData.activeBowls.splice(activeIndex, 1);
+    }
+    // THEN check in preparedBowls (as fallback)
+    else {
+        const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === code);
+        if (preparedIndex !== -1) {
+            sourceBowl = window.appData.preparedBowls[preparedIndex];
+            sourceType = 'prepared';
+            window.appData.preparedBowls.splice(preparedIndex, 1);
 }
 }
 
@@ -390,34 +266,40 @@ if (!sourceBowl) {
 return { message: "❌ Bowl not found: " + code, type: "error", responseTime: Date.now() - startTime };
 }
 
-const returnedBowl = {
-...sourceBowl, 
-returnedBy: window.appData.user, 
-returnDate: today,
-returnTime: new Date().toLocaleTimeString(), 
-returnTimestamp: new Date().toISOString(), 
-status: 'RETURNED', 
-source: sourceType
-};
+    const returnedBowl = {...sourceBowl, returnedBy: window.appData.user, returnDate: today,
+        returnTime: new Date().toLocaleTimeString(), returnTimestamp: new Date().toISOString(), status: 'RETURNED', source: sourceType};
+    const returnedBowl = {
+        ...sourceBowl, 
+        returnedBy: window.appData.user, 
+        returnDate: today,
+        returnTime: new Date().toLocaleTimeString(), 
+        returnTimestamp: new Date().toISOString(), 
+        status: 'RETURNED', 
+        source: sourceType
+    };
 
 window.appData.returnedBowls.push(returnedBowl);
-window.appData.myScans.push({
-type: 'return', 
-code: code, 
-user: window.appData.user, 
-timestamp: new Date().toISOString()
-});
+    window.appData.myScans.push({type: 'return', code: code, user: window.appData.user, timestamp: new Date().toISOString()});
+    window.appData.myScans.push({
+        type: 'return', 
+        code: code, 
+        user: window.appData.user, 
+        timestamp: new Date().toISOString()
+    });
 
 const activeAfter = window.appData.activeBowls.length;
-const countChange = sourceType === 'active' ? ` (Active: ${activeBefore} → ${activeAfter})` : ' (From Prepared)';
+    const countChange = sourceType === 'active' ? ` (Active: ${activeBefore} → ${activeAfter})` : '';
+    const countChange = sourceType === 'active' ? ` (Active: ${activeBefore} → ${activeAfter})` : ' (From Prepared)';
 
+    if (typeof syncToFirebase === 'function') syncToFirebase();
     saveToStorage();
-    
-return { 
-message: `✅ Returned: ${code}${countChange}`, 
-type: "success", 
-responseTime: Date.now() - startTime 
-};
+
+    return { message: `✅ Returned: ${code}${countChange}`, type: "success", responseTime: Date.now() - startTime };
+    return { 
+        message: `✅ Returned: ${code}${countChange}`, 
+        type: "success", 
+        responseTime: Date.now() - startTime 
+    };
 }
 
 function updateDishTimes(dishLetter, user) {
@@ -456,11 +338,10 @@ window.appData.activeBowls.push({...bowl, status: 'ACTIVE', preparedTimestamp: b
 });
 
 window.appData.lastCleanup = today;
+    if (typeof syncToFirebase === 'function') syncToFirebase();
     saveToStorage();
-    syncToFirebase();
 updateDisplay();
-    showMessage('✅ Daily reset', 'success');
-    showMessage('✅ Daily reset - Cloud Sync', 'success');
+showMessage('✅ Daily reset', 'success');
 }
 
 function updateDisplay() {
@@ -510,60 +391,75 @@ if (hour >= 22 || hour < 10) {
 cycleStart = new Date(now); 
 if (hour < 10) cycleStart.setDate(cycleStart.getDate() - 1);
 cycleStart.setHours(22, 0, 0, 0);
-cycleEnd = new Date(now); 
-cycleEnd.setDate(cycleEnd.getDate() + 1); 
-cycleEnd.setHours(10, 0, 0, 0);
+            cycleEnd = new Date(now); cycleEnd.setDate(cycleEnd.getDate() + 1); cycleEnd.setHours(10, 0, 0, 0);
+            cycleEnd = new Date(now); 
+            cycleEnd.setDate(cycleEnd.getDate() + 1); 
+            cycleEnd.setHours(10, 0, 0, 0);
 cycleText = `Tonight 10PM - Tomorrow 10AM`;
 } else {
-cycleStart = new Date(now); 
-cycleStart.setDate(cycleStart.getDate() - 1); 
-cycleStart.setHours(22, 0, 0, 0);
-cycleEnd = new Date(now); 
-cycleEnd.setHours(10, 0, 0, 0);
+            cycleStart = new Date(now); cycleStart.setDate(cycleStart.getDate() - 1); cycleStart.setHours(22, 0, 0, 0);
+            cycleEnd = new Date(now); cycleEnd.setHours(10, 0, 0, 0);
+            cycleStart = new Date(now); 
+            cycleStart.setDate(cycleStart.getDate() - 1); 
+            cycleStart.setHours(22, 0, 0, 0);
+            cycleEnd = new Date(now); 
+            cycleEnd.setHours(10, 0, 0, 0);
 cycleText = `Last Night 10PM - Today 10AM`;
 }
 
 cycleInfo.textContent = cycleText;
-
+        const overnightScans = window.appData.myScans.filter(scan => {
+            const scanTime = new Date(scan.timestamp);
+            return scanTime >= cycleStart && scanTime <= cycleEnd;
+        
         // Safe filtering with null checks
-const overnightScans = (window.appData.myScans || []).filter(scan => {
-if (!scan || !scan.timestamp) return false;
-try {
-const scanTime = new Date(scan.timestamp);
-return scanTime >= cycleStart && scanTime <= cycleEnd;
-} catch (error) {
-return false;
-}
+        const overnightScans = (window.appData.myScans || []).filter(scan => {
+            if (!scan || !scan.timestamp) return false;
+            try {
+                const scanTime = new Date(scan.timestamp);
+                return scanTime >= cycleStart && scanTime <= cycleEnd;
+            } catch (error) {
+                return false;
+            }
 });
 
 const dishStats = {};
 overnightScans.forEach(scan => {
-const dish = (scan.dish || "Unknown");
-const user = (scan.user || "Unknown");
+            const dish = scan.dish || "Unknown";
+            const user = scan.user || "Unknown";
+            const dish = (scan.dish || "Unknown");
+            const user = (scan.user || "Unknown");
 const key = `${dish}-${user}`;
-
-if (!dishStats[key]) {
-dishStats[key] = { 
-dish: dish, 
-user: user, 
-count: 0, 
-startTime: null, 
-endTime: null 
-};
+            if (!dishStats[key]) dishStats[key] = { dish: dish, user: user, count: 0, startTime: null, endTime: null };
+            dishStats[key].count++;
+            const scanTime = new Date(scan.timestamp);
+            if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
+                dishStats[key].startTime = scan.timestamp;
+            
+            if (!dishStats[key]) {
+                dishStats[key] = { 
+                    dish: dish, 
+                    user: user, 
+                    count: 0, 
+                    startTime: null, 
+                    endTime: null 
+                };
 }
-
-dishStats[key].count++;
-
-try {
-const scanTime = new Date(scan.timestamp);
-if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
-dishStats[key].startTime = scan.timestamp;
-}
-if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
-dishStats[key].endTime = scan.timestamp;
-}
-} catch (error) {
-// Skip time processing if date is invalid
+            if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
+                dishStats[key].endTime = scan.timestamp;
+            
+            dishStats[key].count++;
+            
+            try {
+                const scanTime = new Date(scan.timestamp);
+                if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
+                    dishStats[key].startTime = scan.timestamp;
+                }
+                if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
+                    dishStats[key].endTime = scan.timestamp;
+                }
+            } catch (error) {
+                // Skip time processing if date is invalid
 }
 });
 
@@ -571,35 +467,41 @@ const statsArray = Object.values(dishStats).sort((a, b) => {
 const dishA = a.dish || "Unknown";
 const dishB = b.dish || "Unknown";
 if (dishA !== dishB) return String(dishA).localeCompare(String(dishB));
-
-const timeA = a.startTime ? new Date(a.startTime) : new Date(0);
-const timeB = b.startTime ? new Date(b.startTime) : new Date(0);
-return timeA - timeB;
+            return new Date(a.startTime || now) - new Date(b.startTime || now);
+            
+            const timeA = a.startTime ? new Date(a.startTime) : new Date(0);
+            const timeB = b.startTime ? new Date(b.startTime) : new Date(0);
+            return timeA - timeB;
 });
 
 let html = statsArray.length === 0 ? 
 '<tr><td colspan="5" style="text-align: center;">No overnight scans</td></tr>' :
 statsArray.map(stat => {
-const start = stat.startTime ? 
-new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-const end = stat.endTime ? 
-new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-return `<tr>
-                   <td class="dish-header">${stat.dish}</td>
-                   <td>${stat.user}</td>
-                   <td>${stat.count}</td>
-                   <td>${start}</td>
-                   <td>${end}</td>
-               </tr>`;
+                const start = stat.startTime ? new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                const end = stat.endTime ? new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                return `<tr><td class="dish-header">${stat.dish}</td><td>${stat.user}</td><td>${stat.count}</td><td>${start}</td><td>${end}</td></tr>`;
+                const start = stat.startTime ? 
+                    new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                const end = stat.endTime ? 
+                    new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+                return `<tr>
+                    <td class="dish-header">${stat.dish}</td>
+                    <td>${stat.user}</td>
+                    <td>${stat.count}</td>
+                    <td>${start}</td>
+                    <td>${end}</td>
+                </tr>`;
 }).join('');
-
+        
 statsBody.innerHTML = html;
-} catch (error) {
-console.error('Error in updateOvernightStats:', error);
-}
+    } catch (error) {}
+    } catch (error) {
+        console.error('Error in updateOvernightStats:', error);
+    }
 }
 
 function saveToStorage() {
+    localStorage.setItem('proglove_data', JSON.stringify(window.appData));
     try {
         localStorage.setItem('proglove_data', JSON.stringify(window.appData));
     } catch (error) {
@@ -608,6 +510,8 @@ function saveToStorage() {
 }
 
 function loadFromStorage() {
+    const saved = localStorage.getItem('proglove_data');
+    if (saved) window.appData = {...window.appData, ...JSON.parse(saved)};
     try {
         const saved = localStorage.getItem('proglove_data');
         if (saved) {
@@ -621,71 +525,73 @@ function loadFromStorage() {
 
 function showMessage(text, type) {
 const element = document.getElementById('feedback');
-if (element) {
-element.textContent = text;
-element.className = 'feedback ' + type;
-}
+    element.textContent = text;
+    element.className = 'feedback ' + type;
+    if (element) {
+        element.textContent = text;
+        element.className = 'feedback ' + type;
+    }
 }
 
 // Export functions
 function exportActiveBowls() {
-try {
-const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
-const dataBlob = new Blob([dataStr], {type: 'application/json'});
-const url = URL.createObjectURL(dataBlob);
-const link = document.createElement('a');
-link.href = url;
-link.download = `active-bowls-${getStandardizedDate()}.json`;
-link.click();
-URL.revokeObjectURL(url);
-showMessage('✅ Active bowls exported', 'success');
-} catch (error) {
-showMessage('❌ Export failed', 'error');
-}
+    try {
+        const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `active-bowls-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ Active bowls exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
 }
 
 function exportReturnData() {
-try {
-const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
-const dataBlob = new Blob([dataStr], {type: 'application/json'});
-const url = URL.createObjectURL(dataBlob);
-const link = document.createElement('a');
-link.href = url;
-link.download = `return-data-${getStandardizedDate()}.json`;
-link.click();
-URL.revokeObjectURL(url);
-showMessage('✅ Return data exported', 'success');
-} catch (error) {
-showMessage('❌ Export failed', 'error');
-}
+    try {
+        const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `return-data-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ Return data exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
 }
 
 function exportAllData() {
-try {
-const dataStr = JSON.stringify(window.appData, null, 2);
-const dataBlob = new Blob([dataStr], {type: 'application/json'});
-const url = URL.createObjectURL(dataBlob);
-const link = document.createElement('a');
-link.href = url;
-link.download = `proglove-data-${getStandardizedDate()}.json`;
-link.click();
-URL.revokeObjectURL(url);
-showMessage('✅ All data exported', 'success');
-} catch (error) {
-showMessage('❌ Export failed', 'error');
-}
+    try {
+        const dataStr = JSON.stringify(window.appData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `proglove-data-${getStandardizedDate()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMessage('✅ All data exported', 'success');
+    } catch (error) {
+        showMessage('❌ Export failed', 'error');
+    }
 }
 
 function processJsonData(data) {
-try {
-if (typeof data === 'string') {
-data = JSON.parse(data);
-}
-return data;
-} catch (error) {
-console.error('Error processing JSON data:', error);
-return null;
-}
+    try {
+        if (typeof data === 'string') {
+            data = JSON.parse(data);
+        }
+        return data;
+    } catch (error) {
+        console.error('Error processing JSON data:', error);
+        return null;
+    }
 }
 
 // Global functions
