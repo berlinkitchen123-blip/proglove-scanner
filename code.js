@@ -37,34 +37,9 @@ function getStandardizedDate(dateString = null) {
     return date.toISOString().split('T')[0];
 }
 
-function getCurrentCycle() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    if (currentHour >= 22 || currentHour < 10) {
-        // Overnight cycle (10PM - 10AM) - PREPARATION TIME
-        const cycleStart = new Date(now);
-        if (currentHour < 10) {
-            cycleStart.setDate(cycleStart.getDate() - 1);
-        }
-        cycleStart.setHours(22, 0, 0, 0);
-        return cycleStart.toISOString().split('T')[0];
-    } else {
-        // Day cycle (10AM - 10PM) - ACTIVE/DISPATCH TIME
-        const cycleStart = new Date(now);
-        cycleStart.setHours(10, 0, 0, 0);
-        return cycleStart.toISOString().split('T')[0];
-    }
-}
-
-function isPreparationTime() {
+function isKitchenTime() {
     const currentHour = new Date().getHours();
-    return currentHour >= 22 || currentHour < 10;
-}
-
-function isActiveTime() {
-    const currentHour = new Date().getHours();
-    return currentHour >= 10 && currentHour < 22;
+    return currentHour >= 22 || currentHour < 10; // 10PM-10AM
 }
 
 // Initialize System
@@ -80,7 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', updateLastActivity);
     document.addEventListener('keydown', updateLastActivity);
     
-    // Initialize Firebase if available
+    // Start emergency input cleanup
+    startEmergencyCleanup();
+    
     if (typeof initializeFirebase === 'function') {
         initializeFirebase();
     }
@@ -90,14 +67,47 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
+function startEmergencyCleanup() {
+    // Emergency input reset every 2 seconds
+    setInterval(() => {
+        const input = document.getElementById('progloveInput');
+        if (input.value.length > 50) {
+            console.log('🚨 EMERGENCY INPUT RESET - Too long:', input.value);
+            input.value = '';
+            showMessage('🔄 Input auto-cleared', 'info');
+        }
+    }, 2000);
+}
+
 function handleScanInput(e) {
     if (!window.appData.scanning) return;
-    const scanValue = e.target.value.trim();
-    if (scanValue.length >= 6 && (scanValue.includes('vyt') || scanValue.includes('VYT'))) {
-        console.log('Processing scan:', scanValue);
-        processScan(scanValue);
-        setTimeout(() => { e.target.value = ''; }, 100);
+    
+    const input = e.target;
+    const scanValue = input.value;
+    
+    console.log('🔍 RAW INPUT:', scanValue, 'Length:', scanValue.length);
+    
+    // 🎯 DETECT ANY VYT CODE (use full URL as-is)
+    if (scanValue.includes('vyt') || scanValue.includes('VYT')) {
+        console.log('✅ VYT CODE DETECTED - PROCESSING FULL URL');
+        
+        // CLEAR INPUT IMMEDIATELY (before processing)
+        input.value = '';
+        
+        // PROCESS with error handling - USE FULL ORIGINAL URL
+        try {
+            processScan(scanValue);
+        } catch (error) {
+            console.error('❌ SCAN PROCESSING ERROR:', error);
+            showMessage('❌ System error - try scanning again', 'error');
+        }
+    } else if (scanValue.length > 30) {
+        // 🎯 CLEAR GARBAGE INPUT (too long but no VYT)
+        console.log('🔄 CLEARING GARBAGE INPUT');
+        input.value = '';
+        showMessage('🔄 Input cleared - ready for scan', 'info');
     }
+    
     updateLastActivity();
 }
 
@@ -225,12 +235,29 @@ function stopScanning() {
 }
 
 function processScan(code) {
+    console.log('🚨 processScan STARTED with FULL URL:', code);
+    
     let result;
-    if (window.appData.mode === 'kitchen') {
-        result = kitchenScan(code);
-    } else {
-        result = returnScan(code);
+    
+    // AUTO-SWITCH TO KITCHEN during 10PM-10AM
+    let actualMode = window.appData.mode;
+    if (isKitchenTime()) {
+        actualMode = 'kitchen';
+        console.log('⏰ Auto-switched to KITCHEN mode (10PM-10AM)');
     }
+    
+    try {
+        if (actualMode === 'kitchen') {
+            result = kitchenScan(code);
+        } else {
+            result = returnScan(code);
+        }
+        console.log('✅ processScan RESULT:', result);
+    } catch (error) {
+        console.log('❌ processScan ERROR:', error);
+        result = { message: "System error: " + error.message, type: "error", responseTime: 0 };
+    }
+    
     document.getElementById('responseTimeValue').textContent = result.responseTime + 'ms';
     showMessage(result.message, result.type);
     if (result.type === 'error') {
@@ -240,29 +267,33 @@ function processScan(code) {
     updateDisplay();
     updateOvernightStats();
     updateLastActivity();
+    
+    return result;
 }
 
 function kitchenScan(code) {
     const startTime = Date.now();
-    const originalCode = code;
+    const originalCode = code; // Keep FULL URL
     const today = getStandardizedDate();
     
-    // Check if bowl is already prepared today
+    console.log('🍳 kitchenScan STARTED with:', originalCode);
+    
+    // ONLY CHECK: If already prepared today
     const alreadyPrepared = window.appData.preparedBowls.some(bowl => 
         bowl.code === originalCode && bowl.date === today);
     
     if (alreadyPrepared) {
-        return { message: "❌ Bowl already prepared today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
+        return { message: "❌ Already prepared today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
-    // Remove this bowl from active bowls if it exists (clean up)
+    // ALWAYS REMOVE from active (if exists)
     window.appData.activeBowls = window.appData.activeBowls.filter(bowl => bowl.code !== originalCode);
     
-    // Add to prepared bowls
+    // ALWAYS ADD to prepared
     const newPreparedBowl = {
-        code: originalCode,
-        dish: window.appData.dishLetter,
-        user: window.appData.user,
+        code: originalCode, // Store FULL URL
+        dish: window.appData.dishLetter || "AUTO",
+        user: window.appData.user || "AUTO_KITCHEN",
         company: "Unknown",
         customer: "Unknown",
         date: today,
@@ -274,64 +305,61 @@ function kitchenScan(code) {
     window.appData.preparedBowls.push(newPreparedBowl);
     updateDishTimes(window.appData.dishLetter, window.appData.user);
     
-    // Add to my scans
     window.appData.myScans.push({
         type: 'kitchen',
-        code: originalCode,
+        code: originalCode, // Store FULL URL
         dish: window.appData.dishLetter,
         user: window.appData.user,
         timestamp: new Date().toISOString()
     });
     
-    // Add to scan history
     window.appData.scanHistory.unshift({
         type: 'kitchen',
-        code: originalCode,
+        code: originalCode, // Store FULL URL
         user: window.appData.user,
         timestamp: new Date().toISOString(),
         message: `${window.appData.dishLetter} Prepared: ${originalCode}`
     });
     
-    // Sync to Firebase if available
     if (typeof syncToFirebase === 'function') {
         syncToFirebase().catch(() => console.log('Firebase sync failed after kitchen scan'));
     }
     
+    console.log('🍳 kitchenScan COMPLETED');
     return { message: `✅ ${window.appData.dishLetter} Prepared: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
 }
 
 function returnScan(code) {
     const startTime = Date.now();
-    const originalCode = code;
+    const originalCode = code; // Keep FULL URL
     const today = getStandardizedDate();
     
-    // Check if already returned today
+    console.log('🔄 returnScan STARTED with:', originalCode);
+    
     if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
         return { message: "❌ Already returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
-    // Find and remove from active bowls
-    const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
     let sourceBowl = null;
-    let sourceType = 'active';
-    
-    if (activeIndex !== -1) {
-        sourceBowl = window.appData.activeBowls[activeIndex];
-        window.appData.activeBowls.splice(activeIndex, 1);
+    let sourceType = '';
+    const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
+    if (preparedIndex !== -1) {
+        sourceBowl = window.appData.preparedBowls[preparedIndex];
+        sourceType = 'prepared';
+        window.appData.preparedBowls.splice(preparedIndex, 1);
     } else {
-        // If not in active, check prepared bowls
-        const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
-        if (preparedIndex !== -1) {
-            sourceBowl = window.appData.preparedBowls[preparedIndex];
-            sourceType = 'prepared';
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
+        if (activeIndex !== -1) {
+            sourceBowl = window.appData.activeBowls[activeIndex];
+            sourceType = 'active';
+            window.appData.activeBowls.splice(activeIndex, 1);
         }
     }
     
     if (!sourceBowl) {
-        return { message: "❌ Bowl not found in system: " + originalCode, type: "error", responseTime: Date.now() - startTime };
+        return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
     }
     
-    // Add to returned bowls
     const returnedBowl = {
         ...sourceBowl,
         returnedBy: window.appData.user,
@@ -343,35 +371,31 @@ function returnScan(code) {
     };
     
     window.appData.returnedBowls.push(returnedBowl);
-    
-    // Add to my scans
     window.appData.myScans.push({
         type: 'return',
-        code: originalCode,
+        code: originalCode, // Store FULL URL
         user: window.appData.user,
         timestamp: new Date().toISOString()
     });
     
-    // Add to scan history
     window.appData.scanHistory.unshift({
         type: 'return',
-        code: originalCode,
+        code: originalCode, // Store FULL URL
         user: window.appData.user,
         timestamp: new Date().toISOString(),
         message: `Returned: ${originalCode} (from ${sourceType})`
     });
     
-    // Sync to Firebase if available
     if (typeof syncToFirebase === 'function') {
         syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
     }
     
+    console.log('🔄 returnScan COMPLETED');
     return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
 }
 
 // ========== DAILY RESET FUNCTIONS ==========
 function startDailyResetTimer() {
-    // Check every minute if it's 10PM for reset
     setInterval(() => {
         const now = new Date();
         if (now.getHours() === 22 && now.getMinutes() === 0) {
@@ -383,39 +407,34 @@ function startDailyResetTimer() {
 function resetDailyStatistics() {
     const today = getStandardizedDate();
     
-    // Don't reset if already reset today
     if (window.appData.lastCleanup === today) return;
     
     console.log('🔄 Resetting daily statistics at 10PM');
     
-    // Move prepared bowls from overnight (10PM-10AM) to active bowls for next day
     const overnightPrepared = window.appData.preparedBowls.filter(bowl => {
         const bowlTime = new Date(bowl.timestamp);
         const bowlHour = bowlTime.getHours();
-        return bowlHour >= 22 || bowlHour < 10; // Bowls prepared overnight
+        return bowlHour >= 22 || bowlHour < 10;
     });
     
-    // Convert prepared bowls to active bowls
     overnightPrepared.forEach(bowl => {
         const activeBowl = {
             ...bowl,
             status: 'ACTIVE',
-            preparedTimestamp: bowl.timestamp, // Keep original preparation time
-            timestamp: new Date().toISOString() // Update to current time
+            preparedTimestamp: bowl.timestamp,
+            timestamp: new Date().toISOString()
         };
         window.appData.activeBowls.push(activeBowl);
     });
     
-    // Clear statistics (but keep the data)
     window.appData.myScans = window.appData.myScans.filter(scan => {
         const scanTime = new Date(scan.timestamp);
         const scanHour = scanTime.getHours();
-        return scanHour >= 22 || scanHour < 10; // Keep overnight scans
+        return scanHour >= 22 || scanHour < 10;
     });
     
     window.appData.lastCleanup = today;
     
-    // Sync to Firebase if available
     if (typeof syncToFirebase === 'function') {
         syncToFirebase().catch(() => console.log('Firebase sync failed after daily reset'));
     }
@@ -443,7 +462,6 @@ function processJSONData() {
         const extractedData = [];
         const deliveries = Array.isArray(jsonData) ? jsonData : [jsonData];
         
-        // Extract data from JSON
         deliveries.forEach(delivery => {
             if (delivery.boxes && Array.isArray(delivery.boxes)) {
                 delivery.boxes.forEach(box => {
@@ -469,11 +487,9 @@ function processJSONData() {
             }
         });
 
-        // Process assignment logic
         extractedData.forEach(item => {
             const originalCode = item.code;
             
-            // Update existing active bowls
             const activeMatches = window.appData.activeBowls.filter(bowl => bowl.code === originalCode);
             if (activeMatches.length > 0) {
                 activeMatches.forEach(bowl => {
@@ -484,7 +500,6 @@ function processJSONData() {
                 patchResults.matched += activeMatches.length;
             }
             
-            // Update prepared bowls
             const preparedMatches = window.appData.preparedBowls.filter(bowl => bowl.code === originalCode);
             if (preparedMatches.length > 0) {
                 preparedMatches.forEach(bowl => {
@@ -495,7 +510,6 @@ function processJSONData() {
                 patchResults.matched += preparedMatches.length;
             }
             
-            // Create new active entry if not found anywhere
             if (activeMatches.length === 0 && preparedMatches.length === 0) {
                 const newBowl = {
                     code: originalCode,
@@ -513,12 +527,10 @@ function processJSONData() {
             }
         });
 
-        // Combine customer names for same dish+company
         combineCustomerNamesByDish();
         
         updateDisplay();
         
-        // Sync to Firebase if available
         if (typeof syncToFirebase === 'function') {
             syncToFirebase().catch(() => console.log('Firebase sync failed after JSON processing'));
         }
@@ -590,7 +602,6 @@ function exportAllData() {
     let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
     csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
     
-    // Sheet 1: Prepared Bowls
     csvContent += "PREPARED BOWLS (TODAY)\n";
     csvContent += "VYT Code,Dish Letter,Prepared By,Date,Time,Company,Customer,Multiple Customers\n";
     todayPrepared.forEach(bowl => {
@@ -599,7 +610,6 @@ function exportAllData() {
     });
     csvContent += "\n";
     
-    // Sheet 2: Active Bowls
     csvContent += "ACTIVE BOWLS\n";
     csvContent += "VYT Code,Dish Letter,Prepared By,Date,Time,Company,Customer,Multiple Customers,Status\n";
     window.appData.activeBowls.forEach(bowl => {
@@ -608,7 +618,6 @@ function exportAllData() {
     });
     csvContent += "\n";
     
-    // Sheet 3: Returned Bowls
     csvContent += "RETURNED BOWLS (TODAY)\n";
     csvContent += "VYT Code,Dish Letter,Returned By,Return Date,Return Time,Original Prepared By,Company,Customer\n";
     todayReturns.forEach(bowl => {
