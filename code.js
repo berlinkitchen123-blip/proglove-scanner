@@ -595,6 +595,135 @@ function showMessage(text, type) {
     }
 }
 
+// JSON IMPORT FUNCTIONS - MATCHES URL TO URL
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    const jsonStatus = document.getElementById('jsonStatus');
+    const patchResults = document.getElementById('patchResults');
+    const patchSummary = document.getElementById('patchSummary');
+    const failedMatches = document.getElementById('failedMatches');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        const results = patchCustomerData(jsonData);
+        
+        // Update JSON status
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} items`;
+        
+        // Show patch results
+        patchResults.style.display = 'block';
+        patchSummary.innerHTML = `
+            ✅ ${results.matched} bowls updated | 
+            ❌ ${results.failed} failed matches
+        `;
+        
+        // Show failed matches
+        if (results.failedCodes.length > 0) {
+            failedMatches.innerHTML = `
+                <strong>No matching bowls found for:</strong> ${results.failedCodes.join(', ')}
+            `;
+        } else {
+            failedMatches.innerHTML = '';
+        }
+        
+        if (results.matched > 0) {
+            showMessage(`✅ Updated ${results.matched} bowls with customer data`, 'success');
+            saveToStorage();
+            if (typeof syncToFirebase === 'function') syncToFirebase();
+        } else {
+            showMessage('❌ No matching bowls found for the provided VYT codes', 'error');
+        }
+        
+    } catch (error) {
+        showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Invalid JSON format`;
+    }
+}
+
+function patchCustomerData(jsonData) {
+    let matched = 0;
+    let failed = 0;
+    let total = 0;
+    const failedCodes = [];
+    
+    if (!Array.isArray(jsonData)) {
+        throw new Error('JSON data must be an array');
+    }
+    
+    total = jsonData.length;
+    
+    jsonData.forEach(item => {
+        // VYT code is URL format from JSON
+        const vytCodeUrl = item.vyt_code || item.code;
+        const company = item.company;
+        const customer = item.customer;
+        const dish = item.dish;
+        
+        if (!vytCodeUrl) {
+            failed++;
+            failedCodes.push('Missing VYT code URL');
+            return;
+        }
+        
+        // Search in active bowls - EXACT URL MATCH
+        let bowlFound = false;
+        
+        // Check active bowls first - exact URL match
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => 
+            bowl.code === vytCodeUrl
+        );
+        
+        if (activeIndex !== -1) {
+            // Update existing bowl
+            window.appData.activeBowls[activeIndex] = {
+                ...window.appData.activeBowls[activeIndex],
+                company: company || window.appData.activeBowls[activeIndex].company,
+                customer: customer || window.appData.activeBowls[activeIndex].customer,
+                dish: dish || window.appData.activeBowls[activeIndex].dish
+            };
+            bowlFound = true;
+            matched++;
+        } 
+        // Check prepared bowls
+        else {
+            const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === vytCodeUrl
+            );
+            
+            if (preparedIndex !== -1) {
+                window.appData.preparedBowls[preparedIndex] = {
+                    ...window.appData.preparedBowls[preparedIndex],
+                    company: company || window.appData.preparedBowls[preparedIndex].company,
+                    customer: customer || window.appData.preparedBowls[preparedIndex].customer,
+                    dish: dish || window.appData.preparedBowls[preparedIndex].dish
+                };
+                bowlFound = true;
+                matched++;
+            }
+        }
+        
+        if (!bowlFound) {
+            failed++;
+            failedCodes.push(vytCodeUrl);
+        }
+    });
+    
+    return {
+        matched,
+        failed,
+        total,
+        failedCodes
+    };
+}
+
+// Make function globally available
+window.processJsonData = processJsonData;
+
 // Export functions
 function exportActiveBowls() {
     try {
