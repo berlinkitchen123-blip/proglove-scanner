@@ -805,6 +805,55 @@ function exportAllData() {
     }
 }
 
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        
+        // DEBUG: Check the actual structure
+        console.log('=== JSON DEBUG INFO ===');
+        console.log('Full JSON:', jsonData);
+        console.log('Type:', Array.isArray(jsonData) ? 'ARRAY' : 'OBJECT');
+        
+        if (Array.isArray(jsonData)) {
+            console.log('Array length:', jsonData.length);
+            jsonData.forEach((item, index) => {
+                console.log(`Item ${index}:`, item);
+                console.log(`Item ${index} boxes:`, item.boxes);
+                if (item.boxes) {
+                    item.boxes.forEach((box, boxIndex) => {
+                        console.log(`Box ${boxIndex} dishes:`, box.dishes);
+                        if (box.dishes) {
+                            box.dishes.forEach((dish, dishIndex) => {
+                                console.log(`Dish ${dishIndex} bowlCodes:`, dish.bowlCodes);
+                            });
+                        }
+                    });
+                }
+            });
+        } else {
+            console.log('Single object - boxes:', jsonData.boxes);
+            if (jsonData.boxes) {
+                jsonData.boxes.forEach((box, boxIndex) => {
+                    console.log(`Box ${boxIndex} dishes:`, box.dishes);
+                    if (box.dishes) {
+                        box.dishes.forEach((dish, dishIndex) => {
+                            console.log(`Dish ${dishIndex} bowlCodes:`, dish.bowlCodes);
+                        });
+                    }
+                });
+            }
+        }
+        
+        const results = patchCustomerData(jsonData);
+        // ... rest of your code
+
 // Global functions
 window.setMode = setMode;
 window.selectUser = selectUser;
