@@ -1,4 +1,4 @@
-// ProGlove Scanner - Complete System
+// ProGlove Scanner - Complete System (Firebase Primary)
 window.appData = {
     mode: null, user: null, dishLetter: null, scanning: false,
     myScans: [], activeBowls: [], preparedBowls: [], returnedBowls: [],
@@ -25,7 +25,73 @@ function isKitchenTime() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadFromStorage();
+    console.log('🚀 Scanner System Starting...');
+    initializeFirebase(); // Initialize Firebase FIRST
+});
+
+// Initialize Firebase and load data
+function initializeFirebase() {
+    try {
+        // Your Firebase config
+        const firebaseConfig = {
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            databaseURL: "https://your-project.firebaseio.com",
+            projectId: "your-project",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // Load data from Firebase
+        loadFromFirebase();
+        
+    } catch (error) {
+        console.error('Firebase initialization failed:', error);
+        // Fallback to localStorage
+        loadFromStorage();
+        initializeUI();
+        showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
+    }
+}
+
+// Load data from Firebase (PRIMARY)
+function loadFromFirebase() {
+    try {
+        const db = firebase.database();
+        db.ref('progloveData').on('value', (snapshot) => {
+            if (snapshot.exists()) {
+                const firebaseData = snapshot.val();
+                window.appData = { ...window.appData, ...firebaseData };
+                console.log('✅ Data loaded from Firebase');
+                showMessage('✅ Connected to Cloud', 'success');
+            } else {
+                // No data in Firebase, try localStorage
+                loadFromStorage();
+                showMessage('✅ Cloud connected (no data yet)', 'info');
+            }
+            initializeUI();
+        }, (error) => {
+            console.error('Firebase load error:', error);
+            // Fallback to localStorage
+            loadFromStorage();
+            initializeUI();
+            showMessage('⚠️ Using local storage', 'warning');
+        });
+    } catch (error) {
+        console.error('Firebase error:', error);
+        loadFromStorage();
+        initializeUI();
+    }
+}
+
+// Initialize UI after data is loaded
+function initializeUI() {
     initializeUsers();
     updateDisplay();
     updateOvernightStats();
@@ -34,7 +100,62 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('progloveInput').addEventListener('input', handleScanInput);
     document.addEventListener('click', updateLastActivity);
     document.addEventListener('keydown', updateLastActivity);
-});
+}
+
+// Sync to Firebase (PRIMARY storage)
+function syncToFirebase() {
+    try {
+        const db = firebase.database();
+        db.ref('progloveData').set(window.appData)
+            .then(() => {
+                window.appData.lastSync = new Date().toISOString();
+                console.log('✅ Data synced to Firebase');
+            })
+            .catch((error) => {
+                console.error('Firebase sync failed:', error);
+                // Save to localStorage as backup
+                saveToStorage();
+            });
+    } catch (error) {
+        console.error('Sync error:', error);
+        saveToStorage();
+    }
+}
+
+// localStorage is now only a BACKUP
+function saveToStorage() {
+    try {
+        localStorage.setItem('proglove_data', JSON.stringify(window.appData));
+    } catch (error) {
+        console.error('Local storage save failed:', error);
+    }
+}
+
+function loadFromStorage() {
+    try {
+        const saved = localStorage.getItem('proglove_data');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            window.appData = { ...window.appData, ...parsed };
+            console.log('📁 Data loaded from local storage (backup)');
+        }
+    } catch (error) {
+        console.error('Local storage load failed:', error);
+        // Initialize empty arrays if everything fails
+        initializeDataArrays();
+    }
+}
+
+function initializeDataArrays() {
+    // Ensure all arrays exist
+    if (!window.appData.myScans) window.appData.myScans = [];
+    if (!window.appData.activeBowls) window.appData.activeBowls = [];
+    if (!window.appData.preparedBowls) window.appData.preparedBowls = [];
+    if (!window.appData.returnedBowls) window.appData.returnedBowls = [];
+    if (!window.appData.scanHistory) window.appData.scanHistory = [];
+    if (!window.appData.customerData) window.appData.customerData = [];
+    if (!window.appData.dishTimes) window.appData.dishTimes = {};
+}
 
 function updateLastActivity() {
     window.appData.lastActivity = Date.now();
@@ -62,6 +183,8 @@ function handleScanInput(e) {
 
 function initializeUsers() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
     USERS.forEach(user => {
         const option = document.createElement('option');
@@ -87,7 +210,7 @@ function setMode(mode) {
     loadUsers();
     updateStatsLabels();
     updateDisplay();
-    showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
+    showMessage(`📱 ${mode.toUpperCase()} mode - Cloud Sync`, 'info');
 }
 
 function updateStatsLabels() {
@@ -97,10 +220,13 @@ function updateStatsLabels() {
 
 function loadUsers() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
     const users = window.appData.mode === 'kitchen' ? 
         USERS.filter(u => u.role === 'Kitchen') : 
         USERS.filter(u => u.role === 'Return');
+    
     users.forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
@@ -111,6 +237,8 @@ function loadUsers() {
 
 function selectUser() {
     const dropdown = document.getElementById('userDropdown');
+    if (!dropdown) return;
+    
     window.appData.user = dropdown.value;
     if (window.appData.user) {
         showMessage(`✅ ${window.appData.user} selected`, 'success');
@@ -124,6 +252,8 @@ function selectUser() {
 
 function loadDishLetters() {
     const dropdown = document.getElementById('dishDropdown');
+    if (!dropdown) return;
+    
     dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'.split('').forEach(char => {
         const option = document.createElement('option');
@@ -135,6 +265,8 @@ function loadDishLetters() {
 
 function selectDishLetter() {
     const dropdown = document.getElementById('dishDropdown');
+    if (!dropdown) return;
+    
     window.appData.dishLetter = dropdown.value;
     if (window.appData.dishLetter) {
         showMessage(`📝 Dish ${window.appData.dishLetter}`, 'success');
@@ -154,7 +286,7 @@ function startScanning() {
     window.appData.scanning = true;
     updateDisplay();
     document.getElementById('progloveInput').focus();
-    showMessage(`🎯 SCANNING ACTIVE`, 'success');
+    showMessage(`🎯 SCANNING ACTIVE - Cloud Sync`, 'success');
 }
 
 function stopScanning() {
@@ -185,7 +317,7 @@ function processScan(code) {
     
     updateDisplay();
     updateOvernightStats();
-    saveToStorage();
+    syncToFirebase(); // PRIMARY SYNC
     return result;
 }
 
@@ -209,7 +341,6 @@ function kitchenScan(code) {
     window.appData.myScans.push({type: 'kitchen', code: code, dish: window.appData.dishLetter, user: window.appData.user, timestamp: new Date().toISOString()});
     
     updateDishTimes(window.appData.dishLetter, window.appData.user);
-    saveToStorage();
     
     return { message: `✅ ${window.appData.dishLetter} Prepared: ${code}`, type: "success", responseTime: Date.now() - startTime };
 }
@@ -273,8 +404,6 @@ function returnScan(code) {
     const activeAfter = window.appData.activeBowls.length;
     const countChange = sourceType === 'active' ? ` (Active: ${activeBefore} → ${activeAfter})` : ' (From Prepared)';
     
-    saveToStorage();
-    
     return { 
         message: `✅ Returned: ${code}${countChange}`, 
         type: "success", 
@@ -318,9 +447,9 @@ function resetDailyStatistics() {
     });
     
     window.appData.lastCleanup = today;
-    saveToStorage();
+    syncToFirebase();
     updateDisplay();
-    showMessage('✅ Daily reset', 'success');
+    showMessage('✅ Daily reset - Cloud Sync', 'success');
 }
 
 function updateDisplay() {
@@ -385,7 +514,6 @@ function updateOvernightStats() {
         
         cycleInfo.textContent = cycleText;
         
-        // Safe filtering with null checks
         const overnightScans = (window.appData.myScans || []).filter(scan => {
             if (!scan || !scan.timestamp) return false;
             try {
@@ -456,26 +584,6 @@ function updateOvernightStats() {
         statsBody.innerHTML = html;
     } catch (error) {
         console.error('Error in updateOvernightStats:', error);
-    }
-}
-
-function saveToStorage() {
-    try {
-        localStorage.setItem('proglove_data', JSON.stringify(window.appData));
-    } catch (error) {
-        console.error('Error saving to storage:', error);
-    }
-}
-
-function loadFromStorage() {
-    try {
-        const saved = localStorage.getItem('proglove_data');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            window.appData = {...window.appData, ...parsed};
-        }
-    } catch (error) {
-        console.error('Error loading from storage:', error);
     }
 }
 
