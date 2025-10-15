@@ -756,6 +756,30 @@ function patchCustomerData(jsonData) {
     };
 }
 
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        
+// DEBUG: Check the structure
+        console.log('JSON Structure:', jsonData);
+        console.log('Is Array?', Array.isArray(jsonData));
+        if (Array.isArray(jsonData)) {
+            console.log('First item:', jsonData[0]);
+            console.log('First item boxes:', jsonData[0]?.boxes);
+        } else {
+            console.log('Single object boxes:', jsonData.boxes);
+        }
+        
+        const results = patchCustomerData(jsonData);
+ // ... rest of your code
+
 // Make function globally available
 window.processJsonData = processJsonData;
 
