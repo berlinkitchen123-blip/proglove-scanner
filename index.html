@@ -1,473 +1,504 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProGlove Scanner System</title>
+    <link rel="stylesheet" href="styles.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Scanner - Complete System</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px; min-height: 100vh; }
-        .container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
-        
-        .header { 
-            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
-            padding: 20px; 
-            text-align: center; 
-            border-radius: 15px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-        }
-        
-        .card { 
-            background: linear-gradient(135deg, #2c3e50, #34495e);
-            padding: 20px; 
-            border-radius: 15px; 
-            margin-bottom: 10px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
-        .sync-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
-        .download-btn { background: linear-gradient(45deg, #3498db, #2980b9); color: white; }
-        .upload-btn { background: linear-gradient(45deg, #27ae60, #2ecc71); color: white; }
-        .export-btn { background: linear-gradient(45deg, #e67e22, #d35400); color: white; }
-        .backup-btn { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; }
-        .sync-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        .sync-btn:disabled { background: #7f8c8d; cursor: not-allowed; transform: none; box-shadow: none; }
-        
-        .system-status { 
-            padding: 15px; 
-            margin-top: 10px; 
-            border-radius: 10px; 
-            text-align: center; 
-            font-size: 14px; 
-            background: linear-gradient(45deg, #e67e22, #f39c12);
-            border-left: 4px solid #f1c40f;
-            font-weight: bold;
-        }
-        
-        .mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .mode-btn { flex: 1; padding: 18px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
-        .kitchen-btn { background: linear-gradient(45deg, #27ae60, #2ecc71); color: white; }
-        .return-btn { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; }
-        .mode-btn.active { box-shadow: 0 0 0 3px #f1c40f, 0 0 20px rgba(241, 196, 15, 0.5); transform: scale(1.02); }
-        .mode-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        
-        .dropdown { 
-            width: 100%; 
-            padding: 15px; 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            color: white; 
-            border: 2px solid #3498db; 
-            border-radius: 10px; 
-            font-size: 16px; 
-            margin-top: 10px; 
-        }
-        
-        .scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
-        .scan-btn { flex: 1; padding: 18px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
-        .start-btn { background: linear-gradient(45deg, #27ae60, #2ecc71); color: white; }
-        .stop-btn { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; }
-        .scan-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        .scan-btn:disabled { background: #7f8c8d; cursor: not-allowed; transform: none; box-shadow: none; }
-        
-        .proglove-input { 
-            width: 100%; 
-            padding: 18px; 
-            font-size: 18px; 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            color: white; 
-            border: 3px solid #3498db; 
-            border-radius: 12px; 
-            margin-bottom: 15px; 
-            text-align: center; 
-            transition: all 0.3s ease;
-        }
-        .proglove-input:focus { border-color: #f1c40f; box-shadow: 0 0 20px rgba(241, 196, 15, 0.5); }
-        .proglove-input.error { border-color: #e74c3c; animation: shake 0.5s; background: linear-gradient(135deg, #c0392b, #e74c3c); }
-        .scanning-active { animation: pulse 1.5s infinite; border: 3px solid #27ae60; box-shadow: 0 0 30px rgba(39, 174, 96, 0.5); }
-        
-        .feedback { 
-            padding: 15px; 
-            margin-top: 10px; 
-            border-radius: 10px; 
-            text-align: center; 
-            font-weight: bold; 
-            min-height: 50px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        .success { background: linear-gradient(45deg, #27ae60, #2ecc71); }
-        .error { background: linear-gradient(45deg, #e74c3c, #c0392b); }
-        .warning { background: linear-gradient(45deg, #e67e22, #f39c12); }
-        .info { background: linear-gradient(45deg, #3498db, #2980b9); }
-        
-        .hidden { display: none; }
-        
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .stat-item { 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            padding: 20px; 
-            border-radius: 12px; 
-            text-align: center;
-            border: 2px solid rgba(255,255,255,0.1);
-        }
-        .stat-value { font-size: 28px; font-weight: bold; margin: 10px 0; }
-        .kitchen-stat { color: #2ecc71; }
-        .return-stat { color: #e74c3c; }
-        .active-stat { color: #3498db; }
-        .prep-stat { color: #f39c12; }
-        
-        .response-time { 
-            font-size: 14px; 
-            color: #bdc3c7; 
-            text-align: center; 
-            margin-top: 5px; 
-            font-weight: bold;
-        }
-        
-        .local-data { 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            padding: 12px; 
-            border-radius: 8px; 
-            margin-top: 10px; 
-            font-size: 12px; 
-            border-left: 4px solid #f39c12;
-        }
-        
-        .upload-info { 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            padding: 12px; 
-            border-radius: 8px; 
-            margin-top: 10px; 
-            font-size: 12px; 
-            border-left: 4px solid #3498db;
-        }
-        
-        .cross-team-data { 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            padding: 12px; 
-            border-radius: 8px; 
-            margin-top: 10px; 
-            font-size: 12px; 
-            border-left: 4px solid #f39c12;
-        }
-        
-        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        .data-label { font-weight: bold; color: #f1c40f; }
-        
-        .admin-section { border: 3px solid #f39c12; background: linear-gradient(135deg, #2c3e50, #34495e); }
-        
-        .backup-status { 
-            background: linear-gradient(45deg, #27ae60, #2ecc71);
-            padding: 10px; 
-            border-radius: 8px; 
-            margin-top: 5px; 
-            font-size: 12px; 
-            border-left: 4px solid #2ecc71;
-            font-weight: bold;
-        }
-        
-        /* Table Styles */
-        .data-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 10px;
-            font-size: 12px;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .data-table th {
-            background: linear-gradient(45deg, #3498db, #2980b9);
-            color: white;
-            padding: 8px;
-            text-align: center;
-            border: 1px solid #2c3e50;
-            font-weight: bold;
-        }
-        .data-table td {
-            padding: 8px;
-            text-align: center;
-            border: 1px solid #2c3e50;
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-        }
-        .dish-header { 
-            background: linear-gradient(45deg, #27ae60, #2ecc71) !important; 
-            font-weight: bold; 
-            color: white;
-        }
-        
-        /* JSON Upload */
-        .json-upload { 
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            padding: 15px; 
-            border-radius: 10px; 
-            margin: 10px 0; 
-            border: 2px solid #3498db;
-        }
-        .json-textarea { 
-            width: 100%; 
-            height: 120px; 
-            background: linear-gradient(135deg, #2c3e50, #34495e);
-            color: white; 
-            border: 2px solid #3498db; 
-            border-radius: 8px; 
-            padding: 10px; 
-            font-family: monospace; 
-            font-size: 12px; 
-            resize: vertical;
-        }
-        
-        @keyframes pulse { 
-            0% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7); } 
-            70% { box-shadow: 0 0 0 20px rgba(39, 174, 96, 0); } 
-            100% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); } 
-        }
-        @keyframes shake { 
-            0%, 100% { transform: translateX(0); } 
-            25% { transform: translateX(-8px); } 
-            75% { transform: translateX(8px); } 
-        }
-        
-        h3 { color: #f1c40f; margin-bottom: 15px; font-size: 18px; }
-        h1 { font-size: 24px; margin-bottom: 5px; }
-    </style>
+<title>ProGlove Scanner - Complete System</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; padding: 10px; }
+.container { max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
+.header { background: #4285f4; padding: 15px; text-align: center; border-radius: 10px; }
+.card { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+.sync-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+.sync-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
+.download-btn { background: #4285f4; color: white; }
+.upload-btn { background: #34a853; color: white; }
+.export-btn { background: #f57c00; color: white; }
+.backup-btn { background: #ea4335; color: white; }
+.sync-btn:disabled { background: #666; cursor: not-allowed; }
+.system-status { padding: 10px; margin-top: 10px; border-radius: 5px; text-align: center; font-size: 12px; background: #444; border-left: 4px solid #f57c00; }
+.mode-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+.mode-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+.kitchen-btn { background: #34a853; color: white; }
+.return-btn { background: #ea4335; color: white; }
+.mode-btn.active { box-shadow: 0 0 0 3px white; }
+.dropdown { width: 100%; padding: 12px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; font-size: 16px; margin-top: 10px; }
+.scan-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+.scan-btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+.start-btn { background: #34a853; color: white; }
+.stop-btn { background: #ea4335; color: white; }
+.scan-btn:disabled { background: #666; cursor: not-allowed; }
+.proglove-input { width: 100%; padding: 15px; font-size: 18px; background: #333; color: white; border: 2px solid #666; border-radius: 8px; margin-bottom: 15px; text-align: center; }
+.proglove-input.error { border-color: #ea4335; animation: shake 0.5s; }
+.scanning-active { animation: pulse 1.5s infinite; border: 3px solid #34a853; }
+.feedback { padding: 12px; margin-top: 10px; border-radius: 6px; text-align: center; font-weight: bold; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+.success { background: #34a853; }
+.error { background: #ea4335; }
+.warning { background: #f57c00; }
+.info { background: #4285f4; }
+.hidden { display: none; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+.stat-item { background: #333; padding: 15px; border-radius: 8px; text-align: center; }
+.stat-value { font-size: 24px; font-weight: bold; }
+.kitchen-stat { color: #34a853; }
+.return-stat { color: #ea4335; }
+.active-stat { color: #4285f4; }
+.prep-stat { color: #f57c00; }
+.response-time { font-size: 12px; color: #888; text-align: center; margin-top: 5px; }
+.local-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
+.upload-info { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #4285f4; }
+.cross-team-data { background: #2a2a2a; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; border-left: 4px solid #f57c00; }
+.data-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+.data-label { font-weight: bold; }
+.admin-section { border: 2px solid #f57c00; }
+.backup-status { background: #2a2a2a; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 11px; border-left: 4px solid #34a853; }
+
+/* Table Styles */
+.data-table { 
+width: 100%; 
+border-collapse: collapse; 
+margin-top: 10px;
+font-size: 11px;
+}
+.data-table th {
+background: #4285f4;
+color: white;
+padding: 6px;
+text-align: center;
+border: 1px solid #555;
+}
+.data-table td {
+padding: 6px;
+text-align: center;
+border: 1px solid #555;
+background: #333;
+}
+.dish-header { background: #34a853; font-weight: bold; }
+
+/* Color Coding */
+.yellow-bg { background: #ffeb3b !important; color: #000 !important; }
+.pink-bg { background: #e91e63 !important; color: white !important; }
+.orange-bg { background: #ff9800 !important; color: white !important; }
+.red-bg { background: #f44336 !important; color: white !important; }
+.green-text { color: #4caf50 !important; font-weight: bold; }
+.red-text { color: #f44336 !important; font-weight: bold; }
+
+/* JSON Upload */
+.json-upload { background: #333; padding: 10px; border-radius: 5px; margin: 10px 0; }
+.json-textarea { width: 100%; height: 120px; background: #444; color: white; border: 1px solid #666; border-radius: 5px; padding: 8px; font-family: monospace; font-size: 12px; }
+
+@keyframes pulse { 
+0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); } 
+70% { box-shadow: 0 0 0 15px rgba(52, 168, 83, 0); } 
+100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); } 
+}
+@keyframes shake { 
+0%, 100% { transform: translateX(0); } 
+25% { transform: translateX(-5px); } 
+75% { transform: translateX(5px); } 
+}
+</style>
 </head>
 <body>
+    <div id="syncStatus" class="sync-status sync-offline">🔴 OFFLINE</div>
+    
+<div class="container">
+        <header>
+            <h1>ProGlove Scanner System</h1>
+            <p>Real-time Bowl Tracking Solution</p>
+        </header>
     <div class="container">
-        <div class="header">
-            <h1>🧤 ProGlove Scanner - Complete System</h1>
-            <p>Real-time Tracking • Data Export • Daily Reset</p>
-        </div>
+<div class="header">
+<h1>🧤 ProGlove Scanner - Complete System</h1>
+<p>Real-time Tracking • Data Export • Daily Reset</p>
+</div>
+
+<div class="card">
+            <h2>Operation Mode</h2>
+            <div class="mode-selector">
+                <button id="kitchenBtn" class="btn btn-primary" onclick="setMode('kitchen')">Kitchen Mode</button>
+                <button id="returnBtn" class="btn btn-primary" onclick="setMode('return')">Return Mode</button>
         
         <div class="card">
-            <h3>📊 SYSTEM STATUS</h3>
-            <div class="system-status" id="systemStatus">
-                🔄 Connecting to cloud...
+<h3>📊 SYSTEM STATUS</h3>
+<div class="system-status" id="systemStatus">
+🔄 Connecting to cloud...
+</div>
+            
+            <div class="form-group">
+                <label for="userDropdown">Select User:</label>
+                <select id="userDropdown" onchange="selectUser()">
+                    <option value="">-- Select User --</option>
+                </select>
             </div>
-            <div class="backup-status" id="backupStatus">
-                💾 Real-time sync active
+<div class="backup-status" id="backupStatus">
+💾 Real-time sync active
+</div>
+            
+            <div id="dishSection" class="form-group hidden">
+                <label for="dishDropdown">Select Dish Letter:</label>
+                <select id="dishDropdown" onchange="selectDishLetter()">
+                    <option value="">-- Select Dish Letter --</option>
+                </select>
+            </div>
+</div>
+
+<div class="card">
+<h3>📱 SELECT MODE</h3>
+<div class="mode-buttons">
+<button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
+<button class="mode-btn return-btn" onclick="setMode('return')" id="returnBtn">🔄 RETURN</button>
+</div>
+</div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div>Active Bowls</div>
+                <div id="activeCount" class="stat-value">0</div>
+            </div>
+        </div>
+        
+<div class="card">
+<h3>👤 SELECT USER</h3>
+<select class="dropdown" id="userDropdown" onchange="selectUser()">
+<option value="">-- Select User --</option>
+</select>
+</div>
+
+<div class="card hidden" id="dishSection">
+<h3>📝 SELECT DISH LETTER</h3>
+<select class="dropdown" id="dishDropdown" onchange="selectDishLetter()">
+<option value="">-- Select Dish Letter --</option>
+</select>
+</div>
+
+<!-- SCANNING SECTION -->
+<div class="card" id="scanSection">
+<h3>🔍 SCANNING CONTROLS</h3>
+<div class="scan-controls">
+<button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
+<button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
+</div>
+            <div class="stat-card">
+                <div id="prepLabel">Prepared Today</div>
+                <div id="prepCount" class="stat-value">0</div>
+            </div>
+
+<input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
+
+<div class="response-time">
+Response time: <span id="responseTimeValue">0</span>ms
+</div>
+            <div class="stat-card">
+                <div>My Scans Today</div>
+                <div id="myScansCount" class="stat-value">0</div>
+            </div>
+
+<div class="stats-grid">
+<div class="stat-item">
+<div class="stat-label">Active Bowls</div>
+<div class="stat-value active-stat" id="activeCount">0</div>
+</div>
+<div class="stat-item">
+<div class="stat-label" id="prepLabel">Prepared Today</div>
+<div class="stat-value prep-stat" id="prepCount">0</div>
+</div>
+<div class="stat-item">
+<div class="stat-label">My Scans Today</div>
+<div class="stat-value kitchen-stat" id="myScansCount">0</div>
+</div>
+</div>
+            <div class="stat-card">
+                <div>Response Time</div>
+                <div id="responseTimeValue" class="stat-value">0ms</div>
+            </div>
+
+<div class="feedback info" id="feedback">
+✅ System ready - Select mode and user to start
+</div>
+</div>
             </div>
         </div>
 
+<!-- OVERNIGHT STATISTICS TABLE -->
+<div class="card">
+            <h2>Dish Preparation Times</h2>
+            <div id="dishTimesList">
+                <p>No dish preparation data</p>
         <div class="card">
-            <h3>📱 SELECT MODE</h3>
-            <div class="mode-buttons">
-                <button class="mode-btn kitchen-btn" onclick="setMode('kitchen')" id="kitchenBtn">🍳 KITCHEN</button>
-                <button class="mode-btn return-btn" onclick="setMode('return')" id="returnBtn">🔄 RETURN</button>
-            </div>
+<h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
+<div class="local-data">
+<strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
+</div>
+        </div>
+        
+        <div id="feedback" class="feedback info">
+            Welcome! Please select a mode to begin.
         </div>
         
         <div class="card">
-            <h3>👤 SELECT USER</h3>
-            <select class="dropdown" id="userDropdown" onchange="selectUser()">
-                <option value="">-- Select User --</option>
-            </select>
-        </div>
-        
-        <div class="card hidden" id="dishSection">
-            <h3>📝 SELECT DISH LETTER</h3>
-            <select class="dropdown" id="dishDropdown" onchange="selectDishLetter()">
-                <option value="">-- Select Dish Letter --</option>
-            </select>
-        </div>
-        
-        <!-- SCANNING SECTION -->
-        <div class="card" id="scanSection">
-            <h3>🔍 SCANNING CONTROLS</h3>
-            <div class="scan-controls">
-                <button class="scan-btn start-btn" id="startBtn" onclick="startScanning()">▶ START SCANNING</button>
-                <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
-            </div>
-            
-            <input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
-            
-            <div class="response-time">
-                Response time: <span id="responseTimeValue">0</span>ms
-            </div>
-            
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-label">Active Bowls</div>
-                    <div class="stat-value active-stat" id="activeCount">0</div>
+            <h2>Scanning Control</h2>
+            <div id="scanSection" class="form-group">
+                <label for="progloveInput">Scan VYT Code:</label>
+                <input type="text" id="progloveInput" placeholder="Click START SCANNING...">
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button id="startBtn" class="btn btn-success" onclick="startScanning()">START SCANNING</button>
+                    <button id="stopBtn" class="btn btn-danger" onclick="stopScanning()" disabled>STOP SCANNING</button>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-label" id="prepLabel">Prepared Today</div>
-                    <div class="stat-value prep-stat" id="prepCount">0</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">My Scans Today</div>
-                    <div class="stat-value kitchen-stat" id="myScansCount">0</div>
-                </div>
             </div>
-            
-            <div class="feedback info" id="feedback">
-                ✅ System ready - Select mode and user to start
-            </div>
-        </div>
-
-        <!-- OVERNIGHT STATISTICS TABLE -->
+<div id="overnightStats">
+<table class="data-table">
+<thead>
+<tr>
+<th>Dish</th>
+<th>User</th>
+<th>Bowls</th>
+<th>Start Time</th>
+<th>End Time</th>
+</tr>
+</thead>
+<tbody id="overnightStatsBody">
+<tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+        
         <div class="card">
-            <h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
-            <div class="local-data">
-                <strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
-            </div>
-            <div id="overnightStats">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Dish</th>
-                            <th>User</th>
-                            <th>Bowls</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                        </tr>
-                    </thead>
-                    <tbody id="overnightStatsBody">
-                        <tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- DATA EXPORT SECTION -->
-        <div class="card admin-section">
-            <h3>📤 DATA EXPORT</h3>
-            <div class="sync-controls">
-                <button class="sync-btn export-btn" onclick="exportActiveBowls()" id="exportActiveBtn">
-                    📥 EXPORT ACTIVE BOWLS
-                </button>
-                <button class="sync-btn export-btn" onclick="exportReturnData()" id="exportReturnBtn">
-                    📥 EXPORT RETURN DATA
-                </button>
-                <button class="sync-btn download-btn" onclick="exportAllData()" id="exportAllBtn">
-                    📊 EXPORT ALL DATA
-                </button>
-            </div>
-            <div class="local-data" id="exportInfo">
-                <strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
+            <h2>Overnight Statistics</h2>
+            <div id="cycleInfo">Current Cycle: Tonight 10PM - Tomorrow 10AM</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Dish</th>
+                        <th>User</th>
+                        <th>Count</th>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                    </tr>
+                </thead>
+                <tbody id="overnightStatsBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center;">No scans in current overnight cycle</td>
+                    </tr>
+                </tbody>
+            </table>
             </div>
         </div>
 
-        <!-- JSON DATA PASTE SECTION -->
+<!-- DATA EXPORT SECTION -->
+<div class="card admin-section">
+<h3>📤 DATA EXPORT</h3>
+<div class="sync-controls">
+<button class="sync-btn export-btn" onclick="exportActiveBowls()" id="exportActiveBtn">
+📥 EXPORT ACTIVE BOWLS
+</button>
+<button class="sync-btn export-btn" onclick="exportReturnData()" id="exportReturnBtn">
+📥 EXPORT RETURN DATA
+</button>
+<button class="sync-btn download-btn" onclick="loadFromFirebase()" id="loadBackupBtn">
+🔄 LOAD FROM CLOUD
+</button>
+</div>
+<div class="local-data" id="exportInfo">
+<strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
+</div>
+</div>
+        
+        </div>
+
+<!-- JSON DATA PASTE SECTION -->
+<div class="card">
+            <h2>JSON Data Assignment</h2>
+            <div class="json-section">
+                <p>Paste JSON data to assign company and customer information:</p>
+                <textarea id="jsonData" placeholder='Paste JSON data here...'></textarea>
+                <button class="btn btn-warning" onclick="processJSONData()" style="margin-top: 10px;">Process JSON Data</button>
+                
+                <div id="patchResults" class="patch-results" style="display: none;">
+                    <div id="patchSummary" style="font-weight: bold; margin-bottom: 10px;"></div>
+                    <div id="failedMatches"></div>
         <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
-            <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
+<h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+<div class="json-upload">
+<textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
 [
-  {
-    "vyt_code": "https://vytal.io/VYT12345",
-    "company": "Company Name", 
-    "customer": "Customer Name",
-    "dish": "A"
-  }
+ {
+   "vyt_code": "VYT12345",
+   "company": "Company Name", 
+   "customer": "Customer Name",
+   "dish": "A"
+ }
 ]
 
 Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
-                <div class="sync-controls">
-                    <button class="sync-btn upload-btn" onclick="processJsonData()">🔄 PATCH CUSTOMER DATA</button>
-                    <button class="sync-btn backup-btn" onclick="document.getElementById('jsonData').value=''">🗑️ CLEAR</button>
+<div class="sync-controls">
+<button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
+<button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
+</div>
+                
+                <div id="jsonStatus" style="margin-top: 10px;"></div>
+</div>
+        </div>
+        
+        <div class="card">
+            <h2>Data Management</h2>
+            <p id="exportInfo">Data Status: Loading...</p>
+            <div class="export-section">
+                <button class="btn btn-success" onclick="exportAllData()">📊 Export All Data to Excel</button>
+                <button class="btn btn-primary" onclick="exportActiveBowls()">Export Active Bowls</button>
+                <button class="btn btn-primary" onclick="exportReturnData()">Export Return Data</button>
+                <button class="btn btn-warning" onclick="clearStuckBowls()">Clear Stuck Bowls</button>
+                <button class="btn btn-info" onclick="forceSync()">🔄 Force Sync</button>
+                <button class="btn btn-info" onclick="reloadFromFirebase()">📥 Reload Data</button>
                 </div>
             </div>
-            <div class="local-data" id="jsonStatus">
-                <strong>JSON Status:</strong> No data loaded
-            </div>
-            <div class="local-data" id="patchResults" style="display: none;">
-                <strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
-                <div id="failedMatches" style="margin-top: 5px;"></div>
+<div class="local-data" id="jsonStatus">
+<strong>JSON Status:</strong> No data loaded
+</div>
+<div class="local-data" id="patchResults" style="display: none;">
+<strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
+<div id="failedMatches" style="margin-top: 5px;"></div>
+</div>
+</div>
+</div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase Configuration -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<!-- Firebase Configuration -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
-            authDomain: "proglove-scanner.firebaseapp.com",
-            databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "proglove-scanner",
-            storageBucket: "proglove-scanner.firebasestorage.app",
-            messagingSenderId: "177575768177",
-            appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
-        };
+const firebaseConfig = {
+apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
+authDomain: "proglove-scanner.firebaseapp.com",
+databaseURL: "https://proglove-scanner-default-rtdb.europe-west1.firebasedatabase.app",
+projectId: "proglove-scanner",
+storageBucket: "proglove-scanner.firebasestorage.app",
+messagingSenderId: "177575768177",
+appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
+};
 
-        let app;
-        let database;
+let app;
+let database;
 
-        function initializeFirebase() {
-            try {
-                app = initializeApp(firebaseConfig);
-                database = getDatabase(app);
-                setupFirebaseListeners();
-                
-                showMessage('✅ Cloud connected • Real-time sync active', 'success');
-                document.getElementById('systemStatus').textContent = '✅ Cloud connected • Real-time sync active';
-                
-            } catch (error) {
-                console.log('Firebase initialization failed:', error);
-                showMessage('⚠️ Offline mode - scanning works locally', 'warning');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
-            }
-        }
+function initializeFirebase() {
+try {
+app = initializeApp(firebaseConfig);
+database = getDatabase(app);
+setupFirebaseListeners();
 
-        function setupFirebaseListeners() {
-            if (!database) return;
+showMessage('✅ Cloud connected • Real-time sync active', 'success');
+document.getElementById('systemStatus').textContent = '✅ Cloud connected • Real-time sync active';
 
-            const appDataRef = ref(database, 'appData');
-            onValue(appDataRef, (snapshot) => {
-                const firebaseAppData = snapshot.val();
-                if (firebaseAppData) {
-                    window.appData.activeBowls = firebaseAppData.activeBowls || [];
-                    window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
-                    window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
-                    window.appData.myScans = firebaseAppData.myScans || [];
-                    window.appData.scanHistory = firebaseAppData.scanHistory || [];
-                    window.appData.customerData = firebaseAppData.customerData || [];
-                    
-                    updateDisplay();
-                    updateOvernightStats();
-                    saveToStorage();
-                    
-                    console.log('✅ Data loaded from Firebase');
-                }
-            });
-        }
+} catch (error) {
+console.log('Firebase initialization failed:', error);
+showMessage('⚠️ Offline mode - scanning works locally', 'warning');
+document.getElementById('systemStatus').textContent = '⚠️ Offline mode - Scanning works locally';
+}
+}
 
-        async function syncToFirebase() {
-            if (!database) {
-                throw new Error('Firebase not available');
-            }
-            
-            try {
-                const backupData = {
-                    activeBowls: [...window.appData.activeBowls],
-                    preparedBowls: [...window.appData.preparedBowls],
-                    returnedBowls: [...window.appData.returnedBowls],
-                    myScans: [...window.appData.myScans],
-                    scanHistory: [...window.appData.scanHistory],
-                    customerData: [...window.appData.customerData],
-                    lastSync: new Date().toISOString()
-                };
-                
-                await set(ref(database, 'appData'), backupData);
-                return true;
-            } catch (error) {
-                console.log('Firebase sync failed:', error);
-                throw error;
-            }
-        }
+function setupFirebaseListeners() {
+if (!database) return;
 
-        window.initializeFirebase = initializeFirebase;
-        window.syncToFirebase = syncToFirebase;
-    </script>
+const appDataRef = ref(database, 'appData');
+onValue(appDataRef, (snapshot) => {
+const firebaseAppData = snapshot.val();
+if (firebaseAppData) {
+// IMPORTANT: Load ALL data from Firebase
+window.appData.activeBowls = firebaseAppData.activeBowls || [];
+window.appData.preparedBowls = firebaseAppData.preparedBowls || [];
+window.appData.returnedBowls = firebaseAppData.returnedBowls || [];
+window.appData.myScans = firebaseAppData.myScans || [];
+window.appData.scanHistory = firebaseAppData.scanHistory || [];
+window.appData.customerData = firebaseAppData.customerData || [];
 
-    <!-- Main Application Logic -->
+updateDisplay();
+updateOvernightStats();
+saveToStorage();
+
+console.log('✅ Data loaded from Firebase:', {
+activeBowls: window.appData.activeBowls.length,
+preparedBowls: window.appData.preparedBowls.length,
+returnedBowls: window.appData.returnedBowls.length
+});
+}
+});
+}
+
+async function syncToFirebase() {
+if (!database) {
+throw new Error('Firebase not available');
+}
+
+try {
+const backupData = {
+activeBowls: [...window.appData.activeBowls],
+preparedBowls: [...window.appData.preparedBowls],
+returnedBowls: [...window.appData.returnedBowls],
+myScans: [...window.appData.myScans],
+scanHistory: [...window.appData.scanHistory],
+customerData: [...window.appData.customerData],
+lastSync: new Date().toISOString()
+};
+
+await set(ref(database, 'appData'), backupData);
+return true;
+} catch (error) {
+console.log('Firebase sync failed:', error);
+throw error;
+}
+}
+
+async function loadFromFirebase() {
+if (!database) {
+showMessage('❌ Firebase not available', 'error');
+return;
+}
+
+try {
+const appDataRef = ref(database, 'appData');
+const snapshot = await get(appDataRef);
+const data = snapshot.val();
+
+if (data) {
+window.appData.activeBowls = data.activeBowls || [];
+window.appData.preparedBowls = data.preparedBowls || [];
+window.appData.returnedBowls = data.returnedBowls || [];
+window.appData.myScans = data.myScans || [];
+window.appData.scanHistory = data.scanHistory || [];
+window.appData.customerData = data.customerData || [];
+
+updateDisplay();
+updateOvernightStats();
+saveToStorage();
+
+showMessage('✅ Data loaded from cloud', 'success');
+} else {
+showMessage('ℹ️ No data found in cloud', 'info');
+}
+} catch (error) {
+showMessage('❌ Error loading from cloud', 'error');
+}
+}
+
+window.initializeFirebase = initializeFirebase;
+window.syncToFirebase = syncToFirebase;
+window.loadFromFirebase = loadFromFirebase;
+</script>
+
+<!-- Main Application Logic -->
+<script src="code.js"></script>
     <script src="code.js"></script>
 </body>
 </html>
