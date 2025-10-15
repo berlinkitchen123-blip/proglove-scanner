@@ -573,12 +573,12 @@ new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digi
 const end = stat.endTime ? 
 new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
 return `<tr>
-                   <td class="dish-header">${stat.dish}</td>
-                   <td>${stat.user}</td>
-                   <td>${stat.count}</td>
-                   <td>${start}</td>
-                   <td>${end}</td>
-               </tr>`;
+                  <td class="dish-header">${stat.dish}</td>
+                  <td>${stat.user}</td>
+                  <td>${stat.count}</td>
+                  <td>${start}</td>
+                  <td>${end}</td>
+              </tr>`;
 }).join('');
 
 statsBody.innerHTML = html;
@@ -595,17 +595,193 @@ element.className = 'feedback ' + type;
 }
 }
 
+// JSON IMPORT FUNCTIONS - FOR YOUR SPECIFIC JSON STRUCTURE
+// JSON IMPORT FUNCTION - FIXED
+function processJsonData() {
+const jsonTextarea = document.getElementById('jsonData');
+const jsonStatus = document.getElementById('jsonStatus');
+const patchResults = document.getElementById('patchResults');
+const patchSummary = document.getElementById('patchSummary');
+const failedMatches = document.getElementById('failedMatches');
+
+if (!jsonTextarea || !jsonTextarea.value.trim()) {
+showMessage('❌ No JSON data to process', 'error');
+return;
+}
+
+try {
+const jsonData = JSON.parse(jsonTextarea.value.trim());
+const results = patchCustomerData(jsonData);
+
+// Update JSON status
+jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} VYT codes`;
+
+// Show patch results
+patchResults.style.display = 'block';
+patchSummary.innerHTML = `
+          ✅ ${results.matched} bowls updated | 
+          ❌ ${results.failed} failed matches |
+          🆕 ${results.created} new bowls created
+      `;
+
+// Show failed matches
+if (results.failedCodes.length > 0) {
+failedMatches.innerHTML = `
+              <strong>No matching bowls found for:</strong> ${results.failedCodes.slice(0, 10).join(', ')}${results.failedCodes.length > 10 ? '...' : ''}
+          `;
+} else {
+failedMatches.innerHTML = '';
+}
+
+if (results.matched > 0 || results.created > 0) {
+showMessage(`✅ Updated ${results.matched} bowls + Created ${results.created} new bowls`, 'success');
+saveToStorage();
+if (typeof syncToFirebase === 'function') syncToFirebase();
+} else {
+showMessage('❌ No VYT codes found in JSON data', 'error');
+}
+
+} catch (error) {
+showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+jsonStatus.innerHTML = `<strong>JSON Status:</strong> Invalid JSON format`;
+}
+}
+
+function patchCustomerData(jsonData) {
+let matched = 0;
+let failed = 0;
+let created = 0;
+let total = 0;
+const failedCodes = [];
+
+// Extract all VYT codes from your complex JSON structure
+const vytCodes = [];
+
+if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+jsonData.boxes.forEach(box => {
+if (box.dishes && Array.isArray(box.dishes)) {
+box.dishes.forEach(dish => {
+if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+dish.bowlCodes.forEach(bowlCode => {
+if (bowlCode && bowlCode.trim()) {
+vytCodes.push({
+code: bowlCode.trim().toUpperCase(),
+company: jsonData.name || "Unknown Company",
+customer: dish.name || "Unknown Dish",
+dish: dish.label || "Unknown",
+boxType: box.type || "Unknown"
+});
+}
+});
+}
+});
+}
+});
+}
+
+total = vytCodes.length;
+
+vytCodes.forEach(item => {
+const vytCodeUrl = item.code;
+const company = item.company;
+const customer = item.customer;
+const dish = item.dish;
+
+if (!vytCodeUrl) {
+failed++;
+failedCodes.push('Empty VYT code');
+return;
+}
+
+// Search in active bowls - EXACT URL MATCH
+let bowlFound = false;
+
+// Check active bowls first - exact URL match
+const activeIndex = window.appData.activeBowls.findIndex(bowl => 
+bowl.code === vytCodeUrl
+);
+
+if (activeIndex !== -1) {
+// Update existing bowl
+window.appData.activeBowls[activeIndex] = {
+...window.appData.activeBowls[activeIndex],
+company: company || window.appData.activeBowls[activeIndex].company,
+customer: customer || window.appData.activeBowls[activeIndex].customer,
+dish: dish || window.appData.activeBowls[activeIndex].dish
+};
+bowlFound = true;
+matched++;
+} 
+// Check prepared bowls
+else {
+const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+bowl.code === vytCodeUrl
+);
+
+if (preparedIndex !== -1) {
+window.appData.preparedBowls[preparedIndex] = {
+...window.appData.preparedBowls[preparedIndex],
+company: company || window.appData.preparedBowls[preparedIndex].company,
+customer: customer || window.appData.preparedBowls[preparedIndex].customer,
+dish: dish || window.appData.preparedBowls[preparedIndex].dish
+};
+bowlFound = true;
+matched++;
+}
+}
+
+if (!bowlFound) {
+// Create new bowl if not found
+const newBowl = {
+code: vytCodeUrl,
+company: company || "Unknown Company",
+customer: customer || "Unknown Customer", 
+dish: dish || "Unknown",
+status: 'ACTIVE',
+timestamp: new Date().toISOString(),
+date: getStandardizedDate(),
+source: 'json_import'
+};
+
+window.appData.activeBowls.push(newBowl);
+created++;
+}
+});
+
+return {
+matched,
+failed,
+created,
+total,
+failedCodes
+};
+}
+
+function processJsonData() {
+const jsonTextarea = document.getElementById('jsonData');
+
+if (!jsonTextarea || !jsonTextarea.value.trim()) {
+showMessage('❌ No JSON data to process', 'error');
+return;
+}
+
+try {
+const jsonData = JSON.parse(jsonTextarea.value.trim());
+
+// Make function globally available
+window.processJsonData = processJsonData;
+
 // Export functions
 function exportActiveBowls() {
 try {
 const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/json'});
 const url = URL.createObjectURL(dataBlob);
 const link = document.createElement('a');
 link.href = url;
-        link.download = `active-bowls-${getStandardizedDate()}.json`;
-        link.download = `active-bowls-${getStandardizedDate()}.JSON`;
+link.download = `active-bowls-${getStandardizedDate()}.JSON`;
+link.download = `active-bowls-${getStandardizedDate()}.json`;
 link.click();
 URL.revokeObjectURL(url);
 showMessage('✅ Active bowls exported', 'success');
@@ -617,13 +793,13 @@ showMessage('❌ Export failed', 'error');
 function exportReturnData() {
 try {
 const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/json'});
 const url = URL.createObjectURL(dataBlob);
 const link = document.createElement('a');
 link.href = url;
-        link.download = `return-data-${getStandardizedDate()}.json`;
-        link.download = `return-data-${getStandardizedDate()}.JSON`;
+link.download = `return-data-${getStandardizedDate()}.JSON`;
+link.download = `return-data-${getStandardizedDate()}.json`;
 link.click();
 URL.revokeObjectURL(url);
 showMessage('✅ Return data exported', 'success');
@@ -635,13 +811,13 @@ showMessage('❌ Export failed', 'error');
 function exportAllData() {
 try {
 const dataStr = JSON.stringify(window.appData, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+const dataBlob = new Blob([dataStr], {type: 'application/json'});
 const url = URL.createObjectURL(dataBlob);
 const link = document.createElement('a');
 link.href = url;
-        link.download = `proglove-data-${getStandardizedDate()}.json`;
-        link.download = `proglove-data-${getStandardizedDate()}.JSON`;
+link.download = `proglove-data-${getStandardizedDate()}.JSON`;
+link.download = `proglove-data-${getStandardizedDate()}.json`;
 link.click();
 URL.revokeObjectURL(url);
 showMessage('✅ All data exported', 'success');
@@ -650,7 +826,6 @@ showMessage('❌ Export failed', 'error');
 }
 }
 
-function processJsonData(data) {
 function processJSONData(data) {
 try {
 if (typeof data === 'string') {
@@ -663,6 +838,187 @@ return null;
 }
 }
 
+// DEBUG: Check the structure
+console.log('JSON Structure:', jsonData);
+console.log('Is Array?', Array.isArray(jsonData));
+if (Array.isArray(jsonData)) {
+console.log('First item:', jsonData[0]);
+console.log('First item boxes:', jsonData[0]?.boxes);
+} else {
+console.log('Single object boxes:', jsonData.boxes);
+}
+
+const results = patchCustomerData(jsonData);
+// ... rest of your code
+
+// Debug: Check if function is loaded
+console.log('processJsonData function exists:', typeof processJsonData);
+console.log('window.processJsonData exists:', typeof window.processJsonData);
+      
+// JSON IMPORT FUNCTION - COMPLETE AND WORKING
+function processJsonData() {
+    const jsonTextarea = document.getElementById('jsonData');
+    const jsonStatus = document.getElementById('jsonStatus');
+    const patchResults = document.getElementById('patchResults');
+    const patchSummary = document.getElementById('patchSummary');
+    const failedMatches = document.getElementById('failedMatches');
+    
+    if (!jsonTextarea || !jsonTextarea.value.trim()) {
+        showMessage('❌ No JSON data to process', 'error');
+        return;
+    }
+    
+    try {
+        const jsonData = JSON.parse(jsonTextarea.value.trim());
+        const results = patchCustomerData(jsonData);
+        
+        // Update JSON status
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Processed ${results.total} VYT codes`;
+        
+        // Show patch results
+        patchResults.style.display = 'block';
+        patchSummary.innerHTML = `
+            ✅ ${results.matched} bowls updated | 
+            ❌ ${results.failed} failed matches |
+            🆕 ${results.created} new bowls created
+        `;
+        
+        // Show failed matches
+        if (results.failedCodes.length > 0) {
+            failedMatches.innerHTML = `
+                <strong>No matching bowls found for:</strong> ${results.failedCodes.slice(0, 10).join(', ')}${results.failedCodes.length > 10 ? '...' : ''}
+            `;
+        } else {
+            failedMatches.innerHTML = '';
+        }
+        
+        if (results.matched > 0 || results.created > 0) {
+            showMessage(`✅ Updated ${results.matched} bowls + Created ${results.created} new bowls`, 'success');
+            saveToStorage();
+            if (typeof syncToFirebase === 'function') syncToFirebase();
+        } else {
+            showMessage('❌ No VYT codes found in JSON data', 'error');
+        }
+        
+    } catch (error) {
+        showMessage('❌ Invalid JSON format: ' + error.message, 'error');
+        jsonStatus.innerHTML = `<strong>JSON Status:</strong> Invalid JSON format`;
+    }
+}
+
+function patchCustomerData(jsonData) {
+    let matched = 0;
+    let failed = 0;
+    let created = 0;
+    let total = 0;
+    const failedCodes = [];
+    
+    // Extract all VYT codes from your complex JSON structure
+    const vytCodes = [];
+    
+    if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
+        jsonData.boxes.forEach(box => {
+            if (box.dishes && Array.isArray(box.dishes)) {
+                box.dishes.forEach(dish => {
+                    if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                        dish.bowlCodes.forEach(bowlCode => {
+                            if (bowlCode && bowlCode.trim()) {
+                                vytCodes.push({
+                                    code: bowlCode.trim().toUpperCase(),
+                                    company: jsonData.name || "Unknown Company",
+                                    customer: dish.name || "Unknown Dish",
+                                    dish: dish.label || "Unknown",
+                                    boxType: box.type || "Unknown"
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    total = vytCodes.length;
+    
+    vytCodes.forEach(item => {
+        const vytCodeUrl = item.code;
+        const company = item.company;
+        const customer = item.customer;
+        const dish = item.dish;
+        
+        if (!vytCodeUrl) {
+            failed++;
+            failedCodes.push('Empty VYT code');
+            return;
+        }
+        
+        // Search in active bowls - EXACT URL MATCH
+        let bowlFound = false;
+        
+        // Check active bowls first - exact URL match
+        const activeIndex = window.appData.activeBowls.findIndex(bowl => 
+            bowl.code === vytCodeUrl
+        );
+        
+        if (activeIndex !== -1) {
+            // Update existing bowl
+            window.appData.activeBowls[activeIndex] = {
+                ...window.appData.activeBowls[activeIndex],
+                company: company || window.appData.activeBowls[activeIndex].company,
+                customer: customer || window.appData.activeBowls[activeIndex].customer,
+                dish: dish || window.appData.activeBowls[activeIndex].dish
+            };
+            bowlFound = true;
+            matched++;
+        } 
+        // Check prepared bowls
+        else {
+            const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+                bowl.code === vytCodeUrl
+            );
+            
+            if (preparedIndex !== -1) {
+                window.appData.preparedBowls[preparedIndex] = {
+                    ...window.appData.preparedBowls[preparedIndex],
+                    company: company || window.appData.preparedBowls[preparedIndex].company,
+                    customer: customer || window.appData.preparedBowls[preparedIndex].customer,
+                    dish: dish || window.appData.preparedBowls[preparedIndex].dish
+                };
+                bowlFound = true;
+                matched++;
+            }
+        }
+        
+        if (!bowlFound) {
+            // Create new bowl if not found
+            const newBowl = {
+                code: vytCodeUrl,
+                company: company || "Unknown Company",
+                customer: customer || "Unknown Customer", 
+                dish: dish || "Unknown",
+                status: 'ACTIVE',
+                timestamp: new Date().toISOString(),
+                date: getStandardizedDate(),
+                source: 'json_import'
+            };
+            
+            window.appData.activeBowls.push(newBowl);
+            created++;
+        }
+    });
+    
+    return {
+        matched,
+        failed,
+        created,
+        total,
+        failedCodes
+    };
+}
+
+// Make function globally available
+window.processJsonData = processJsonData;
+
 // Global functions
 window.setMode = setMode;
 window.selectUser = selectUser;
@@ -672,5 +1028,5 @@ window.stopScanning = stopScanning;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.processJsonData = processJsonData;
 window.processJSONData = processJSONData;
+window.processJsonData = processJsonData;
