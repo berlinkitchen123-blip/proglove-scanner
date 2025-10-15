@@ -331,67 +331,86 @@ function kitchenScan(code) {
 
 function returnScan(code) {
     const startTime = Date.now();
-    const originalCode = code; // Keep FULL URL
+    const originalCode = code;
     const today = getStandardizedDate();
     
     console.log('🔄 returnScan STARTED with:', originalCode);
     
-    if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
-        return { message: "❌ Already returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
-    }
-    
-    let sourceBowl = null;
-    let sourceType = '';
-    const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
-    if (preparedIndex !== -1) {
-        sourceBowl = window.appData.preparedBowls[preparedIndex];
-        sourceType = 'prepared';
-        window.appData.preparedBowls.splice(preparedIndex, 1);
-    } else {
-        const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
-        if (activeIndex !== -1) {
-            sourceBowl = window.appData.activeBowls[activeIndex];
-            sourceType = 'active';
-            window.appData.activeBowls.splice(activeIndex, 1);
+    try {
+        // Check if already returned today
+        if (window.appData.returnedBowls.some(bowl => bowl.code === originalCode && bowl.returnDate === today)) {
+            return { message: "❌ Already returned today: " + originalCode, type: "error", responseTime: Date.now() - startTime };
         }
+        
+        let sourceBowl = null;
+        let sourceType = '';
+        
+        // First check prepared bowls
+        const preparedIndex = window.appData.preparedBowls.findIndex(bowl => bowl.code === originalCode);
+        if (preparedIndex !== -1) {
+            sourceBowl = window.appData.preparedBowls[preparedIndex];
+            sourceType = 'prepared';
+            window.appData.preparedBowls.splice(preparedIndex, 1);
+            console.log('📦 Found in prepared bowls, removed from prepared');
+        } 
+        // Then check active bowls
+        else {
+            const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === originalCode);
+            if (activeIndex !== -1) {
+                sourceBowl = window.appData.activeBowls[activeIndex];
+                sourceType = 'active';
+                window.appData.activeBowls.splice(activeIndex, 1);
+                console.log('📦 Found in active bowls, removed from active');
+            }
+        }
+        
+        if (!sourceBowl) {
+            return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
+        }
+        
+        // Create returned bowl entry
+        const returnedBowl = {
+            ...sourceBowl,
+            returnedBy: window.appData.user,
+            returnDate: today,
+            returnTime: new Date().toLocaleTimeString(),
+            returnTimestamp: new Date().toISOString(),
+            status: 'RETURNED',
+            source: sourceType
+        };
+        
+        window.appData.returnedBowls.push(returnedBowl);
+        console.log('✅ Added to returned bowls');
+        
+        // Add to my scans
+        window.appData.myScans.push({
+            type: 'return',
+            code: originalCode,
+            user: window.appData.user,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Add to scan history
+        window.appData.scanHistory.unshift({
+            type: 'return',
+            code: originalCode,
+            user: window.appData.user,
+            timestamp: new Date().toISOString(),
+            message: `Returned: ${originalCode} (from ${sourceType})`
+        });
+        
+        // Sync to Firebase
+        if (typeof syncToFirebase === 'function') {
+            syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
+        }
+        
+        console.log('🔄 returnScan COMPLETED SUCCESSFULLY');
+        return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
+        
+    } catch (error) {
+        console.error('❌ returnScan ERROR:', error);
+        return { message: "❌ System error during return: " + error.message, type: "error", responseTime: Date.now() - startTime };
     }
-    
-    if (!sourceBowl) {
-        return { message: "❌ Bowl not found in active or prepared: " + originalCode, type: "error", responseTime: Date.now() - startTime };
-    }
-    
-    const returnedBowl = {
-        ...sourceBowl,
-        returnedBy: window.appData.user,
-        returnDate: today,
-        returnTime: new Date().toLocaleTimeString(),
-        returnTimestamp: new Date().toISOString(),
-        status: 'RETURNED',
-        source: sourceType
-    };
-    
-    window.appData.returnedBowls.push(returnedBowl);
-    window.appData.myScans.push({
-        type: 'return',
-        code: originalCode, // Store FULL URL
-        user: window.appData.user,
-        timestamp: new Date().toISOString()
-    });
-    
-    window.appData.scanHistory.unshift({
-        type: 'return',
-        code: originalCode, // Store FULL URL
-        user: window.appData.user,
-        timestamp: new Date().toISOString(),
-        message: `Returned: ${originalCode} (from ${sourceType})`
-    });
-    
-    if (typeof syncToFirebase === 'function') {
-        syncToFirebase().catch(() => console.log('Firebase sync failed after return scan'));
-    }
-    
-    console.log('🔄 returnScan COMPLETED');
-    return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
 }
 
 // ========== DISH TIME TRACKING ==========
