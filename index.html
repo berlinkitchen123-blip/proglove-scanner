@@ -175,9 +175,9 @@
 
         <!-- OVERNIGHT STATISTICS TABLE -->
         <div class="card">
-            <h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
+            <h3>📈 OVERNIGHT SCANNING STATISTICS (7PM-10AM)</h3>
             <div class="local-data">
-                <strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
+                <strong>Cycle:</strong> <span id="cycleInfo">Today 7PM - Tomorrow 10AM</span>
             </div>
             <div id="overnightStats">
                 <table class="data-table">
@@ -218,9 +218,9 @@
 
         <!-- JSON DATA PASTE SECTION -->
         <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+            <h3>📁 PASTE CUSTOMER DATA (json)</h3>
             <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
+                <textarea class="json-textarea" id="jsonData" placeholder='Paste json data here (EXACT FORMAT):
 [
   {
     "vyt_code": "VYT12345",
@@ -232,12 +232,12 @@
 
 Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
                 <div class="sync-controls">
-                    <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
+                    <button class="sync-btn upload-btn" onclick="processjsonData()">🔄 PATCH CUSTOMER DATA</button>
                     <button class="sync-btn export-btn" onclick="exportAllData()">📊 EXPORT ALL DATA</button>
                 </div>
             </div>
             <div class="local-data" id="jsonStatus">
-                <strong>JSON Status:</strong> No data loaded
+                <strong>json Status:</strong> No data loaded
             </div>
             <div class="local-data" id="patchResults" style="display: none;">
                 <strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
@@ -373,3 +373,4 @@ Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
     <script src="code.js"></script>
 </body>
 </html>
+
