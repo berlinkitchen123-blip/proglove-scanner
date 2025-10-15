@@ -394,6 +394,30 @@ function returnScan(code) {
     return { message: `✅ Returned: ${originalCode}`, type: "success", responseTime: Date.now() - startTime };
 }
 
+// ========== DISH TIME TRACKING ==========
+function updateDishTimes(dishLetter, user) {
+    const now = new Date();
+    const timeKey = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    if (!window.appData.dishTimes[dishLetter]) {
+        window.appData.dishTimes[dishLetter] = {
+            firstScan: timeKey,
+            lastScan: timeKey,
+            users: [user], // ✅ FIXED: Use ARRAY instead of Set
+            count: 1
+        };
+    } else {
+        window.appData.dishTimes[dishLetter].lastScan = timeKey;
+        
+        // ✅ FIXED: Use ARRAY operations instead of Set
+        if (!window.appData.dishTimes[dishLetter].users.includes(user)) {
+            window.appData.dishTimes[dishLetter].users.push(user);
+        }
+        
+        window.appData.dishTimes[dishLetter].count++;
+    }
+}
+
 // ========== DAILY RESET FUNCTIONS ==========
 function startDailyResetTimer() {
     setInterval(() => {
@@ -572,25 +596,6 @@ function combineCustomerNamesByDish() {
             }
         }
     });
-}
-
-// ========== DISH TIME TRACKING ==========
-function updateDishTimes(dishLetter, user) {
-    const now = new Date();
-    const timeKey = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    
-    if (!window.appData.dishTimes[dishLetter]) {
-        window.appData.dishTimes[dishLetter] = {
-            firstScan: timeKey,
-            lastScan: timeKey,
-            users: new Set([user]),
-            count: 1
-        };
-    } else {
-        window.appData.dishTimes[dishLetter].lastScan = timeKey;
-        window.appData.dishTimes[dishLetter].users.add(user);
-        window.appData.dishTimes[dishLetter].count++;
-    }
 }
 
 // ========== DATA EXPORT FUNCTIONS ==========
