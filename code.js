@@ -599,11 +599,11 @@ function showMessage(text, type) {
 function exportActiveBowls() {
     try {
         const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `active-bowls-${getStandardizedDate()}.json`;
+        link.download = `active-bowls-${getStandardizedDate()}.JSON`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ Active bowls exported', 'success');
@@ -615,11 +615,11 @@ function exportActiveBowls() {
 function exportReturnData() {
     try {
         const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `return-data-${getStandardizedDate()}.json`;
+        link.download = `return-data-${getStandardizedDate()}.JSON`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ Return data exported', 'success');
@@ -631,11 +631,11 @@ function exportReturnData() {
 function exportAllData() {
     try {
         const dataStr = JSON.stringify(window.appData, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `proglove-data-${getStandardizedDate()}.json`;
+        link.download = `proglove-data-${getStandardizedDate()}.JSON`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ All data exported', 'success');
@@ -644,7 +644,7 @@ function exportAllData() {
     }
 }
 
-function processJsonData(data) {
+function processJSONData(data) {
     try {
         if (typeof data === 'string') {
             data = JSON.parse(data);
@@ -665,4 +665,4 @@ window.stopScanning = stopScanning;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.processJsonData = processJsonData;
+window.processJSONData = processJSONData;
