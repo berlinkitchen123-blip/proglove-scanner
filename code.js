@@ -595,7 +595,7 @@ function showMessage(text, type) {
     }
 }
 
-// JSON IMPORT FUNCTIONS - FOR YOUR SPECIFIC JSON STRUCTURE
+// JSON IMPORT FUNCTION - FIXED
 function processJsonData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonStatus = document.getElementById('jsonStatus');
@@ -756,29 +756,15 @@ function patchCustomerData(jsonData) {
     };
 }
 
-function processJsonData() {
-    const jsonTextarea = document.getElementById('jsonData');
-    
-    if (!jsonTextarea || !jsonTextarea.value.trim()) {
-        showMessage('❌ No JSON data to process', 'error');
-        return;
-    }
-    
-    try {
-        const jsonData = JSON.parse(jsonTextarea.value.trim());
-
-// Make function globally available
-window.processJsonData = processJsonData;
-
 // Export functions
 function exportActiveBowls() {
     try {
         const dataStr = JSON.stringify(window.appData.activeBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `active-bowls-${getStandardizedDate()}.JSON`;
+        link.download = `active-bowls-${getStandardizedDate()}.json`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ Active bowls exported', 'success');
@@ -790,11 +776,11 @@ function exportActiveBowls() {
 function exportReturnData() {
     try {
         const dataStr = JSON.stringify(window.appData.returnedBowls, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `return-data-${getStandardizedDate()}.JSON`;
+        link.download = `return-data-${getStandardizedDate()}.json`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ Return data exported', 'success');
@@ -806,11 +792,11 @@ function exportReturnData() {
 function exportAllData() {
     try {
         const dataStr = JSON.stringify(window.appData, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/JSON'});
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `proglove-data-${getStandardizedDate()}.JSON`;
+        link.download = `proglove-data-${getStandardizedDate()}.json`;
         link.click();
         URL.revokeObjectURL(url);
         showMessage('✅ All data exported', 'success');
@@ -818,35 +804,6 @@ function exportAllData() {
         showMessage('❌ Export failed', 'error');
     }
 }
-
-function processJSONData(data) {
-    try {
-        if (typeof data === 'string') {
-            data = JSON.parse(data);
-        }
-        return data;
-    } catch (error) {
-        console.error('Error processing JSON data:', error);
-        return null;
-    }
-}
-
-// DEBUG: Check the structure
-        console.log('JSON Structure:', jsonData);
-        console.log('Is Array?', Array.isArray(jsonData));
-        if (Array.isArray(jsonData)) {
-            console.log('First item:', jsonData[0]);
-            console.log('First item boxes:', jsonData[0]?.boxes);
-        } else {
-            console.log('Single object boxes:', jsonData.boxes);
-        }
-        
-        const results = patchCustomerData(jsonData);
- // ... rest of your code
-
-// Debug: Check if function is loaded
-console.log('processJsonData function exists:', typeof processJsonData);
-console.log('window.processJsonData exists:', typeof window.processJsonData);
 
 // Global functions
 window.setMode = setMode;
@@ -857,4 +814,4 @@ window.stopScanning = stopScanning;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.processJSONData = processJSONData;
+window.processJsonData = processJsonData;
