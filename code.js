@@ -844,6 +844,10 @@ function processJSONData(data) {
         const results = patchCustomerData(jsonData);
  // ... rest of your code
 
+// Debug: Check if function is loaded
+console.log('processJsonData function exists:', typeof processJsonData);
+console.log('window.processJsonData exists:', typeof window.processJsonData);
+
 // Global functions
 window.setMode = setMode;
 window.selectUser = selectUser;
