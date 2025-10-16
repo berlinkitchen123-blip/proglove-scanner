@@ -41,102 +41,272 @@ const firebaseConfig = {
     appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
 };
 
-// Update the loadFromFirebase function to show more details
-function loadFromFirebase() {
-    try {
-        const db = firebase.database();
-        const appDataRef = db.ref('progloveData');
+// ========== FIREBASE FUNCTIONS ==========
+
+// Load Firebase SDK dynamically
+function loadFirebaseSDK() {
+    return new Promise((resolve, reject) => {
+        // Check if Firebase is already loaded
+        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+            console.log('✅ Firebase already loaded');
+            resolve();
+            return;
+        }
+
+        console.log('🔄 Loading Firebase SDK...');
         
-        console.log('🔄 Attempting to load from Firebase...');
-        showMessage('🔄 Loading from cloud...', 'info');
-        
-        appDataRef.once('value').then((snapshot) => {
-            if (snapshot.exists()) {
-                const firebaseData = snapshot.val();
-                console.log('✅ Firebase data found:', firebaseData);
-                
-                window.appData = { ...window.appData, ...firebaseData };
-                showMessage(`✅ Cloud data loaded: ${firebaseData.activeBowls?.length || 0} active bowls`, 'success');
-                
-                cleanupIncompleteBowls();
-            } else {
-                console.log('❌ No data found in Firebase');
-                showMessage('❌ No cloud data found', 'warning');
-                loadFromStorage();
-            }
-            initializeUI();
-        }).catch((error) => {
-            console.error('Firebase load error:', error);
-            showMessage('❌ Cloud load failed: ' + error.message, 'error');
-            loadFromStorage();
-            initializeUI();
-        });
-    } catch (error) {
-        console.error('Firebase error:', error);
-        showMessage('❌ Firebase error: ' + error.message, 'error');
-        loadFromStorage();
-        initializeUI();
-    }
-};
+        // Load Firebase App
+        const scriptApp = document.createElement('script');
+        scriptApp.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js';
+        scriptApp.onload = function() {
+            console.log('✅ Firebase App loaded');
+            // Load Firebase Database
+            const scriptDatabase = document.createElement('script');
+            scriptDatabase.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js';
+            scriptDatabase.onload = function() {
+                console.log('✅ Firebase Database loaded');
+                resolve();
+            };
+            scriptDatabase.onerror = function() {
+                reject(new Error('Failed to load Firebase Database'));
+            };
+            document.head.appendChild(scriptDatabase);
+        };
+        scriptApp.onerror = function() {
+            reject(new Error('Failed to load Firebase App'));
+        };
+        document.head.appendChild(scriptApp);
+    });
+}
 
 // Initialize Firebase
 function initializeFirebase() {
-    try {
-        if (typeof firebase === 'undefined') {
-            console.log('Firebase not available, using local storage');
+    console.log('🔄 Starting Firebase initialization...');
+    
+    loadFirebaseSDK()
+        .then(() => {
+            console.log('✅ Firebase SDK loaded successfully');
+            
+            // Now initialize Firebase app
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+                console.log('✅ Firebase app initialized');
+            }
+            
+            // Load data from Firebase
+            loadFromFirebase();
+        })
+        .catch((error) => {
+            console.error('❌ Failed to load Firebase SDK:', error);
             loadFromStorage();
             initializeUI();
-            return;
-        }
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        console.log('✅ Firebase initialized');
-        loadFromFirebase();
-    } catch (error) {
-        console.error('Firebase initialization failed:', error);
-        loadFromStorage();
-        initializeUI();
-        showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
-    }
-};
+            showMessage('⚠️ Using local storage (Firebase failed to load)', 'warning');
+            document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
+        });
+}
 
-// Load data from Firebase
+// Load data from Firebase with bowl-by-bowl merge - LOCAL DATA WINS
 function loadFromFirebase() {
     try {
+        console.log('🔄 Loading data from Firebase...');
         const db = firebase.database();
         const appDataRef = db.ref('progloveData');
         
-        appDataRef.once('value').then((snapshot) => {
-            if (snapshot.exists()) {
-                const firebaseData = snapshot.val();
-                window.appData = { ...window.appData, ...firebaseData };
-                console.log('✅ Data loaded from Firebase');
-                showMessage('✅ Cloud data loaded', 'success');
-                
-                // Clean up VYT codes without company details after loading
-                cleanupIncompleteBowls();
-            } else {
-                loadFromStorage();
-            }
-            initializeUI();
-        }).catch((error) => {
-            console.error('Firebase load error:', error);
-            loadFromStorage();
-            initializeUI();
+        showMessage('🔄 Loading from cloud...', 'info');
+        document.getElementById('systemStatus').textContent = '🔄 Connecting to Cloud...';
+        
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Firebase connection timeout')), 180000); // 3 minutes timeout
         });
+
+        Promise.race([appDataRef.once('value'), timeoutPromise])
+            .then((snapshot) => {
+                if (snapshot.exists()) {
+                    const firebaseData = snapshot.val();
+                    console.log('✅ Firebase data loaded, starting bowl-by-bowl merge...');
+                    console.log('📊 Firebase data:', firebaseData);
+                    
+                    // Load local data (LATEST)
+                    loadFromStorage();
+                    console.log('📊 Local data (LATEST):', window.appData);
+                    
+                    // Start bowl-by-bowl merge - LOCAL DATA WINS
+                    mergeFirebaseWithLocalData(firebaseData);
+                    
+                } else {
+                    console.log('❌ No data in Firebase, using local data');
+                    showMessage('❌ No cloud data - using local data', 'warning');
+                    document.getElementById('systemStatus').textContent = '✅ Cloud Connected (No Data)';
+                    loadFromStorage();
+                    initializeUI();
+                }
+            })
+            .catch((error) => {
+                console.error('Firebase load error:', error);
+                showMessage('❌ Cloud load failed: ' + error.message, 'error');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Load Error';
+                loadFromStorage();
+                initializeUI();
+            });
     } catch (error) {
         console.error('Firebase error:', error);
+        showMessage('❌ Firebase error: ' + error.message, 'error');
+        document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Firebase Error';
         loadFromStorage();
         initializeUI();
     }
-};
+}
+
+// Bowl-by-bowl merge - LOCAL DATA WINS over Firebase data
+function mergeFirebaseWithLocalData(firebaseData) {
+    console.log('🔄 Starting bowl-by-bowl merge...');
+    showMessage('🔄 Merging cloud data with local data...', 'info');
+    
+    // Show progress element
+    const progressElement = document.getElementById('mergeProgress');
+    if (progressElement) {
+        progressElement.style.display = 'block';
+        progressElement.innerHTML = 'Starting data merge...';
+    }
+    
+    let bowlsUpdated = 0;
+    let bowlsAdded = 0;
+    
+    // Merge activeBowls - LOCAL WINS
+    if (firebaseData.activeBowls && Array.isArray(firebaseData.activeBowls)) {
+        console.log(`🔄 Processing ${firebaseData.activeBowls.length} active bowls from Firebase...`);
+        
+        firebaseData.activeBowls.forEach((firebaseBowl, index) => {
+            setTimeout(() => {
+                const localBowlIndex = window.appData.activeBowls.findIndex(
+                    localBowl => localBowl.code === firebaseBowl.code
+                );
+                
+                if (localBowlIndex !== -1) {
+                    // Bowl exists in both - KEEP LOCAL DATA (newer)
+                    console.log(`✅ Keeping local bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                    bowlsUpdated++;
+                } else {
+                    // Bowl only in Firebase - ADD to local (but this shouldn't happen if local is newer)
+                    console.log(`🆕 Adding Firebase bowl to local: ${firebaseBowl.code}`);
+                    window.appData.activeBowls.push(firebaseBowl);
+                    bowlsAdded++;
+                }
+                
+                // Update progress
+                updateMergeProgress('active', index + 1, firebaseData.activeBowls.length, bowlsUpdated, bowlsAdded);
+                
+            }, index * 100); // 100ms delay between each bowl
+        });
+    }
+    
+    // Merge preparedBowls - LOCAL WINS
+    if (firebaseData.preparedBowls && Array.isArray(firebaseData.preparedBowls)) {
+        setTimeout(() => {
+            console.log(`🔄 Processing ${firebaseData.preparedBowls.length} prepared bowls from Firebase...`);
+            
+            firebaseData.preparedBowls.forEach((firebaseBowl, index) => {
+                setTimeout(() => {
+                    const localBowlIndex = window.appData.preparedBowls.findIndex(
+                        localBowl => localBowl.code === firebaseBowl.code
+                    );
+                    
+                    if (localBowlIndex !== -1) {
+                        // Bowl exists in both - KEEP LOCAL DATA (newer)
+                        console.log(`✅ Keeping local prepared bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                        bowlsUpdated++;
+                    } else {
+                        // Bowl only in Firebase - ADD to local
+                        console.log(`🆕 Adding Firebase prepared bowl to local: ${firebaseBowl.code}`);
+                        window.appData.preparedBowls.push(firebaseBowl);
+                        bowlsAdded++;
+                    }
+                    
+                    // Update progress
+                    updateMergeProgress('prepared', index + 1, firebaseData.preparedBowls.length, bowlsUpdated, bowlsAdded);
+                    
+                }, (firebaseData.activeBowls?.length || 0) * 100 + index * 100);
+            });
+        }, (firebaseData.activeBowls?.length || 0) * 100 + 1000);
+    }
+    
+    // Merge returnedBowls - LOCAL WINS
+    if (firebaseData.returnedBowls && Array.isArray(firebaseData.returnedBowls)) {
+        setTimeout(() => {
+            console.log(`🔄 Processing ${firebaseData.returnedBowls.length} returned bowls from Firebase...`);
+            
+            firebaseData.returnedBowls.forEach((firebaseBowl, index) => {
+                setTimeout(() => {
+                    const localBowlIndex = window.appData.returnedBowls.findIndex(
+                        localBowl => localBowl.code === firebaseBowl.code
+                    );
+                    
+                    if (localBowlIndex !== -1) {
+                        // Bowl exists in both - KEEP LOCAL DATA (newer)
+                        console.log(`✅ Keeping local returned bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                        bowlsUpdated++;
+                    } else {
+                        // Bowl only in Firebase - ADD to local
+                        console.log(`🆕 Adding Firebase returned bowl to local: ${firebaseBowl.code}`);
+                        window.appData.returnedBowls.push(firebaseBowl);
+                        bowlsAdded++;
+                    }
+                    
+                    // Update progress
+                    updateMergeProgress('returned', index + 1, firebaseData.returnedBowls.length, bowlsUpdated, bowlsAdded);
+                    
+                }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + index * 100);
+            });
+        }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + 2000);
+    }
+    
+    // Finalize after all merges complete
+    const totalBowls = (firebaseData.activeBowls?.length || 0) + 
+                      (firebaseData.preparedBowls?.length || 0) + 
+                      (firebaseData.returnedBowls?.length || 0);
+    
+    setTimeout(() => {
+        console.log(`✅ Merge completed: ${bowlsUpdated} bowls kept (local), ${bowlsAdded} bowls added from Firebase`);
+        showMessage(`✅ Data merge complete: ${bowlsUpdated} local bowls preserved, ${bowlsAdded} cloud bowls added`, 'success');
+        
+        // Hide progress element
+        if (progressElement) {
+            progressElement.style.display = 'none';
+        }
+        
+        // Clean up and sync merged data back to Firebase
+        cleanupIncompleteBowls();
+        syncToFirebase(); // Upload merged data to Firebase
+        
+        // Initialize UI
+        initializeUI();
+        
+    }, totalBowls * 100 + 3000); // Wait for all operations to complete
+}
+
+// Show merge progress
+function updateMergeProgress(bowlType, current, total, updated, added) {
+    const progress = Math.round((current / total) * 100);
+    console.log(`📊 ${bowlType} bowls: ${current}/${total} (${progress}%) - Updated: ${updated}, Added: ${added}`);
+    
+    // Update UI progress
+    const progressElement = document.getElementById('mergeProgress');
+    if (progressElement) {
+        progressElement.innerHTML = `
+            Merging ${bowlType} bowls: ${current}/${total} (${progress}%)<br>
+            Local bowls kept: ${updated} | Cloud bowls added: ${added}
+        `;
+    }
+}
 
 // Sync to Firebase
 function syncToFirebase() {
     try {
-        if (typeof firebase === 'undefined') return;
+        if (typeof firebase === 'undefined') {
+            console.log('Firebase not available, saving to local storage only');
+            saveToStorage();
+            return;
+        }
         
         const db = firebase.database();
         const backupData = {
@@ -154,16 +324,18 @@ function syncToFirebase() {
             .then(() => {
                 window.appData.lastSync = new Date().toISOString();
                 console.log('✅ Data synced to Firebase');
+                document.getElementById('systemStatus').textContent = '✅ Cloud Synced';
             })
             .catch((error) => {
                 console.error('Firebase sync failed:', error);
                 saveToStorage();
+                document.getElementById('systemStatus').textContent = '⚠️ Sync Failed - Using Local';
             });
     } catch (error) {
         console.error('Sync error:', error);
         saveToStorage();
     }
-};
+}
 
 // Clean up VYT codes without company details
 function cleanupIncompleteBowls() {
@@ -183,6 +355,41 @@ function cleanupIncompleteBowls() {
         console.log(`✅ Cleaned up ${removedCount} incomplete bowls`);
     }
 }
+
+// Check Firebase data status
+function checkFirebaseData() {
+    try {
+        if (typeof firebase === 'undefined') {
+            showMessage('❌ Firebase not loaded', 'error');
+            return;
+        }
+        
+        const db = firebase.database();
+        const appDataRef = db.ref('progloveData');
+        
+        showMessage('🔄 Checking Firebase data...', 'info');
+        
+        appDataRef.once('value').then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const activeCount = data.activeBowls ? data.activeBowls.length : 0;
+                const preparedCount = data.preparedBowls ? data.preparedBowls.length : 0;
+                const returnedCount = data.returnedBowls ? data.returnedBowls.length : 0;
+                
+                showMessage(`✅ Firebase has data: ${activeCount} active, ${preparedCount} prepared, ${returnedCount} returned bowls`, 'success');
+                console.log('📊 Firebase data:', data);
+            } else {
+                showMessage('❌ No data found in Firebase', 'warning');
+            }
+        }).catch((error) => {
+            showMessage('❌ Error checking Firebase: ' + error.message, 'error');
+        });
+    } catch (error) {
+        showMessage('❌ Firebase check failed: ' + error.message, 'error');
+    }
+}
+
+// ========== EXISTING SCANNER FUNCTIONS ==========
 
 // VYTAL URL DETECTION - KEEP URLs EXACT, NO SHORTENING
 function detectVytCode(input) {
@@ -229,7 +436,7 @@ function initializeUI() {
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
-    initializeFirebase();
+    initializeFirebase(); // This starts the Firebase loading process
 });
 
 function updateLastActivity() {
@@ -1076,5 +1283,6 @@ window.processJSONData = processJSONData;
 window.exportActiveBowls = exportActiveBowls;
 window.exportReturnData = exportReturnData;
 window.exportAllData = exportAllData;
-window.loadFromFirebase = loadFromFirebase;
+window.checkFirebaseData = checkFirebaseData;
 window.syncToFirebase = syncToFirebase;
+window.loadFromFirebase = loadFromFirebase;
