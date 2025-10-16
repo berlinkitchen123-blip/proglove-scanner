@@ -676,7 +676,7 @@ function processScan(input) {
     updateLastActivity();
 }
 
-// CORRECTED Kitchen Scan - NO company/customer data in prepared bowls
+// UPDATED Kitchen Scan - Remove from active and reset to Unknown
 function kitchenScan(vytInfo) {
     const startTime = Date.now();
     const today = new Date().toLocaleDateString('en-GB');
@@ -694,21 +694,33 @@ function kitchenScan(vytInfo) {
         };
     }
 
+    // STEP 1: Check if bowl exists in active bowls and REMOVE it
+    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
+    let hadCustomerData = false;
+    
+    if (activeBowlIndex !== -1) {
+        // Remove from active bowls (delete Customer A data)
+        window.appData.activeBowls.splice(activeBowlIndex, 1);
+        hadCustomerData = true;
+        console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl}`);
+    }
+
     const preparedBowl = {
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        // ✅ NO COMPANY/CUSTOMER DATA in prepared bowls
-        company: "", // BLANK
-        customer: "", // BLANK
+        // ✅ RESET to Unknown - Kitchen has no customer data
+        company: "Unknown", 
+        customer: "Unknown",
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
         status: 'PREPARED',
-        multipleCustomers: false
+        multipleCustomers: false,
+        hadPreviousCustomer: hadCustomerData // Track if it had previous customer data
     };
 
-    // ADD to prepared bowls (today's preparation)
+    // STEP 2: ADD to prepared bowls (today's preparation)
     window.appData.preparedBowls.push(preparedBowl);
 
     window.appData.myScans.push({
@@ -716,24 +728,29 @@ function kitchenScan(vytInfo) {
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: "", // BLANK
-        customer: "", // BLANK
-        timestamp: new Date().toISOString()
+        company: "Unknown", // RESET
+        customer: "Unknown", // RESET
+        timestamp: new Date().toISOString(),
+        hadPreviousCustomer: hadCustomerData
     });
+
+    const message = hadCustomerData ? 
+        `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl} (customer data reset)` :
+        `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`;
 
     window.appData.scanHistory.unshift({
         type: 'kitchen',
         code: vytInfo.fullUrl,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`
+        message: message
     });
 
     saveToStorage();
     syncToFirebase();
 
     return { 
-        message: `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`, 
+        message: message, 
         type: "success",
         responseTime: Date.now() - startTime
     };
@@ -1164,71 +1181,59 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// Export All Data to Excel
+// Export All Data to Excel with 3 sheets
 function exportAllData() {
-    const allData = {
-        activeBowls: window.appData.activeBowls,
-        preparedBowls: window.appData.preparedBowls,
-        returnedBowls: window.appData.returnedBowls,
-        customerData: window.appData.customerData,
-        scanHistory: window.appData.scanHistory,
-        exportTime: new Date().toISOString()
-    };
-
-    const csvData = convertAllDataToCSV(allData);
-    downloadCSV(csvData, 'complete_scanner_data.csv');
-    showMessage('✅ All data exported as CSV', 'success');
-}
-
-function convertAllDataToCSV(allData) {
-    let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
-    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
-
-    // Active Bowls
-    csvContent += "ACTIVE BOWLS\n";
-    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
-    allData.activeBowls.forEach(bowl => {
-        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-
-    // Prepared Bowls (Today)
-    const today = new Date().toLocaleDateString('en-GB');
-    const todayPrepared = allData.preparedBowls.filter(bowl => bowl.date === today);
-    csvContent += "PREPARED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
-    todayPrepared.forEach(bowl => {
-        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-
-    // Returned Bowls (Today)
-    const todayReturns = allData.returnedBowls.filter(bowl => bowl.returnDate === today);
-    csvContent += "RETURNED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,Returned By,Return Date,Return Time\n";
-    todayReturns.forEach(bowl => {
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.returnedBy}","${bowl.returnDate}","${bowl.returnTime}"\n`;
-    });
-    csvContent += "\n";
-
-    // Customer Data
-    csvContent += "CUSTOMER DATA\n";
-    csvContent += "VYT Code,Company,Customer,Dish\n";
-    allData.customerData.forEach(customer => {
-        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
-    });
-    csvContent += "\n";
-
-    // Recent Scan History
-    csvContent += "RECENT SCAN HISTORY (Last 50)\n";
-    csvContent += "Type,Code,User,Company,Customer,Timestamp,Message\n";
-    allData.scanHistory.slice(0, 50).forEach(scan => {
-        csvContent += `"${scan.type}","${scan.code}","${scan.user}","${scan.company || ''}","${scan.customer || ''}","${scan.timestamp}","${scan.message}"\n`;
-    });
-
-    return csvContent;
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Sheet 1: Active Bowls
+    const activeData = window.appData.activeBowls.map(bowl => ({
+        'Code': bowl.code,
+        'Dish': bowl.dish,
+        'Company': bowl.company,
+        'Customer': bowl.customer,
+        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
+        'User': bowl.user,
+        'Date': bowl.date,
+        'Time': bowl.time,
+        'Status': bowl.status
+    }));
+    const wsActive = XLSX.utils.json_to_sheet(activeData);
+    XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
+    
+    // Sheet 2: Prepared Bowls
+    const preparedData = window.appData.preparedBowls.map(bowl => ({
+        'Code': bowl.code,
+        'Dish': bowl.dish,
+        'Company': bowl.company,
+        'Customer': bowl.customer,
+        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
+        'User': bowl.user,
+        'Date': bowl.date,
+        'Time': bowl.time,
+        'Status': bowl.status,
+        'Was In Active': bowl.wasInActive ? 'Yes' : 'No'
+    }));
+    const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
+    XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
+    
+    // Sheet 3: Returned Bowls
+    const returnedData = window.appData.returnedBowls.map(bowl => ({
+        'Code': bowl.code,
+        'Dish': bowl.dish,
+        'Company': bowl.company,
+        'Customer': bowl.customer,
+        'Returned By': bowl.returnedBy,
+        'Return Date': bowl.returnDate,
+        'Return Time': bowl.returnTime,
+        'Status': bowl.status
+    }));
+    const wsReturned = XLSX.utils.json_to_sheet(returnedData);
+    XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
+    
+    // Export the workbook
+    XLSX.writeFile(wb, 'complete_scanner_data.xlsx');
+    showMessage('✅ All data exported as Excel with 3 sheets', 'success');
 }
 
 function convertToCSV(data, fields) {
