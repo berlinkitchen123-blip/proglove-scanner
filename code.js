@@ -46,7 +46,6 @@ const firebaseConfig = {
 // Load Firebase SDK dynamically
 function loadFirebaseSDK() {
     return new Promise((resolve, reject) => {
-        // Check if Firebase is already loaded
         if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
             console.log('✅ Firebase already loaded');
             resolve();
@@ -55,12 +54,10 @@ function loadFirebaseSDK() {
 
         console.log('🔄 Loading Firebase SDK...');
         
-        // Load Firebase App
         const scriptApp = document.createElement('script');
         scriptApp.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js';
         scriptApp.onload = function() {
             console.log('✅ Firebase App loaded');
-            // Load Firebase Database
             const scriptDatabase = document.createElement('script');
             scriptDatabase.src = 'https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js';
             scriptDatabase.onload = function() {
@@ -87,25 +84,23 @@ function initializeFirebase() {
         .then(() => {
             console.log('✅ Firebase SDK loaded successfully');
             
-            // Now initialize Firebase app
             if (!firebase.apps.length) {
                 firebase.initializeApp(firebaseConfig);
                 console.log('✅ Firebase app initialized');
             }
             
-            // Load data from Firebase
             loadFromFirebase();
         })
         .catch((error) => {
             console.error('❌ Failed to load Firebase SDK:', error);
             loadFromStorage();
             initializeUI();
-            showMessage('⚠️ Using local storage (Firebase failed to load)', 'warning');
+            showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
             document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
         });
 }
 
-// Load data from Firebase with bowl-by-bowl merge - LOCAL DATA WINS
+// Load data from Firebase
 function loadFromFirebase() {
     try {
         console.log('🔄 Loading data from Firebase...');
@@ -116,21 +111,18 @@ function loadFromFirebase() {
         document.getElementById('systemStatus').textContent = '🔄 Connecting to Cloud...';
         
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Firebase connection timeout')), 180000); // 3 minutes timeout
+            setTimeout(() => reject(new Error('Firebase connection timeout')), 180000);
         });
 
         Promise.race([appDataRef.once('value'), timeoutPromise])
             .then((snapshot) => {
                 if (snapshot.exists()) {
                     const firebaseData = snapshot.val();
-                    console.log('✅ Firebase data loaded, starting bowl-by-bowl merge...');
-                    console.log('📊 Firebase data:', firebaseData);
+                    console.log('✅ Firebase data loaded, starting merge...');
                     
-                    // Load local data (LATEST)
                     loadFromStorage();
                     console.log('📊 Local data (LATEST):', window.appData);
                     
-                    // Start bowl-by-bowl merge - LOCAL DATA WINS
                     mergeFirebaseWithLocalData(firebaseData);
                     
                 } else {
@@ -157,12 +149,11 @@ function loadFromFirebase() {
     }
 }
 
-// Bowl-by-bowl merge - LOCAL DATA WINS over Firebase data
+// Bowl-by-bowl merge - LOCAL DATA WINS
 function mergeFirebaseWithLocalData(firebaseData) {
     console.log('🔄 Starting bowl-by-bowl merge...');
     showMessage('🔄 Merging cloud data with local data...', 'info');
     
-    // Show progress element
     const progressElement = document.getElementById('mergeProgress');
     if (progressElement) {
         progressElement.style.display = 'block';
@@ -172,7 +163,7 @@ function mergeFirebaseWithLocalData(firebaseData) {
     let bowlsUpdated = 0;
     let bowlsAdded = 0;
     
-    // Merge activeBowls - LOCAL WINS
+    // Merge activeBowls
     if (firebaseData.activeBowls && Array.isArray(firebaseData.activeBowls)) {
         console.log(`🔄 Processing ${firebaseData.activeBowls.length} active bowls from Firebase...`);
         
@@ -183,24 +174,21 @@ function mergeFirebaseWithLocalData(firebaseData) {
                 );
                 
                 if (localBowlIndex !== -1) {
-                    // Bowl exists in both - KEEP LOCAL DATA (newer)
                     console.log(`✅ Keeping local bowl: ${firebaseBowl.code} (LOCAL WINS)`);
                     bowlsUpdated++;
                 } else {
-                    // Bowl only in Firebase - ADD to local (but this shouldn't happen if local is newer)
                     console.log(`🆕 Adding Firebase bowl to local: ${firebaseBowl.code}`);
                     window.appData.activeBowls.push(firebaseBowl);
                     bowlsAdded++;
                 }
                 
-                // Update progress
                 updateMergeProgress('active', index + 1, firebaseData.activeBowls.length, bowlsUpdated, bowlsAdded);
                 
-            }, index * 100); // 100ms delay between each bowl
+            }, index * 100);
         });
     }
     
-    // Merge preparedBowls - LOCAL WINS
+    // Merge preparedBowls
     if (firebaseData.preparedBowls && Array.isArray(firebaseData.preparedBowls)) {
         setTimeout(() => {
             console.log(`🔄 Processing ${firebaseData.preparedBowls.length} prepared bowls from Firebase...`);
@@ -212,17 +200,14 @@ function mergeFirebaseWithLocalData(firebaseData) {
                     );
                     
                     if (localBowlIndex !== -1) {
-                        // Bowl exists in both - KEEP LOCAL DATA (newer)
                         console.log(`✅ Keeping local prepared bowl: ${firebaseBowl.code} (LOCAL WINS)`);
                         bowlsUpdated++;
                     } else {
-                        // Bowl only in Firebase - ADD to local
                         console.log(`🆕 Adding Firebase prepared bowl to local: ${firebaseBowl.code}`);
                         window.appData.preparedBowls.push(firebaseBowl);
                         bowlsAdded++;
                     }
                     
-                    // Update progress
                     updateMergeProgress('prepared', index + 1, firebaseData.preparedBowls.length, bowlsUpdated, bowlsAdded);
                     
                 }, (firebaseData.activeBowls?.length || 0) * 100 + index * 100);
@@ -230,7 +215,7 @@ function mergeFirebaseWithLocalData(firebaseData) {
         }, (firebaseData.activeBowls?.length || 0) * 100 + 1000);
     }
     
-    // Merge returnedBowls - LOCAL WINS
+    // Merge returnedBowls
     if (firebaseData.returnedBowls && Array.isArray(firebaseData.returnedBowls)) {
         setTimeout(() => {
             console.log(`🔄 Processing ${firebaseData.returnedBowls.length} returned bowls from Firebase...`);
@@ -242,17 +227,14 @@ function mergeFirebaseWithLocalData(firebaseData) {
                     );
                     
                     if (localBowlIndex !== -1) {
-                        // Bowl exists in both - KEEP LOCAL DATA (newer)
                         console.log(`✅ Keeping local returned bowl: ${firebaseBowl.code} (LOCAL WINS)`);
                         bowlsUpdated++;
                     } else {
-                        // Bowl only in Firebase - ADD to local
                         console.log(`🆕 Adding Firebase returned bowl to local: ${firebaseBowl.code}`);
                         window.appData.returnedBowls.push(firebaseBowl);
                         bowlsAdded++;
                     }
                     
-                    // Update progress
                     updateMergeProgress('returned', index + 1, firebaseData.returnedBowls.length, bowlsUpdated, bowlsAdded);
                     
                 }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + index * 100);
@@ -260,7 +242,6 @@ function mergeFirebaseWithLocalData(firebaseData) {
         }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + 2000);
     }
     
-    // Finalize after all merges complete
     const totalBowls = (firebaseData.activeBowls?.length || 0) + 
                       (firebaseData.preparedBowls?.length || 0) + 
                       (firebaseData.returnedBowls?.length || 0);
@@ -269,19 +250,15 @@ function mergeFirebaseWithLocalData(firebaseData) {
         console.log(`✅ Merge completed: ${bowlsUpdated} bowls kept (local), ${bowlsAdded} bowls added from Firebase`);
         showMessage(`✅ Data merge complete: ${bowlsUpdated} local bowls preserved, ${bowlsAdded} cloud bowls added`, 'success');
         
-        // Hide progress element
         if (progressElement) {
             progressElement.style.display = 'none';
         }
         
-        // Clean up and sync merged data back to Firebase
         cleanupIncompleteBowls();
-        syncToFirebase(); // Upload merged data to Firebase
-        
-        // Initialize UI
+        syncToFirebase();
         initializeUI();
         
-    }, totalBowls * 100 + 3000); // Wait for all operations to complete
+    }, totalBowls * 100 + 3000);
 }
 
 // Show merge progress
@@ -289,7 +266,6 @@ function updateMergeProgress(bowlType, current, total, updated, added) {
     const progress = Math.round((current / total) * 100);
     console.log(`📊 ${bowlType} bowls: ${current}/${total} (${progress}%) - Updated: ${updated}, Added: ${added}`);
     
-    // Update UI progress
     const progressElement = document.getElementById('mergeProgress');
     if (progressElement) {
         progressElement.innerHTML = `
@@ -342,7 +318,6 @@ function cleanupIncompleteBowls() {
     const initialCount = window.appData.activeBowls.length;
     
     window.appData.activeBowls = window.appData.activeBowls.filter(bowl => {
-        // Remove bowls that have incomplete company data
         if (bowl.company && bowl.company !== "Unknown" && (!bowl.customer || bowl.customer === "Unknown")) {
             console.log(`🗑️ Removing incomplete bowl: ${bowl.code} - Company: ${bowl.company}, Customer: ${bowl.customer}`);
             return false;
@@ -391,16 +366,15 @@ function checkFirebaseData() {
 
 // ========== SCANNER SYSTEM FUNCTIONS ==========
 
-// VYTAL URL DETECTION - KEEP URLs EXACT, NO SHORTENING
+// VYTAL URL DETECTION
 function detectVytCode(input) {
     if (!input || typeof input !== 'string') return null;
 
     const cleanInput = input.trim();
 
-    // Check if it's ANY VYTAL-related URL (VYT.TO or VYTAL)
     if (cleanInput.includes('VYT.TO/') || cleanInput.includes('VYTAL')) {
         return {
-            fullUrl: cleanInput, // KEEP ORIGINAL URL EXACTLY
+            fullUrl: cleanInput,
             type: cleanInput.includes('VYT.TO/') ? 'VYT.TO' : 'VYTAL'
         };
     }
@@ -412,10 +386,8 @@ function detectVytCode(input) {
 function extractCompanyFromUniqueIdentifier(uniqueIdentifier) {
     if (!uniqueIdentifier) return "Unknown";
     
-    // Example: "cm-1-Bahnhofstr - degewo-2025-10-13" → "Bahnhofstr - degewo"
     const parts = uniqueIdentifier.split('-');
     if (parts.length >= 3) {
-        // Join parts from index 2 to second-last (excluding date)
         return parts.slice(2, -1).join(' ').trim();
     }
     
@@ -436,7 +408,7 @@ function initializeUI() {
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Scanner System...');
-    initializeFirebase(); // This starts the Firebase loading process
+    initializeFirebase();
 });
 
 function updateLastActivity() {
@@ -466,12 +438,12 @@ function processJSONData() {
             companiesProcessed: new Set()
         };
 
-        // PROCESS SINGLE COMPANY (your current structure)
+        // PROCESS SINGLE COMPANY
         if (jsonData.name && jsonData.boxes) {
             console.log(`📦 Processing single company: ${jsonData.name}`);
             processCompanyData(jsonData, extractedData, patchResults);
         }
-        // PROCESS ARRAY OF COMPANIES (multiple companies in one JSON)
+        // PROCESS ARRAY OF COMPANIES
         else if (Array.isArray(jsonData)) {
             console.log(`🏢 Processing ${jsonData.length} companies in array`);
             jsonData.forEach((companyData, index) => {
@@ -481,7 +453,7 @@ function processJSONData() {
                 }
             });
         }
-        // PROCESS NESTED COMPANIES (companies array inside JSON)
+        // PROCESS NESTED COMPANIES
         else if (jsonData.companies && Array.isArray(jsonData.companies)) {
             console.log(`🏢 Processing ${jsonData.companies.length} companies from companies array`);
             jsonData.companies.forEach((companyData, index) => {
@@ -492,18 +464,17 @@ function processJSONData() {
             });
         }
         else {
-            throw new Error('Unsupported JSON format. Expected: single company, array of companies, or {companies: [...]}');
+            throw new Error('Unsupported JSON format');
         }
 
         console.log('📊 Extracted data:', extractedData);
         console.log(`🏢 Companies processed: ${Array.from(patchResults.companiesProcessed).join(', ')}`);
 
-        // STEP 2: Process each extracted VYT code
+        // Process each extracted VYT code
         extractedData.forEach(customer => {
             const exactVytCode = customer.vyt_code.toString().trim();
             console.log(`Looking for bowl matching: ${exactVytCode}`);
 
-            // Find ALL active bowls with this EXACT VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
                 return bowl.code === exactVytCode;
             });
@@ -511,7 +482,6 @@ function processJSONData() {
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${exactVytCode}`);
 
-                // Update ALL matching bowls with new customer data
                 matchingBowls.forEach(bowl => {
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
@@ -526,7 +496,6 @@ function processJSONData() {
 
                 patchResults.matched += matchingBowls.length;
             } else {
-                // Create new bowl if not found
                 console.log(`🆕 Creating new bowl for: ${exactVytCode}`);
                 const newBowl = {
                     code: exactVytCode,
@@ -544,15 +513,12 @@ function processJSONData() {
             }
         });
 
-        // Update display and save
         updateDisplay();
         saveToStorage();
         syncToFirebase();
 
-        // Show comprehensive results
         showMessage(`✅ JSON processing completed: ${extractedData.length} VYT codes from ${patchResults.companiesProcessed.size} companies`, 'success');
 
-        // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
             `Companies: ${patchResults.companiesProcessed.size} | VYT Codes: ${extractedData.length} | Updated: ${patchResults.matched} | Created: ${patchResults.created}`;
@@ -589,7 +555,6 @@ function processCompanyData(companyData, extractedData, patchResults) {
                     if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
                         dish.bowlCodes.forEach(bowlCode => {
                             if (bowlCode && dish.users && dish.users.length > 0) {
-                                // Get all customer names for this dish
                                 const allCustomers = dish.users.map(user => user.username).filter(name => name);
                                 const customerNames = allCustomers.join(', ');
                                 
@@ -607,97 +572,6 @@ function processCompanyData(companyData, extractedData, patchResults) {
             }
         });
     }
-}
-
-// UPDATED: Combine customer names for same dish and set color flags (MULTIPLE = RED, SINGLE = GREEN)
-function combineCustomerNamesByDish() {
-    // Group active bowls by dish
-    const dishGroups = {};
-    window.appData.activeBowls.forEach(bowl => {
-        if (!dishGroups[bowl.dish]) {
-            dishGroups[bowl.dish] = [];
-        }
-        dishGroups[bowl.dish].push(bowl);
-    });
-
-    // Process each dish group
-    Object.values(dishGroups).forEach(bowls => {
-        if (bowls.length > 1) {
-            // Multiple bowls for same dish - combine customer names + RED FONT
-            const allCustomers = [...new Set(bowls.map(b => b.customer))].filter(name => name && name !== "Unknown");
-
-            if (allCustomers.length > 0) {
-                const combinedCustomers = allCustomers.join(', ');
-
-                // Update all bowls in this dish with combined names + RED FLAG
-                bowls.forEach(bowl => {
-                    bowl.customer = combinedCustomers;
-                    bowl.multipleCustomers = true; // Flag for RED color
-                });
-            }
-        } else {
-            // Single bowl for this dish - GREEN FONT
-            if (bowls[0].customer && bowls[0].customer !== "Unknown") {
-                bowls[0].multipleCustomers = false; // Flag for GREEN color
-            }
-        }
-    });
-
-    // Also update prepared bowls to match
-    window.appData.preparedBowls.forEach(prepBowl => {
-        const activeBowl = window.appData.activeBowls.find(bowl => bowl.code === prepBowl.code);
-        if (activeBowl) {
-            prepBowl.customer = activeBowl.customer;
-            prepBowl.company = activeBowl.company;
-            prepBowl.multipleCustomers = activeBowl.multipleCustomers;
-        }
-    });
-}
-
-// UPDATED color coding for customer names (GREEN = single, RED = multiple)
-function getCustomerNameColor(bowl) {
-    if (bowl.multipleCustomers) {
-        return 'red-text';    // RED for multiple customers
-    } else if (bowl.customer && bowl.customer !== "Unknown") {
-        return 'green-text';  // GREEN for single customer
-    }
-    return ''; // Default color for unknown customers
-}
-
-// UPDATED Scanning Functions - KEEP URLs EXACT
-function processScan(input) {
-    let result;
-
-    // Detect VYT code - KEEP URL EXACT
-    const vytInfo = detectVytCode(input);
-
-    if (!vytInfo) {
-        return {
-            message: "❌ Invalid VYT code/URL format: " + input,
-            type: "error", 
-            responseTime: 0
-        };
-    }
-
-    console.log(`🎯 Processing scan: ${vytInfo.fullUrl} (${vytInfo.type})`);
-
-    if (window.appData.mode === 'kitchen') {
-        result = kitchenScan(vytInfo);
-    } else {
-        result = returnScan(vytInfo);
-    }
-
-    document.getElementById('responseTimeValue').textContent = result.responseTime;
-    showMessage(result.message, result.type);
-
-    if (result.type === 'error') {
-        document.getElementById('progloveInput').classList.add('error');
-        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
-    }
-
-    updateDisplay();
-    updateOvernightStats();
-    updateLastActivity();
 }
 
 // CORRECTED Kitchen Scan - NO company/customer data in prepared bowls
@@ -836,27 +710,74 @@ function returnScan(vytInfo) {
     };
 }
 
-// Daily Cleanup Timer (7PM Return Data Clear)
-function startDailyCleanupTimer() {
-    setInterval(() => {
-        const now = new Date();
-        if (now.getHours() === 19 && now.getMinutes() === 0) {
-            clearReturnData();
-        }
-    }, 60000);
+// Scanning Functions
+function processScan(input) {
+    let result;
+
+    const vytInfo = detectVytCode(input);
+
+    if (!vytInfo) {
+        return {
+            message: "❌ Invalid VYT code/URL format: " + input,
+            type: "error", 
+            responseTime: 0
+        };
+    }
+
+    console.log(`🎯 Processing scan: ${vytInfo.fullUrl} (${vytInfo.type})`);
+
+    if (window.appData.mode === 'kitchen') {
+        result = kitchenScan(vytInfo);
+    } else {
+        result = returnScan(vytInfo);
+    }
+
+    document.getElementById('responseTimeValue').textContent = result.responseTime;
+    showMessage(result.message, result.type);
+
+    if (result.type === 'error') {
+        document.getElementById('progloveInput').classList.add('error');
+        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
+    }
+
+    updateDisplay();
+    updateOvernightStats();
+    updateLastActivity();
 }
 
-function clearReturnData() {
-    const today = new Date().toLocaleDateString('en-GB');
-    if (window.appData.lastCleanup === today) return;
+function startScanning() {
+    if (!window.appData.user) {
+        showMessage('❌ Please select user first', 'error');
+        return;
+    }
+    if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
+        showMessage('❌ Please select dish letter first', 'error');
+        return;
+    }
 
-    window.appData.returnedBowls = [];
-    window.appData.lastCleanup = today;
-    saveToStorage();
-    syncToFirebase();
-
-    showMessage('✅ Return data cleared for new day', 'success');
+    window.appData.scanning = true;
     updateDisplay();
+    document.getElementById('progloveInput').focus();
+    updateLastActivity();
+    showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
+}
+
+function stopScanning() {
+    window.appData.scanning = false;
+    updateDisplay();
+    updateLastActivity();
+    showMessage(`⏹ Scanning stopped`, 'info');
+}
+
+function handleScanInput(e) {
+    if (!window.appData.scanning) return;
+
+    const scanValue = e.target.value.trim();
+    if (scanValue.length >= 2) {
+        processScan(scanValue);
+        setTimeout(() => e.target.value = '', 100);
+    }
+    updateLastActivity();
 }
 
 // Storage Functions
@@ -875,8 +796,6 @@ function loadFromStorage() {
             const data = JSON.parse(saved);
             window.appData = { ...window.appData, ...data };
             console.log('Data loaded from storage');
-            
-            // Clean up incomplete bowls when loading from storage
             cleanupIncompleteBowls();
         }
     } catch (error) {
@@ -962,4 +881,316 @@ function selectUser() {
 }
 
 function loadDishLetters() {
-    const
+    const dropdown = document.getElementById('dishDropdown');
+    dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
+
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+        const option = document.createElement('option');
+        option.value = letter;
+        option.textContent = letter;
+        dropdown.appendChild(option);
+    });
+
+    '1234'.split('').forEach(number => {
+        const option = document.createElement('option');
+        option.value = number;
+        option.textContent = number;
+        dropdown.appendChild(option);
+    });
+}
+
+function selectDishLetter() {
+    const dropdown = document.getElementById('dishDropdown');
+    window.appData.dishLetter = dropdown.value;
+
+    if (window.appData.dishLetter) {
+        showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
+    }
+    updateDisplay();
+    updateLastActivity();
+}
+
+// Daily Cleanup Timer (7PM Return Data Clear)
+function startDailyCleanupTimer() {
+    setInterval(() => {
+        const now = new Date();
+        if (now.getHours() === 19 && now.getMinutes() === 0) {
+            clearReturnData();
+        }
+    }, 60000);
+}
+
+function clearReturnData() {
+    const today = new Date().toLocaleDateString('en-GB');
+    if (window.appData.lastCleanup === today) return;
+
+    window.appData.returnedBowls = [];
+    window.appData.lastCleanup = today;
+    saveToStorage();
+    syncToFirebase();
+
+    showMessage('✅ Return data cleared for new day', 'success');
+    updateDisplay();
+}
+
+// Display Functions
+function updateDisplay() {
+    document.getElementById('userDropdown').disabled = false;
+    document.getElementById('dishDropdown').disabled = false;
+
+    let canScan = window.appData.user && !window.appData.scanning;
+    if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
+    document.getElementById('startBtn').disabled = !canScan;
+    document.getElementById('stopBtn').disabled = !window.appData.scanning;
+
+    const input = document.getElementById('progloveInput');
+    if (window.appData.scanning) {
+        document.getElementById('scanSection').classList.add('scanning-active');
+        input.placeholder = "Scan VYT code...";
+        input.disabled = false;
+    } else {
+        document.getElementById('scanSection').classList.remove('scanning-active');
+        input.placeholder = "Click START SCANNING...";
+        input.disabled = !window.appData.scanning;
+    }
+
+    const today = new Date().toLocaleDateString('en-GB');
+    const userTodayScans = window.appData.myScans.filter(scan => 
+        scan.user === window.appData.user && 
+        new Date(scan.timestamp).toLocaleDateString('en-GB') === today
+    ).length;
+
+    const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
+    const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
+
+    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
+
+    if (window.appData.mode === 'kitchen') {
+        document.getElementById('prepCount').textContent = preparedToday;
+        document.getElementById('myScansCount').textContent = userTodayScans;
+    } else {
+        document.getElementById('prepCount').textContent = returnedToday;
+        document.getElementById('myScansCount').textContent = userTodayScans;
+    }
+
+    document.getElementById('exportInfo').innerHTML = `
+       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
+   `;
+}
+
+function showMessage(text, type) {
+    const element = document.getElementById('feedback');
+    element.textContent = text;
+    element.className = 'feedback ' + type;
+}
+
+// Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
+function updateOvernightStats() {
+    const statsBody = document.getElementById('overnightStatsBody');
+    const cycleInfo = document.getElementById('cycleInfo');
+
+    const now = new Date();
+    const today10AM = new Date(now);
+    today10AM.setHours(10, 0, 0, 0);
+
+    const yesterday10PM = new Date(now);
+    yesterday10PM.setDate(yesterday10PM.getDate() - 1);
+    yesterday10PM.setHours(22, 0, 0, 0);
+
+    const isOvernightCycle = now >= yesterday10PM && now <= today10AM;
+    cycleInfo.textContent = isOvernightCycle ? 
+    `Yesterday 10PM - Today 10AM` : 
+    `Today 10PM - Tomorrow 10AM`;
+
+    const overnightScans = window.appData.myScans.filter(scan => {
+        const scanTime = new Date(scan.timestamp);
+        return scanTime >= yesterday10PM && scanTime <= today10AM;
+    });
+
+    const dishStats = {};
+    overnightScans.forEach(scan => {
+        const key = `${scan.dish}-${scan.user}`;
+        if (!dishStats[key]) {
+            dishStats[key] = {
+                dish: scan.dish,
+                user: scan.user,
+                scans: [],
+                count: 0,
+                startTime: null,
+                endTime: null
+            };
+        }
+
+        dishStats[key].scans.push(scan);
+        dishStats[key].count++;
+
+        const scanTime = new Date(scan.timestamp);
+        if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
+            dishStats[key].startTime = scan.timestamp;
+        }
+        if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
+            dishStats[key].endTime = scan.timestamp;
+        }
+    });
+
+    const statsArray = Object.values(dishStats).sort((a, b) => {
+        if (a.dish !== b.dish) {
+            const aIsNumber = !isNaN(a.dish);
+            const bIsNumber = !isNaN(b.dish);
+
+            if (aIsNumber && !bIsNumber) return 1;
+            if (!aIsNumber && bIsNumber) return -1;
+            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
+            return a.dish.localeCompare(b.dish);
+        }
+        return new Date(a.startTime) - new Date(b.startTime);
+    });
+
+    if (statsArray.length === 0) {
+        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans in current cycle</td></tr>';
+        return;
+    }
+
+    let html = '';
+    statsArray.forEach(stat => {
+        const startTime = stat.startTime ? new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+        const endTime = stat.endTime ? new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+
+        html += `
+           <tr>
+               <td class="dish-header">${stat.dish}</td>
+               <td>${stat.user}</td>
+               <td>${stat.count}</td>
+               <td>${startTime}</td>
+               <td>${endTime}</td>
+           </tr>
+       `;
+    });
+
+    statsBody.innerHTML = html;
+}
+
+// Data Export Functions
+function exportActiveBowls() {
+    if (window.appData.activeBowls.length === 0) {
+        showMessage('❌ No active bowls to export', 'error');
+        return;
+    }
+
+    const csvData = convertToCSV(window.appData.activeBowls, ['code', 'dish', 'company', 'customer', 'user', 'date', 'time']);
+    downloadCSV(csvData, 'active_bowls.csv');
+    showMessage('✅ Active bowls exported as CSV', 'success');
+}
+
+function exportReturnData() {
+    const today = new Date().toLocaleDateString('en-GB');
+    const todayReturns = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today);
+
+    if (todayReturns.length === 0) {
+        showMessage('❌ No return data to export today', 'error');
+        return;
+    }
+
+    const csvData = convertToCSV(todayReturns, ['code', 'dish', 'company', 'customer', 'returnedBy', 'returnDate', 'returnTime']);
+    downloadCSV(csvData, 'return_data.csv');
+    showMessage('✅ Return data exported as CSV', 'success');
+}
+
+// Export All Data to Excel
+function exportAllData() {
+    const allData = {
+        activeBowls: window.appData.activeBowls,
+        preparedBowls: window.appData.preparedBowls,
+        returnedBowls: window.appData.returnedBowls,
+        customerData: window.appData.customerData,
+        scanHistory: window.appData.scanHistory,
+        exportTime: new Date().toISOString()
+    };
+
+    const csvData = convertAllDataToCSV(allData);
+    downloadCSV(csvData, 'complete_scanner_data.csv');
+    showMessage('✅ All data exported as CSV', 'success');
+}
+
+function convertAllDataToCSV(allData) {
+    let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
+    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
+
+    // Active Bowls
+    csvContent += "ACTIVE BOWLS\n";
+    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
+    allData.activeBowls.forEach(bowl => {
+        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
+    });
+    csvContent += "\n";
+
+    // Prepared Bowls (Today)
+    const today = new Date().toLocaleDateString('en-GB');
+    const todayPrepared = allData.preparedBowls.filter(bowl => bowl.date === today);
+    csvContent += "PREPARED BOWLS (TODAY)\n";
+    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
+    todayPrepared.forEach(bowl => {
+        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
+    });
+    csvContent += "\n";
+
+    // Returned Bowls (Today)
+    const todayReturns = allData.returnedBowls.filter(bowl => bowl.returnDate === today);
+    csvContent += "RETURNED BOWLS (TODAY)\n";
+    csvContent += "Code,Dish,Company,Customer,Returned By,Return Date,Return Time\n";
+    todayReturns.forEach(bowl => {
+        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.returnedBy}","${bowl.returnDate}","${bowl.returnTime}"\n`;
+    });
+    csvContent += "\n";
+
+    // Customer Data
+    csvContent += "CUSTOMER DATA\n";
+    csvContent += "VYT Code,Company,Customer,Dish\n";
+    allData.customerData.forEach(customer => {
+        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
+    });
+    csvContent += "\n";
+
+    // Recent Scan History
+    csvContent += "RECENT SCAN HISTORY (Last 50)\n";
+    csvContent += "Type,Code,User,Company,Customer,Timestamp,Message\n";
+    allData.scanHistory.slice(0, 50).forEach(scan => {
+        csvContent += `"${scan.type}","${scan.code}","${scan.user}","${scan.company || ''}","${scan.customer || ''}","${scan.timestamp}","${scan.message}"\n`;
+    });
+
+    return csvContent;
+}
+
+function convertToCSV(data, fields) {
+    const headers = fields.join(',');
+    const rows = data.map(item => {
+        return fields.map(field => `"${item[field] || ''}"`).join(',');
+    });
+    return [headers, ...rows].join('\n');
+}
+
+function downloadCSV(csvData, filename) {
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
+
+// Make functions globally available
+window.setMode = setMode;
+window.selectUser = selectUser;
+window.selectDishLetter = selectDishLetter;
+window.startScanning = startScanning;
+window.stopScanning = stopScanning;
+window.processJSONData = processJSONData;
+window.exportActiveBowls = exportActiveBowls;
+window.exportReturnData = exportReturnData;
+window.exportAllData = exportAllData;
+window.checkFirebaseData = checkFirebaseData;
+window.syncToFirebase = syncToFirebase;
+window.loadFromFirebase = loadFromFirebase;
