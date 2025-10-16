@@ -149,7 +149,7 @@ function loadFromFirebase() {
     }
 }
 
-// Bowl-by-bowl merge - LOCAL DATA WINS
+// Bowl-by-bowl merge - LOCAL DATA WINS (OPTIMIZED FOR MOBILE)
 function mergeFirebaseWithLocalData(firebaseData) {
     console.log('🔄 Starting bowl-by-bowl merge...');
     showMessage('🔄 Merging cloud data with local data...', 'info');
@@ -163,71 +163,58 @@ function mergeFirebaseWithLocalData(firebaseData) {
     let bowlsUpdated = 0;
     let bowlsAdded = 0;
     
-    // Merge activeBowls - REMOVED DELAYS FOR PERFORMANCE
-    if (firebaseData.activeBowls && Array.isArray(firebaseData.activeBowls)) {
-        console.log(`🔄 Processing ${firebaseData.activeBowls.length} active bowls from Firebase...`);
+    // OPTIMIZED: Process in batches and reduce logging
+    const processBatch = (bowls, type) => {
+        if (!bowls || !Array.isArray(bowls)) return;
         
-        firebaseData.activeBowls.forEach((firebaseBowl, index) => {
-            const localBowlIndex = window.appData.activeBowls.findIndex(
-                localBowl => localBowl.code === firebaseBowl.code
-            );
+        console.log(`🔄 Processing ${bowls.length} ${type} bowls from Firebase...`);
+        
+        // Process all bowls at once (no delays)
+        bowls.forEach((firebaseBowl, index) => {
+            let localBowlIndex = -1;
+            
+            // Find in local data
+            if (type === 'active') {
+                localBowlIndex = window.appData.activeBowls.findIndex(localBowl => localBowl.code === firebaseBowl.code);
+            } else if (type === 'prepared') {
+                localBowlIndex = window.appData.preparedBowls.findIndex(localBowl => localBowl.code === firebaseBowl.code);
+            } else if (type === 'returned') {
+                localBowlIndex = window.appData.returnedBowls.findIndex(localBowl => localBowl.code === firebaseBowl.code);
+            }
             
             if (localBowlIndex !== -1) {
-                console.log(`✅ Keeping local bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                // Only log every 100 bowls to reduce overhead
+                if (index % 100 === 0) {
+                    console.log(`✅ Keeping local ${type} bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                }
                 bowlsUpdated++;
             } else {
-                console.log(`🆕 Adding Firebase bowl to local: ${firebaseBowl.code}`);
-                window.appData.activeBowls.push(firebaseBowl);
+                // Only log every 100 bowls to reduce overhead
+                if (index % 100 === 0) {
+                    console.log(`🆕 Adding Firebase ${type} bowl to local: ${firebaseBowl.code}`);
+                }
+                
+                if (type === 'active') {
+                    window.appData.activeBowls.push(firebaseBowl);
+                } else if (type === 'prepared') {
+                    window.appData.preparedBowls.push(firebaseBowl);
+                } else if (type === 'returned') {
+                    window.appData.returnedBowls.push(firebaseBowl);
+                }
                 bowlsAdded++;
             }
             
-            updateMergeProgress('active', index + 1, firebaseData.activeBowls.length, bowlsUpdated, bowlsAdded);
+            // Update progress less frequently
+            if (index % 50 === 0 || index === bowls.length - 1) {
+                updateMergeProgress(type, index + 1, bowls.length, bowlsUpdated, bowlsAdded);
+            }
         });
-    }
+    };
     
-    // Merge preparedBowls - REMOVED DELAYS FOR PERFORMANCE
-    if (firebaseData.preparedBowls && Array.isArray(firebaseData.preparedBowls)) {
-        console.log(`🔄 Processing ${firebaseData.preparedBowls.length} prepared bowls from Firebase...`);
-        
-        firebaseData.preparedBowls.forEach((firebaseBowl, index) => {
-            const localBowlIndex = window.appData.preparedBowls.findIndex(
-                localBowl => localBowl.code === firebaseBowl.code
-            );
-            
-            if (localBowlIndex !== -1) {
-                console.log(`✅ Keeping local prepared bowl: ${firebaseBowl.code} (LOCAL WINS)`);
-                bowlsUpdated++;
-            } else {
-                console.log(`🆕 Adding Firebase prepared bowl to local: ${firebaseBowl.code}`);
-                window.appData.preparedBowls.push(firebaseBowl);
-                bowlsAdded++;
-            }
-            
-            updateMergeProgress('prepared', index + 1, firebaseData.preparedBowls.length, bowlsUpdated, bowlsAdded);
-        });
-    }
-    
-    // Merge returnedBowls - REMOVED DELAYS FOR PERFORMANCE
-    if (firebaseData.returnedBowls && Array.isArray(firebaseData.returnedBowls)) {
-        console.log(`🔄 Processing ${firebaseData.returnedBowls.length} returned bowls from Firebase...`);
-        
-        firebaseData.returnedBowls.forEach((firebaseBowl, index) => {
-            const localBowlIndex = window.appData.returnedBowls.findIndex(
-                localBowl => localBowl.code === firebaseBowl.code
-            );
-            
-            if (localBowlIndex !== -1) {
-                console.log(`✅ Keeping local returned bowl: ${firebaseBowl.code} (LOCAL WINS)`);
-                bowlsUpdated++;
-            } else {
-                console.log(`🆕 Adding Firebase returned bowl to local: ${firebaseBowl.code}`);
-                window.appData.returnedBowls.push(firebaseBowl);
-                bowlsAdded++;
-            }
-            
-            updateMergeProgress('returned', index + 1, firebaseData.returnedBowls.length, bowlsUpdated, bowlsAdded);
-        });
-    }
+    // Process all types
+    processBatch(firebaseData.activeBowls, 'active');
+    processBatch(firebaseData.preparedBowls, 'prepared');
+    processBatch(firebaseData.returnedBowls, 'returned');
     
     console.log(`✅ Merge completed: ${bowlsUpdated} bowls kept (local), ${bowlsAdded} bowls added from Firebase`);
     showMessage(`✅ Data merge complete: ${bowlsUpdated} local bowls preserved, ${bowlsAdded} cloud bowls added`, 'success');
@@ -1012,238 +999,3 @@ function updateDisplay() {
     if (window.appData.scanning) {
         document.getElementById('scanSection').classList.add('scanning-active');
         input.placeholder = "Scan VYT code...";
-        input.disabled = false;
-    } else {
-        document.getElementById('scanSection').classList.remove('scanning-active');
-        input.placeholder = "Click START SCANNING...";
-        input.disabled = !window.appData.scanning;
-    }
-
-    const today = new Date().toLocaleDateString('en-GB');
-    const userTodayScans = window.appData.myScans.filter(scan => 
-        scan.user === window.appData.user && 
-        new Date(scan.timestamp).toLocaleDateString('en-GB') === today
-    ).length;
-
-    const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
-    const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
-
-    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
-
-    if (window.appData.mode === 'kitchen') {
-        document.getElementById('prepCount').textContent = preparedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
-    } else {
-        document.getElementById('prepCount').textContent = returnedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
-    }
-
-    document.getElementById('exportInfo').innerHTML = `
-       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
-   `;
-}
-
-function showMessage(text, type) {
-    const element = document.getElementById('feedback');
-    element.textContent = text;
-    element.className = 'feedback ' + type;
-}
-
-// Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
-function updateOvernightStats() {
-    const statsBody = document.getElementById('overnightStatsBody');
-    const cycleInfo = document.getElementById('cycleInfo');
-
-    const now = new Date();
-    const today10AM = new Date(now);
-    today10AM.setHours(10, 0, 0, 0);
-
-    const yesterday10PM = new Date(now);
-    yesterday10PM.setDate(yesterday10PM.getDate() - 1);
-    yesterday10PM.setHours(22, 0, 0, 0);
-
-    const isOvernightCycle = now >= yesterday10PM && now <= today10AM;
-    cycleInfo.textContent = isOvernightCycle ? 
-    `Yesterday 10PM - Today 10AM` : 
-    `Today 10PM - Tomorrow 10AM`;
-
-    const overnightScans = window.appData.myScans.filter(scan => {
-        const scanTime = new Date(scan.timestamp);
-        return scanTime >= yesterday10PM && scanTime <= today10AM;
-    });
-
-    const dishStats = {};
-    overnightScans.forEach(scan => {
-        const key = `${scan.dish}-${scan.user}`;
-        if (!dishStats[key]) {
-            dishStats[key] = {
-                dish: scan.dish,
-                user: scan.user,
-                scans: [],
-                count: 0,
-                startTime: null,
-                endTime: null
-            };
-        }
-
-        dishStats[key].scans.push(scan);
-        dishStats[key].count++;
-
-        const scanTime = new Date(scan.timestamp);
-        if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
-            dishStats[key].startTime = scan.timestamp;
-        }
-        if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
-            dishStats[key].endTime = scan.timestamp;
-        }
-    });
-
-    const statsArray = Object.values(dishStats).sort((a, b) => {
-        if (a.dish !== b.dish) {
-            const aIsNumber = !isNaN(a.dish);
-            const bIsNumber = !isNaN(b.dish);
-
-            if (aIsNumber && !bIsNumber) return 1;
-            if (!aIsNumber && bIsNumber) return -1;
-            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
-            return a.dish.localeCompare(b.dish);
-        }
-        return new Date(a.startTime) - new Date(b.startTime);
-    });
-
-    if (statsArray.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans in current cycle</td></tr>';
-        return;
-    }
-
-    let html = '';
-    statsArray.forEach(stat => {
-        const startTime = stat.startTime ? new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-        const endTime = stat.endTime ? new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-
-        html += `
-           <tr>
-               <td class="dish-header">${stat.dish}</td>
-               <td>${stat.user}</td>
-               <td>${stat.count}</td>
-               <td>${startTime}</td>
-               <td>${endTime}</td>
-           </tr>
-       `;
-    });
-
-    statsBody.innerHTML = html;
-}
-
-// Data Export Functions
-function exportActiveBowls() {
-    if (window.appData.activeBowls.length === 0) {
-        showMessage('❌ No active bowls to export', 'error');
-        return;
-    }
-
-    const csvData = convertToCSV(window.appData.activeBowls, ['code', 'dish', 'company', 'customer', 'user', 'date', 'time']);
-    downloadCSV(csvData, 'active_bowls.csv');
-    showMessage('✅ Active bowls exported as CSV', 'success');
-}
-
-function exportReturnData() {
-    const today = new Date().toLocaleDateString('en-GB');
-    const todayReturns = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today);
-
-    if (todayReturns.length === 0) {
-        showMessage('❌ No return data to export today', 'error');
-        return;
-    }
-
-    const csvData = convertToCSV(todayReturns, ['code', 'dish', 'company', 'customer', 'returnedBy', 'returnDate', 'returnTime']);
-    downloadCSV(csvData, 'return_data.csv');
-    showMessage('✅ Return data exported as CSV', 'success');
-}
-
-// Export All Data to Excel with 3 sheets
-function exportAllData() {
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    
-    // Sheet 1: Active Bowls
-    const activeData = window.appData.activeBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
-        'User': bowl.user,
-        'Date': bowl.date,
-        'Time': bowl.time,
-        'Status': bowl.status
-    }));
-    const wsActive = XLSX.utils.json_to_sheet(activeData);
-    XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
-    
-    // Sheet 2: Prepared Bowls
-    const preparedData = window.appData.preparedBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
-        'User': bowl.user,
-        'Date': bowl.date,
-        'Time': bowl.time,
-        'Status': bowl.status,
-        'Was In Active': bowl.wasInActive ? 'Yes' : 'No'
-    }));
-    const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
-    XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
-    
-    // Sheet 3: Returned Bowls
-    const returnedData = window.appData.returnedBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Returned By': bowl.returnedBy,
-        'Return Date': bowl.returnDate,
-        'Return Time': bowl.returnTime,
-        'Status': bowl.status
-    }));
-    const wsReturned = XLSX.utils.json_to_sheet(returnedData);
-    XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
-    
-    // Export the workbook
-    XLSX.writeFile(wb, 'complete_scanner_data.xlsx');
-    showMessage('✅ All data exported as Excel with 3 sheets', 'success');
-}
-
-function convertToCSV(data, fields) {
-    const headers = fields.join(',');
-    const rows = data.map(item => {
-        return fields.map(field => `"${item[field] || ''}"`).join(',');
-    });
-    return [headers, ...rows].join('\n');
-}
-
-function downloadCSV(csvData, filename) {
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-}
-
-// Make functions globally available
-window.setMode = setMode;
-window.selectUser = selectUser;
-window.selectDishLetter = selectDishLetter;
-window.startScanning = startScanning;
-window.stopScanning = stopScanning;
-window.processJSONData = processJSONData;
-window.exportActiveBowls = exportActiveBowls;
-window.exportReturnData = exportReturnData;
-window.exportAllData = exportAllData;
-window.checkFirebaseData = checkFirebaseData;
-window.syncToFirebase = syncToFirebase;
-window.loadFromFirebase = loadFromFirebase;
