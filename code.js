@@ -389,7 +389,7 @@ function checkFirebaseData() {
     }
 }
 
-// ========== EXISTING SCANNER FUNCTIONS ==========
+// ========== SCANNER SYSTEM FUNCTIONS ==========
 
 // VYTAL URL DETECTION - KEEP URLs EXACT, NO SHORTENING
 function detectVytCode(input) {
@@ -443,7 +443,7 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
-// UPDATED JSON Data Processing - Extract from your actual JSON structure
+// ENHANCED JSON Processing - Handles large data and multiple companies
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
     const jsonText = jsonTextarea.value.trim();
@@ -454,47 +454,50 @@ function processJSONData() {
     }
 
     try {
-        const jsonData = JSON.parse(jsonText);
-        console.log('🔍 Starting JSON extraction from delivery data...');
+        console.log('🔍 Starting JSON processing...');
+        showMessage('🔄 Processing JSON data...', 'info');
 
+        const jsonData = JSON.parse(jsonText);
         const extractedData = [];
         const patchResults = {
             matched: 0,
-            failed: []
+            created: 0,
+            failed: 0,
+            companiesProcessed: new Set()
         };
 
-        // STEP 1: Extract data from your JSON structure
-        if (jsonData.boxes && Array.isArray(jsonData.boxes)) {
-            jsonData.boxes.forEach(box => {
-                const company = extractCompanyFromUniqueIdentifier(box.uniqueIdentifier);
-                
-                if (box.dishes && Array.isArray(box.dishes)) {
-                    box.dishes.forEach(dish => {
-                        if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
-                            dish.bowlCodes.forEach(bowlCode => {
-                                if (bowlCode && dish.users && dish.users.length > 0) {
-                                    // Get all customer names for this dish
-                                    const allCustomers = dish.users.map(user => user.username).filter(name => name);
-                                    const customerNames = allCustomers.join(', ');
-                                    
-                                    extractedData.push({
-                                        vyt_code: bowlCode,
-                                        company: company,
-                                        customer: customerNames,
-                                        dish: dish.label || '',
-                                        multipleCustomers: allCustomers.length > 1
-                                    });
-                                }
-                            });
-                        }
-                    });
+        // PROCESS SINGLE COMPANY (your current structure)
+        if (jsonData.name && jsonData.boxes) {
+            console.log(`📦 Processing single company: ${jsonData.name}`);
+            processCompanyData(jsonData, extractedData, patchResults);
+        }
+        // PROCESS ARRAY OF COMPANIES (multiple companies in one JSON)
+        else if (Array.isArray(jsonData)) {
+            console.log(`🏢 Processing ${jsonData.length} companies in array`);
+            jsonData.forEach((companyData, index) => {
+                if (companyData.name && companyData.boxes) {
+                    console.log(`📦 [${index + 1}/${jsonData.length}] Processing: ${companyData.name}`);
+                    processCompanyData(companyData, extractedData, patchResults);
                 }
             });
         }
-        
+        // PROCESS NESTED COMPANIES (companies array inside JSON)
+        else if (jsonData.companies && Array.isArray(jsonData.companies)) {
+            console.log(`🏢 Processing ${jsonData.companies.length} companies from companies array`);
+            jsonData.companies.forEach((companyData, index) => {
+                if (companyData.name && companyData.boxes) {
+                    console.log(`📦 [${index + 1}/${jsonData.companies.length}] Processing: ${companyData.name}`);
+                    processCompanyData(companyData, extractedData, patchResults);
+                }
+            });
+        }
+        else {
+            throw new Error('Unsupported JSON format. Expected: single company, array of companies, or {companies: [...]}');
+        }
+
         console.log('📊 Extracted data:', extractedData);
-        console.log('Active bowls before patch:', window.appData.activeBowls.length);
-        
+        console.log(`🏢 Companies processed: ${Array.from(patchResults.companiesProcessed).join(', ')}`);
+
         // STEP 2: Process each extracted VYT code
         extractedData.forEach(customer => {
             const exactVytCode = customer.vyt_code.toString().trim();
@@ -508,70 +511,101 @@ function processJSONData() {
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${exactVytCode}`);
 
-                // Patch the data to all matching bowls
+                // Update ALL matching bowls with new customer data
                 matchingBowls.forEach(bowl => {
-                    // Store original values for logging
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
 
-                    // Patch the data from JSON
                     bowl.company = customer.company || "Unknown";
                     bowl.customer = customer.customer || "Unknown";
                     bowl.dish = customer.dish || bowl.dish;
                     bowl.multipleCustomers = customer.multipleCustomers;
 
-                    console.log(`🔄 Patched bowl ${bowl.code}: Company "${oldCompany}" → "${bowl.company}" | Customer "${oldCustomer}" → "${bowl.customer}"`);
+                    console.log(`🔄 Updated bowl ${bowl.code}: Company "${oldCompany}" → "${bowl.company}" | Customer "${oldCustomer}" → "${bowl.customer}"`);
                 });
 
                 patchResults.matched += matchingBowls.length;
             } else {
-                // No active bowl found for this VYT code
-                console.log(`❌ No active bowl found for VYT code: ${exactVytCode}`);
-                patchResults.failed.push({
-                    vyt_code: exactVytCode,
-                    customer: customer.customer || 'Unknown',
-                    company: customer.company || 'Unknown',
-                    reason: 'No active bowl found with this VYT code'
-                });
+                // Create new bowl if not found
+                console.log(`🆕 Creating new bowl for: ${exactVytCode}`);
+                const newBowl = {
+                    code: exactVytCode,
+                    company: customer.company || "Unknown",
+                    customer: customer.customer || "Unknown",
+                    dish: customer.dish || "Unknown",
+                    status: 'ACTIVE',
+                    timestamp: new Date().toISOString(),
+                    date: new Date().toLocaleDateString('en-GB'),
+                    multipleCustomers: customer.multipleCustomers
+                };
+                
+                window.appData.activeBowls.push(newBowl);
+                patchResults.created++;
             }
         });
 
-        // STEP 3: After individual patching, combine customer names for same dish + COLOR CODING
-        if (patchResults.matched > 0) {
-            combineCustomerNamesByDish();
-        }
-        
         // Update display and save
         updateDisplay();
         saveToStorage();
         syncToFirebase();
 
-        // Show results
-        showMessage(`✅ JSON processing completed: ${extractedData.length} VYT codes extracted, ${patchResults.matched} bowls updated`, 'success');
+        // Show comprehensive results
+        showMessage(`✅ JSON processing completed: ${extractedData.length} VYT codes from ${patchResults.companiesProcessed.size} companies`, 'success');
 
         // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
-            `Extracted: ${extractedData.length} VYT codes | Matched: ${patchResults.matched} bowls | Failed: ${patchResults.failed.length}`;
+            `Companies: ${patchResults.companiesProcessed.size} | VYT Codes: ${extractedData.length} | Updated: ${patchResults.matched} | Created: ${patchResults.created}`;
 
         const failedDiv = document.getElementById('failedMatches');
-        if (patchResults.failed.length > 0) {
-            let failedHtml = '<strong>Failed matches:</strong><br>';
-            patchResults.failed.forEach(failed => {
-                failedHtml += `• ${failed.vyt_code} - ${failed.customer} (${failed.reason})<br>`;
-            });
-            failedDiv.innerHTML = failedHtml;
+        if (patchResults.failed > 0) {
+            failedDiv.innerHTML = `<strong>Failed:</strong> ${patchResults.failed} bowls could not be processed`;
         } else {
-            failedDiv.innerHTML = '<em>All VYT codes matched successfully!</em>';
+            failedDiv.innerHTML = '<em>All VYT codes processed successfully!</em>';
         }
 
         document.getElementById('jsonStatus').innerHTML = 
-            `<strong>JSON Status:</strong> ${extractedData.length} VYT codes extracted from delivery data, ${patchResults.matched} bowls patched`;
+            `<strong>JSON Status:</strong> Processed ${extractedData.length} VYT codes from ${patchResults.companiesProcessed.size} companies`;
 
-        console.log('📊 Final patch results:', patchResults);
+        console.log('📊 Final results:', patchResults);
 
     } catch (error) {
         showMessage('❌ Error processing JSON data: ' + error.message, 'error');
+        console.error('JSON processing error:', error);
+    }
+}
+
+// Helper function to process company data
+function processCompanyData(companyData, extractedData, patchResults) {
+    const companyName = companyData.name;
+    patchResults.companiesProcessed.add(companyName);
+
+    if (companyData.boxes && Array.isArray(companyData.boxes)) {
+        companyData.boxes.forEach(box => {
+            const boxCompany = extractCompanyFromUniqueIdentifier(box.uniqueIdentifier) || companyName;
+            
+            if (box.dishes && Array.isArray(box.dishes)) {
+                box.dishes.forEach(dish => {
+                    if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
+                        dish.bowlCodes.forEach(bowlCode => {
+                            if (bowlCode && dish.users && dish.users.length > 0) {
+                                // Get all customer names for this dish
+                                const allCustomers = dish.users.map(user => user.username).filter(name => name);
+                                const customerNames = allCustomers.join(', ');
+                                
+                                extractedData.push({
+                                    vyt_code: bowlCode,
+                                    company: boxCompany,
+                                    customer: customerNames,
+                                    dish: dish.label || '',
+                                    multipleCustomers: allCustomers.length > 1
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
     }
 }
 
@@ -666,25 +700,16 @@ function processScan(input) {
     updateLastActivity();
 }
 
-// UPDATED Kitchen Scan - REMOVE company details when moving from active to prepared
+// CORRECTED Kitchen Scan - NO company/customer data in prepared bowls
 function kitchenScan(vytInfo) {
     const startTime = Date.now();
     const today = new Date().toLocaleDateString('en-GB');
 
-    // Check if bowl is already processed today
-    const isAlreadyActive = window.appData.activeBowls.some(bowl => bowl.code === vytInfo.fullUrl);
-    const isPreparedToday = window.appData.preparedBowls.some(bowl => bowl.code === vytInfo.fullUrl && bowl.date === today);
+    // Check if already prepared today
+    const isPreparedToday = window.appData.preparedBowls.some(bowl => 
+        bowl.code === vytInfo.fullUrl && bowl.date === today
+    );
 
-    // ERROR: Bowl is currently active (can't scan same bowl twice without return)
-    if (isAlreadyActive) {
-        return { 
-            message: "❌ Bowl already active: " + vytInfo.fullUrl, 
-            type: "error",
-            responseTime: Date.now() - startTime
-        };
-    }
-
-    // ERROR: Already prepared today (even if returned, can't prepare twice same day)
     if (isPreparedToday) {
         return { 
             message: "❌ Already prepared today: " + vytInfo.fullUrl, 
@@ -693,50 +718,39 @@ function kitchenScan(vytInfo) {
         };
     }
 
-    // Check if this bowl exists in active bowls with company details
-    const existingActiveBowl = window.appData.activeBowls.find(bowl => bowl.code === vytInfo.fullUrl);
-    
-    const newBowl = {
-        code: vytInfo.fullUrl, // STORE EXACT URL
+    const preparedBowl = {
+        code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        // REMOVE company and customer details when moving to prepared
-        company: "", // Clear company name
-        customer: "", // Clear customer name
+        // ✅ NO COMPANY/CUSTOMER DATA in prepared bowls
+        company: "", // BLANK
+        customer: "", // BLANK
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
-        status: 'ACTIVE',
+        status: 'PREPARED',
         multipleCustomers: false
     };
 
-    // If bowl exists in active with company details, remove it first
-    if (existingActiveBowl) {
-        const activeIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
-        window.appData.activeBowls.splice(activeIndex, 1);
-        console.log(`🗑️ Removed bowl from active with company details: ${vytInfo.fullUrl}`);
-    }
-
-    // ADD TO BOTH collections
-    window.appData.activeBowls.push(newBowl);
-    window.appData.preparedBowls.push({...newBowl, status: 'PREPARED'});
+    // ADD to prepared bowls (today's preparation)
+    window.appData.preparedBowls.push(preparedBowl);
 
     window.appData.myScans.push({
         type: 'kitchen',
-        code: vytInfo.fullUrl, // STORE EXACT URL
+        code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: newBowl.company,
-        customer: newBowl.customer,
+        company: "", // BLANK
+        customer: "", // BLANK
         timestamp: new Date().toISOString()
     });
 
     window.appData.scanHistory.unshift({
         type: 'kitchen',
-        code: vytInfo.fullUrl, // STORE EXACT URL
+        code: vytInfo.fullUrl,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`
+        message: `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`
     });
 
     saveToStorage();
@@ -749,72 +763,68 @@ function kitchenScan(vytInfo) {
     };
 }
 
-// UPDATED Return Scan - CORRECTED LOGIC: Remove from BOTH active and prepared
+// CORRECTED Return Scan - NO wait time, immediate scanning
 function returnScan(vytInfo) {
     const startTime = Date.now();
     const today = new Date().toLocaleDateString('en-GB');
 
-    // Find in activeBowls
-    const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
+    console.log(`🔍 Looking for bowl to return: ${vytInfo.fullUrl}`);
 
-    if (activeBowlIndex === -1) {
-        const isReturnedToday = window.appData.returnedBowls.some(bowl => bowl.code === vytInfo.fullUrl && bowl.returnDate === today);
-
-        if (isReturnedToday) {
-            return { 
-                message: "❌ Already returned today: " + vytInfo.fullUrl, 
-                type: "error",
-                responseTime: Date.now() - startTime
-            };
-        } else {
-            return { 
-                message: "❌ Bowl not active: " + vytInfo.fullUrl, 
-                type: "error",
-                responseTime: Date.now() - startTime
-            };
-        }
-    }
-
-    const activeBowl = window.appData.activeBowls[activeBowlIndex];
-
-    // STEP 1: Remove from activeBowls
-    window.appData.activeBowls.splice(activeBowlIndex, 1);
-
-    // STEP 2: Remove from preparedBowls (today's entry)
-    const preparedBowlIndex = window.appData.preparedBowls.findIndex(
-        bowl => bowl.code === vytInfo.fullUrl && bowl.date === today
+    // Find in prepared bowls (should be here after kitchen scan)
+    const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
+        bowl.code === vytInfo.fullUrl && bowl.date === today
     );
-    if (preparedBowlIndex !== -1) {
-        window.appData.preparedBowls.splice(preparedBowlIndex, 1);
+
+    if (preparedIndex === -1) {
+        return { 
+            message: "❌ Bowl not prepared today: " + vytInfo.fullUrl, 
+            type: "error",
+            responseTime: Date.now() - startTime
+        };
     }
 
-    // STEP 3: Add to returnedBowls
-    window.appData.returnedBowls.push({
-        ...activeBowl,
+    const preparedBowl = window.appData.preparedBowls[preparedIndex];
+
+    // STEP 1: Remove from prepared bowls
+    window.appData.preparedBowls.splice(preparedIndex, 1);
+
+    // STEP 2: Create returned bowl (already blank data from prepared)
+    const returnedBowl = {
+        code: vytInfo.fullUrl,
+        dish: preparedBowl.dish,
+        user: window.appData.user,
+        // ✅ Already BLANK from prepared stage
+        company: "", // BLANK
+        customer: "", // BLANK
         returnedBy: window.appData.user,
         returnDate: today,
         returnTime: new Date().toLocaleTimeString(),
         returnTimestamp: new Date().toISOString(),
         status: 'RETURNED'
-    });
+    };
 
+    // STEP 3: Add to returnedBowls
+    window.appData.returnedBowls.push(returnedBowl);
+
+    // STEP 4: Log the return scan
     window.appData.myScans.push({
         type: 'return',
-        code: vytInfo.fullUrl, // STORE EXACT URL
+        code: vytInfo.fullUrl,
         user: window.appData.user,
-        company: activeBowl.company,
-        customer: activeBowl.customer,
-        timestamp: new Date().toISOString(),
-        originalData: activeBowl
+        company: "", // BLANK
+        customer: "", // BLANK
+        timestamp: new Date().toISOString()
     });
 
     window.appData.scanHistory.unshift({
         type: 'return',
-        code: vytInfo.fullUrl, // STORE EXACT URL
+        code: vytInfo.fullUrl,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `Returned: ${vytInfo.fullUrl}`
+        message: `✅ Returned: ${vytInfo.fullUrl}`
     });
+
+    console.log(`✅ Bowl returned: ${vytInfo.fullUrl}`);
 
     saveToStorage();
     syncToFirebase();
@@ -952,337 +962,4 @@ function selectUser() {
 }
 
 function loadDishLetters() {
-    const dropdown = document.getElementById('dishDropdown');
-    dropdown.innerHTML = '<option value="">-- Select Dish Letter --</option>';
-
-    // Add letters A-Z
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
-        const option = document.createElement('option');
-        option.value = letter;
-        option.textContent = letter;
-        dropdown.appendChild(option);
-    });
-
-    // Add numbers 1-4
-    '1234'.split('').forEach(number => {
-        const option = document.createElement('option');
-        option.value = number;
-        option.textContent = number;
-        dropdown.appendChild(option);
-    });
-}
-
-function selectDishLetter() {
-    const dropdown = document.getElementById('dishDropdown');
-    window.appData.dishLetter = dropdown.value;
-
-    if (window.appData.dishLetter) {
-        showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
-    }
-    updateDisplay();
-    updateLastActivity();
-}
-
-// Scanning Functions
-function startScanning() {
-    if (!window.appData.user) {
-        showMessage('❌ Please select user first', 'error');
-        return;
-    }
-    if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
-        showMessage('❌ Please select dish letter first', 'error');
-        return;
-    }
-
-    window.appData.scanning = true;
-    updateDisplay();
-    document.getElementById('progloveInput').focus();
-    updateLastActivity();
-    showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
-}
-
-function stopScanning() {
-    window.appData.scanning = false;
-    updateDisplay();
-    updateLastActivity();
-    showMessage(`⏹ Scanning stopped`, 'info');
-}
-
-function handleScanInput(e) {
-    if (!window.appData.scanning) return;
-
-    const scanValue = e.target.value.trim();
-    if (scanValue.length >= 2) {
-        processScan(scanValue);
-        setTimeout(() => e.target.value = '', 100);
-    }
-    updateLastActivity();
-}
-
-// Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
-function updateOvernightStats() {
-    const statsBody = document.getElementById('overnightStatsBody');
-    const cycleInfo = document.getElementById('cycleInfo');
-
-    // Calculate overnight cycle (10PM previous day to 10AM current day)
-    const now = new Date();
-    const today10AM = new Date(now);
-    today10AM.setHours(10, 0, 0, 0);
-
-    const yesterday10PM = new Date(now);
-    yesterday10PM.setDate(yesterday10PM.getDate() - 1);
-    yesterday10PM.setHours(22, 0, 0, 0);
-
-    const isOvernightCycle = now >= yesterday10PM && now <= today10AM;
-    cycleInfo.textContent = isOvernightCycle ? 
-    `Yesterday 10PM - Today 10AM` : 
-    `Today 10PM - Tomorrow 10AM`;
-
-    // Filter scans for overnight cycle
-    const overnightScans = window.appData.myScans.filter(scan => {
-        const scanTime = new Date(scan.timestamp);
-        return scanTime >= yesterday10PM && scanTime <= today10AM;
-    });
-
-    // Group by dish and user - INCLUDES DISHES 1-4
-    const dishStats = {};
-    overnightScans.forEach(scan => {
-        const key = `${scan.dish}-${scan.user}`;
-        if (!dishStats[key]) {
-            dishStats[key] = {
-                dish: scan.dish,
-                user: scan.user,
-                scans: [],
-                count: 0,
-                startTime: null,
-                endTime: null
-            };
-        }
-
-        dishStats[key].scans.push(scan);
-        dishStats[key].count++;
-
-        const scanTime = new Date(scan.timestamp);
-        if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
-            dishStats[key].startTime = scan.timestamp;
-        }
-        if (!dishStats[key].endTime || scanTime > new Date(dishStats[key].endTime)) {
-            dishStats[key].endTime = scan.timestamp;
-        }
-    });
-
-    // Convert to array and sort - INCLUDES DISHES 1-4
-    const statsArray = Object.values(dishStats).sort((a, b) => {
-        // Sort dishes: A-Z then 1-4
-        if (a.dish !== b.dish) {
-            const aIsNumber = !isNaN(a.dish);
-            const bIsNumber = !isNaN(b.dish);
-
-            if (aIsNumber && !bIsNumber) return 1; // Numbers after letters
-            if (!aIsNumber && bIsNumber) return -1; // Letters before numbers
-            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish); // Numeric sort for numbers
-            return a.dish.localeCompare(b.dish); // Alphabetic sort for letters
-        }
-        return new Date(a.startTime) - new Date(b.startTime);
-    });
-
-    // Update table
-    if (statsArray.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans in current cycle</td></tr>';
-        return;
-    }
-
-    let html = '';
-    statsArray.forEach(stat => {
-        const startTime = stat.startTime ? new Date(stat.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-        const endTime = stat.endTime ? new Date(stat.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
-
-        html += `
-           <tr>
-               <td class="dish-header">${stat.dish}</td>
-               <td>${stat.user}</td>
-               <td>${stat.count}</td>
-               <td>${startTime}</td>
-               <td>${endTime}</td>
-           </tr>
-       `;
-    });
-
-    statsBody.innerHTML = html;
-}
-
-// Data Export Functions
-function exportActiveBowls() {
-    if (window.appData.activeBowls.length === 0) {
-        showMessage('❌ No active bowls to export', 'error');
-        return;
-    }
-
-    const csvData = convertToCSV(window.appData.activeBowls, ['code', 'dish', 'company', 'customer', 'user', 'date', 'time']);
-    downloadCSV(csvData, 'active_bowls.csv');
-    showMessage('✅ Active bowls exported as CSV', 'success');
-}
-
-function exportReturnData() {
-    const today = new Date().toLocaleDateString('en-GB');
-    const todayReturns = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today);
-
-    if (todayReturns.length === 0) {
-        showMessage('❌ No return data to export today', 'error');
-        return;
-    }
-
-    const csvData = convertToCSV(todayReturns, ['code', 'dish', 'company', 'customer', 'returnedBy', 'returnDate', 'returnTime']);
-    downloadCSV(csvData, 'return_data.csv');
-    showMessage('✅ Return data exported as CSV', 'success');
-}
-
-// Export All Data to Excel
-function exportAllData() {
-    const allData = {
-        activeBowls: window.appData.activeBowls,
-        preparedBowls: window.appData.preparedBowls,
-        returnedBowls: window.appData.returnedBowls,
-        customerData: window.appData.customerData,
-        scanHistory: window.appData.scanHistory,
-        exportTime: new Date().toISOString()
-    };
-
-    const csvData = convertAllDataToCSV(allData);
-    downloadCSV(csvData, 'complete_scanner_data.csv');
-    showMessage('✅ All data exported as CSV', 'success');
-}
-
-function convertAllDataToCSV(allData) {
-    let csvContent = "PROGLOVE SCANNER - COMPLETE DATA EXPORT\n";
-    csvContent += `Exported on: ${new Date().toLocaleString()}\n\n`;
-
-    // Active Bowls - INCLUDE COLOR CODING INFO
-    csvContent += "ACTIVE BOWLS\n";
-    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
-    allData.activeBowls.forEach(bowl => {
-        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-
-    // Prepared Bowls (Today)
-    const today = new Date().toLocaleDateString('en-GB');
-    const todayPrepared = allData.preparedBowls.filter(bowl => bowl.date === today);
-    csvContent += "PREPARED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,Multiple Customers,User,Date,Time,Status\n";
-    todayPrepared.forEach(bowl => {
-        const multipleFlag = bowl.multipleCustomers ? "Yes" : "No";
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${multipleFlag}","${bowl.user}","${bowl.date}","${bowl.time}","${bowl.status}"\n`;
-    });
-    csvContent += "\n";
-
-    // Returned Bowls (Today)
-    const todayReturns = allData.returnedBowls.filter(bowl => bowl.returnDate === today);
-    csvContent += "RETURNED BOWLS (TODAY)\n";
-    csvContent += "Code,Dish,Company,Customer,Returned By,Return Date,Return Time\n";
-    todayReturns.forEach(bowl => {
-        csvContent += `"${bowl.code}","${bowl.dish}","${bowl.company}","${bowl.customer}","${bowl.returnedBy}","${bowl.returnDate}","${bowl.returnTime}"\n`;
-    });
-    csvContent += "\n";
-
-    // Customer Data
-    csvContent += "CUSTOMER DATA\n";
-    csvContent += "VYT Code,Company,Customer,Dish\n";
-    allData.customerData.forEach(customer => {
-        csvContent += `"${customer.vyt_code}","${customer.company}","${customer.customer}","${customer.dish}"\n`;
-    });
-    csvContent += "\n";
-
-    // Recent Scan History
-    csvContent += "RECENT SCAN HISTORY (Last 50)\n";
-    csvContent += "Type,Code,User,Company,Customer,Timestamp,Message\n";
-    allData.scanHistory.slice(0, 50).forEach(scan => {
-        csvContent += `"${scan.type}","${scan.code}","${scan.user}","${scan.company || ''}","${scan.customer || ''}","${scan.timestamp}","${scan.message}"\n`;
-    });
-
-    return csvContent;
-}
-
-function convertToCSV(data, fields) {
-    const headers = fields.join(',');
-    const rows = data.map(item => {
-        return fields.map(field => `"${item[field] || ''}"`).join(',');
-    });
-    return [headers, ...rows].join('\n');
-}
-
-function downloadCSV(csvData, filename) {
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-}
-
-// Display Functions
-function updateDisplay() {
-    document.getElementById('userDropdown').disabled = false;
-    document.getElementById('dishDropdown').disabled = false;
-
-    let canScan = window.appData.user && !window.appData.scanning;
-    if (window.appData.mode === 'kitchen') canScan = canScan && window.appData.dishLetter;
-    document.getElementById('startBtn').disabled = !canScan;
-    document.getElementById('stopBtn').disabled = !window.appData.scanning;
-
-    const input = document.getElementById('progloveInput');
-    if (window.appData.scanning) {
-        document.getElementById('scanSection').classList.add('scanning-active');
-        input.placeholder = "Scan VYT code...";
-        input.disabled = false;
-    } else {
-        document.getElementById('scanSection').classList.remove('scanning-active');
-        input.placeholder = "Click START SCANNING...";
-        input.disabled = !window.appData.scanning;
-    }
-
-    const today = new Date().toLocaleDateString('en-GB');
-    const userTodayScans = window.appData.myScans.filter(scan => 
-        scan.user === window.appData.user && 
-        new Date(scan.timestamp).toLocaleDateString('en-GB') === today
-    ).length;
-
-    const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
-    const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
-
-    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
-
-    if (window.appData.mode === 'kitchen') {
-        document.getElementById('prepCount').textContent = preparedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
-    } else {
-        document.getElementById('prepCount').textContent = returnedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
-    }
-
-    document.getElementById('exportInfo').innerHTML = `
-       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
-   `;
-}
-
-function showMessage(text, type) {
-    const element = document.getElementById('feedback');
-    element.textContent = text;
-    element.className = 'feedback ' + type;
-}
-
-// Make functions globally available
-window.setMode = setMode;
-window.selectUser = selectUser;
-window.selectDishLetter = selectDishLetter;
-window.startScanning = startScanning;
-window.stopScanning = stopScanning;
-window.processJSONData = processJSONData;
-window.exportActiveBowls = exportActiveBowls;
-window.exportReturnData = exportReturnData;
-window.exportAllData = exportAllData;
-window.checkFirebaseData = checkFirebaseData;
-window.syncToFirebase = syncToFirebase;
-window.loadFromFirebase = loadFromFirebase;
+    const
