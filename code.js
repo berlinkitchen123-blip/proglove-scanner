@@ -415,6 +415,8 @@ function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
 
+// ========== UPDATED JSON PROCESSING SECTION ==========
+
 // ENHANCED JSON Processing - Handles large data and multiple companies
 function processJSONData() {
     const jsonTextarea = document.getElementById('jsonData');
@@ -438,12 +440,12 @@ function processJSONData() {
             companiesProcessed: new Set()
         };
 
-        // PROCESS SINGLE COMPANY
+        // PROCESS SINGLE COMPANY (your current structure)
         if (jsonData.name && jsonData.boxes) {
             console.log(`📦 Processing single company: ${jsonData.name}`);
             processCompanyData(jsonData, extractedData, patchResults);
         }
-        // PROCESS ARRAY OF COMPANIES
+        // PROCESS ARRAY OF COMPANIES (multiple companies in one JSON)
         else if (Array.isArray(jsonData)) {
             console.log(`🏢 Processing ${jsonData.length} companies in array`);
             jsonData.forEach((companyData, index) => {
@@ -453,7 +455,7 @@ function processJSONData() {
                 }
             });
         }
-        // PROCESS NESTED COMPANIES
+        // PROCESS NESTED COMPANIES (companies array inside JSON)
         else if (jsonData.companies && Array.isArray(jsonData.companies)) {
             console.log(`🏢 Processing ${jsonData.companies.length} companies from companies array`);
             jsonData.companies.forEach((companyData, index) => {
@@ -464,17 +466,18 @@ function processJSONData() {
             });
         }
         else {
-            throw new Error('Unsupported JSON format');
+            throw new Error('Unsupported JSON format. Expected: single company, array of companies, or {companies: [...]}');
         }
 
         console.log('📊 Extracted data:', extractedData);
         console.log(`🏢 Companies processed: ${Array.from(patchResults.companiesProcessed).join(', ')}`);
 
-        // Process each extracted VYT code
+        // STEP 2: Process each extracted VYT code
         extractedData.forEach(customer => {
             const exactVytCode = customer.vyt_code.toString().trim();
             console.log(`Looking for bowl matching: ${exactVytCode}`);
 
+            // Find ALL active bowls with this EXACT VYT code
             const matchingBowls = window.appData.activeBowls.filter(bowl => {
                 return bowl.code === exactVytCode;
             });
@@ -482,6 +485,7 @@ function processJSONData() {
             if (matchingBowls.length > 0) {
                 console.log(`✅ Found ${matchingBowls.length} matches for ${exactVytCode}`);
 
+                // Update ALL matching bowls with new customer data
                 matchingBowls.forEach(bowl => {
                     const oldCompany = bowl.company;
                     const oldCustomer = bowl.customer;
@@ -496,6 +500,7 @@ function processJSONData() {
 
                 patchResults.matched += matchingBowls.length;
             } else {
+                // Create new bowl if not found
                 console.log(`🆕 Creating new bowl for: ${exactVytCode}`);
                 const newBowl = {
                     code: exactVytCode,
@@ -513,12 +518,15 @@ function processJSONData() {
             }
         });
 
+        // Update display and save
         updateDisplay();
         saveToStorage();
         syncToFirebase();
 
+        // Show comprehensive results
         showMessage(`✅ JSON processing completed: ${extractedData.length} VYT codes from ${patchResults.companiesProcessed.size} companies`, 'success');
 
+        // Show detailed results
         document.getElementById('patchResults').style.display = 'block';
         document.getElementById('patchSummary').textContent = 
             `Companies: ${patchResults.companiesProcessed.size} | VYT Codes: ${extractedData.length} | Updated: ${patchResults.matched} | Created: ${patchResults.created}`;
@@ -555,6 +563,7 @@ function processCompanyData(companyData, extractedData, patchResults) {
                     if (dish.bowlCodes && Array.isArray(dish.bowlCodes)) {
                         dish.bowlCodes.forEach(bowlCode => {
                             if (bowlCode && dish.users && dish.users.length > 0) {
+                                // Get all customer names for this dish
                                 const allCustomers = dish.users.map(user => user.username).filter(name => name);
                                 const customerNames = allCustomers.join(', ');
                                 
@@ -572,6 +581,99 @@ function processCompanyData(companyData, extractedData, patchResults) {
             }
         });
     }
+}
+
+// ========== END OF UPDATED JSON PROCESSING SECTION ==========
+
+// UPDATED: Combine customer names for same dish and set color flags (MULTIPLE = RED, SINGLE = GREEN)
+function combineCustomerNamesByDish() {
+    // Group active bowls by dish
+    const dishGroups = {};
+    window.appData.activeBowls.forEach(bowl => {
+        if (!dishGroups[bowl.dish]) {
+            dishGroups[bowl.dish] = [];
+        }
+        dishGroups[bowl.dish].push(bowl);
+    });
+
+    // Process each dish group
+    Object.values(dishGroups).forEach(bowls => {
+        if (bowls.length > 1) {
+            // Multiple bowls for same dish - combine customer names + RED FONT
+            const allCustomers = [...new Set(bowls.map(b => b.customer))].filter(name => name && name !== "Unknown");
+
+            if (allCustomers.length > 0) {
+                const combinedCustomers = allCustomers.join(', ');
+
+                // Update all bowls in this dish with combined names + RED FLAG
+                bowls.forEach(bowl => {
+                    bowl.customer = combinedCustomers;
+                    bowl.multipleCustomers = true; // Flag for RED color
+                });
+            }
+        } else {
+            // Single bowl for this dish - GREEN FONT
+            if (bowls[0].customer && bowls[0].customer !== "Unknown") {
+                bowls[0].multipleCustomers = false; // Flag for GREEN color
+            }
+        }
+    });
+
+    // Also update prepared bowls to match
+    window.appData.preparedBowls.forEach(prepBowl => {
+        const activeBowl = window.appData.activeBowls.find(bowl => bowl.code === prepBowl.code);
+        if (activeBowl) {
+            prepBowl.customer = activeBowl.customer;
+            prepBowl.company = activeBowl.company;
+            prepBowl.multipleCustomers = activeBowl.multipleCustomers;
+        }
+    });
+}
+
+// UPDATED color coding for customer names (GREEN = single, RED = multiple)
+function getCustomerNameColor(bowl) {
+    if (bowl.multipleCustomers) {
+        return 'red-text';    // RED for multiple customers
+    } else if (bowl.customer && bowl.customer !== "Unknown") {
+        return 'green-text';  // GREEN for single customer
+    }
+    return ''; // Default color for unknown customers
+}
+
+// UPDATED Scanning Functions - KEEP URLs EXACT
+function processScan(input) {
+    let result;
+
+    // Detect VYT code - KEEP URL EXACT
+    const vytInfo = detectVytCode(input);
+
+    if (!vytInfo) {
+        return {
+            message: "❌ Invalid VYT code/URL format: " + input,
+            type: "error", 
+            responseTime: 0
+        };
+    }
+
+    console.log(`🎯 Processing scan: ${vytInfo.fullUrl} (${vytInfo.type})`);
+
+    if (window.appData.mode === 'kitchen') {
+        result = kitchenScan(vytInfo);
+    } else {
+        result = returnScan(vytInfo);
+    }
+
+    document.getElementById('responseTimeValue').textContent = result.responseTime;
+    showMessage(result.message, result.type);
+
+    if (result.type === 'error') {
+        document.getElementById('progloveInput').classList.add('error');
+        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
+    }
+
+    updateDisplay();
+    updateOvernightStats();
+    updateLastActivity();
 }
 
 // CORRECTED Kitchen Scan - NO company/customer data in prepared bowls
@@ -711,40 +813,6 @@ function returnScan(vytInfo) {
 }
 
 // Scanning Functions
-function processScan(input) {
-    let result;
-
-    const vytInfo = detectVytCode(input);
-
-    if (!vytInfo) {
-        return {
-            message: "❌ Invalid VYT code/URL format: " + input,
-            type: "error", 
-            responseTime: 0
-        };
-    }
-
-    console.log(`🎯 Processing scan: ${vytInfo.fullUrl} (${vytInfo.type})`);
-
-    if (window.appData.mode === 'kitchen') {
-        result = kitchenScan(vytInfo);
-    } else {
-        result = returnScan(vytInfo);
-    }
-
-    document.getElementById('responseTimeValue').textContent = result.responseTime;
-    showMessage(result.message, result.type);
-
-    if (result.type === 'error') {
-        document.getElementById('progloveInput').classList.add('error');
-        setTimeout(() => document.getElementById('progloveInput').classList.remove('error'), 2000);
-    }
-
-    updateDisplay();
-    updateOvernightStats();
-    updateLastActivity();
-}
-
 function startScanning() {
     if (!window.appData.user) {
         showMessage('❌ Please select user first', 'error');
