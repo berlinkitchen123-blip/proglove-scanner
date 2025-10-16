@@ -163,102 +163,82 @@ function mergeFirebaseWithLocalData(firebaseData) {
     let bowlsUpdated = 0;
     let bowlsAdded = 0;
     
-    // Merge activeBowls
+    // Merge activeBowls - REMOVED DELAYS FOR PERFORMANCE
     if (firebaseData.activeBowls && Array.isArray(firebaseData.activeBowls)) {
         console.log(`🔄 Processing ${firebaseData.activeBowls.length} active bowls from Firebase...`);
         
         firebaseData.activeBowls.forEach((firebaseBowl, index) => {
-            setTimeout(() => {
-                const localBowlIndex = window.appData.activeBowls.findIndex(
-                    localBowl => localBowl.code === firebaseBowl.code
-                );
-                
-                if (localBowlIndex !== -1) {
-                    console.log(`✅ Keeping local bowl: ${firebaseBowl.code} (LOCAL WINS)`);
-                    bowlsUpdated++;
-                } else {
-                    console.log(`🆕 Adding Firebase bowl to local: ${firebaseBowl.code}`);
-                    window.appData.activeBowls.push(firebaseBowl);
-                    bowlsAdded++;
-                }
-                
-                updateMergeProgress('active', index + 1, firebaseData.activeBowls.length, bowlsUpdated, bowlsAdded);
-                
-            }, index * 100);
+            const localBowlIndex = window.appData.activeBowls.findIndex(
+                localBowl => localBowl.code === firebaseBowl.code
+            );
+            
+            if (localBowlIndex !== -1) {
+                console.log(`✅ Keeping local bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                bowlsUpdated++;
+            } else {
+                console.log(`🆕 Adding Firebase bowl to local: ${firebaseBowl.code}`);
+                window.appData.activeBowls.push(firebaseBowl);
+                bowlsAdded++;
+            }
+            
+            updateMergeProgress('active', index + 1, firebaseData.activeBowls.length, bowlsUpdated, bowlsAdded);
         });
     }
     
-    // Merge preparedBowls
+    // Merge preparedBowls - REMOVED DELAYS FOR PERFORMANCE
     if (firebaseData.preparedBowls && Array.isArray(firebaseData.preparedBowls)) {
-        setTimeout(() => {
-            console.log(`🔄 Processing ${firebaseData.preparedBowls.length} prepared bowls from Firebase...`);
+        console.log(`🔄 Processing ${firebaseData.preparedBowls.length} prepared bowls from Firebase...`);
+        
+        firebaseData.preparedBowls.forEach((firebaseBowl, index) => {
+            const localBowlIndex = window.appData.preparedBowls.findIndex(
+                localBowl => localBowl.code === firebaseBowl.code
+            );
             
-            firebaseData.preparedBowls.forEach((firebaseBowl, index) => {
-                setTimeout(() => {
-                    const localBowlIndex = window.appData.preparedBowls.findIndex(
-                        localBowl => localBowl.code === firebaseBowl.code
-                    );
-                    
-                    if (localBowlIndex !== -1) {
-                        console.log(`✅ Keeping local prepared bowl: ${firebaseBowl.code} (LOCAL WINS)`);
-                        bowlsUpdated++;
-                    } else {
-                        console.log(`🆕 Adding Firebase prepared bowl to local: ${firebaseBowl.code}`);
-                        window.appData.preparedBowls.push(firebaseBowl);
-                        bowlsAdded++;
-                    }
-                    
-                    updateMergeProgress('prepared', index + 1, firebaseData.preparedBowls.length, bowlsUpdated, bowlsAdded);
-                    
-                }, (firebaseData.activeBowls?.length || 0) * 100 + index * 100);
-            });
-        }, (firebaseData.activeBowls?.length || 0) * 100 + 1000);
+            if (localBowlIndex !== -1) {
+                console.log(`✅ Keeping local prepared bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                bowlsUpdated++;
+            } else {
+                console.log(`🆕 Adding Firebase prepared bowl to local: ${firebaseBowl.code}`);
+                window.appData.preparedBowls.push(firebaseBowl);
+                bowlsAdded++;
+            }
+            
+            updateMergeProgress('prepared', index + 1, firebaseData.preparedBowls.length, bowlsUpdated, bowlsAdded);
+        });
     }
     
-    // Merge returnedBowls
+    // Merge returnedBowls - REMOVED DELAYS FOR PERFORMANCE
     if (firebaseData.returnedBowls && Array.isArray(firebaseData.returnedBowls)) {
-        setTimeout(() => {
-            console.log(`🔄 Processing ${firebaseData.returnedBowls.length} returned bowls from Firebase...`);
+        console.log(`🔄 Processing ${firebaseData.returnedBowls.length} returned bowls from Firebase...`);
+        
+        firebaseData.returnedBowls.forEach((firebaseBowl, index) => {
+            const localBowlIndex = window.appData.returnedBowls.findIndex(
+                localBowl => localBowl.code === firebaseBowl.code
+            );
             
-            firebaseData.returnedBowls.forEach((firebaseBowl, index) => {
-                setTimeout(() => {
-                    const localBowlIndex = window.appData.returnedBowls.findIndex(
-                        localBowl => localBowl.code === firebaseBowl.code
-                    );
-                    
-                    if (localBowlIndex !== -1) {
-                        console.log(`✅ Keeping local returned bowl: ${firebaseBowl.code} (LOCAL WINS)`);
-                        bowlsUpdated++;
-                    } else {
-                        console.log(`🆕 Adding Firebase returned bowl to local: ${firebaseBowl.code}`);
-                        window.appData.returnedBowls.push(firebaseBowl);
-                        bowlsAdded++;
-                    }
-                    
-                    updateMergeProgress('returned', index + 1, firebaseData.returnedBowls.length, bowlsUpdated, bowlsAdded);
-                    
-                }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + index * 100);
-            });
-        }, ((firebaseData.activeBowls?.length || 0) + (firebaseData.preparedBowls?.length || 0)) * 100 + 2000);
+            if (localBowlIndex !== -1) {
+                console.log(`✅ Keeping local returned bowl: ${firebaseBowl.code} (LOCAL WINS)`);
+                bowlsUpdated++;
+            } else {
+                console.log(`🆕 Adding Firebase returned bowl to local: ${firebaseBowl.code}`);
+                window.appData.returnedBowls.push(firebaseBowl);
+                bowlsAdded++;
+            }
+            
+            updateMergeProgress('returned', index + 1, firebaseData.returnedBowls.length, bowlsUpdated, bowlsAdded);
+        });
     }
     
-    const totalBowls = (firebaseData.activeBowls?.length || 0) + 
-                      (firebaseData.preparedBowls?.length || 0) + 
-                      (firebaseData.returnedBowls?.length || 0);
+    console.log(`✅ Merge completed: ${bowlsUpdated} bowls kept (local), ${bowlsAdded} bowls added from Firebase`);
+    showMessage(`✅ Data merge complete: ${bowlsUpdated} local bowls preserved, ${bowlsAdded} cloud bowls added`, 'success');
     
-    setTimeout(() => {
-        console.log(`✅ Merge completed: ${bowlsUpdated} bowls kept (local), ${bowlsAdded} bowls added from Firebase`);
-        showMessage(`✅ Data merge complete: ${bowlsUpdated} local bowls preserved, ${bowlsAdded} cloud bowls added`, 'success');
-        
-        if (progressElement) {
-            progressElement.style.display = 'none';
-        }
-        
-        cleanupIncompleteBowls();
-        syncToFirebase();
-        initializeUI();
-        
-    }, totalBowls * 100 + 3000);
+    if (progressElement) {
+        progressElement.style.display = 'none';
+    }
+    
+    cleanupIncompleteBowls();
+    syncToFirebase();
+    initializeUI();
 }
 
 // Show merge progress
