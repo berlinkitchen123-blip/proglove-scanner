@@ -209,10 +209,11 @@
         </div>
 
         <!-- JSON DATA PASTE SECTION -->
-        <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
-            <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
+        <!-- JSON DATA PASTE SECTION -->
+<div class="card">
+    <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
+    <div class="json-upload">
+        <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
 [
   {
     "vyt_code": "VYT12345",
@@ -221,9 +222,28 @@
     "dish": "A"
   }
 ]
-                    <button onclick="resetTodaysPreparedBowls(); updateDisplay();" class="btn btn-warning">
-                    Reset Today's Prepared Bowls
-                    </button>
+
+Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
+        <div class="sync-controls">
+            <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
+            <button class="sync-btn backup-btn" onclick="document.getElementById('jsonData').value=''">🗑️ CLEAR</button>
+        </div>
+        
+        <!-- ADD THE RESET BUTTON HERE -->
+        <div class="sync-controls" style="margin-top: 10px;">
+            <button onclick="resetTodaysPreparedBowls(); updateDisplay();" class="sync-btn" style="background: #f57c00; color: white;">
+                🔄 RESET TODAY'S PREPARED BOWLS
+            </button>
+        </div>
+    </div>
+    <div class="local-data" id="jsonStatus">
+        <strong>JSON Status:</strong> No data loaded
+    </div>
+    <div class="local-data" id="patchResults" style="display: none;">
+        <strong>Patch Results:</strong> <span id="patchSummary">Waiting for patch...</span>
+        <div id="failedMatches" style="margin-top: 5px;"></div>
+    </div>
+</div>
 
 Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
                 <div class="sync-controls">
@@ -245,6 +265,7 @@ Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
     <script src="code.js"></script>
 </body>
 </html>
+
 
 
 
