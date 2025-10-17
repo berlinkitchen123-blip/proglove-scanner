@@ -127,7 +127,7 @@ function loadFromFirebase() {
                     window.appData.myScans = firebaseData.myScans || [];
                     window.appData.scanHistory = firebaseData.scanHistory || [];
                     window.appData.customerData = firebaseData.customerData || [];
-                    window.appData.lastCleanup = firebaseData.lastCleanup || null;
+                    window.appData.lastCleanup = firebaseData.lastCleanup;
                     window.appData.lastSync = firebaseData.lastSync;
                     
                     console.log('📊 Firebase data loaded:', {
@@ -176,18 +176,20 @@ function syncToFirebase() {
         }
         
         const db = firebase.database();
-        const backupData = {
+        
+        // Create a clean copy for Firebase - handle null values
+        const firebaseData = {
             activeBowls: window.appData.activeBowls || [],
             preparedBowls: window.appData.preparedBowls || [],
             returnedBowls: window.appData.returnedBowls || [],
             myScans: window.appData.myScans || [],
             scanHistory: window.appData.scanHistory || [],
             customerData: window.appData.customerData || [],
-            lastCleanup: window.appData.lastCleanup || null,  // FIX: Use null instead of undefined
+            lastCleanup: window.appData.lastCleanup || "", // Convert null to empty string
             lastSync: new Date().toISOString()
         };
         
-        db.ref('progloveData').set(backupData)
+        db.ref('progloveData').set(firebaseData)
             .then(() => {
                 window.appData.lastSync = new Date().toISOString();
                 console.log('✅ Data synced to Firebase');
