@@ -198,30 +198,29 @@ function loadFromFirebase() {
     }
 }
 
-// NEW FUNCTION: Clean up prepared bowls - move bowls with customer data to active
-function cleanupPreparedBowls() {
-    const bowlsToMove = [];
+// FIXED: Remove ALL prepared bowls (all dates) and keep only active bowls
+function resetTodaysPreparedBowls() {
+    console.log('🔄 Removing ALL prepared bowls (all dates)');
     
-    // Find all prepared bowls that have customer data (not "Unknown")
-    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => {
-        const hasCustomerData = bowl.customer && bowl.customer !== "Unknown" && bowl.customer !== "";
-        const hasCompanyData = bowl.company && bowl.company !== "Unknown" && bowl.company !== "";
-        
-        if (hasCustomerData || hasCompanyData) {
-            console.log(`🔄 Moving bowl from prepared to active: ${bowl.code} (Customer: ${bowl.customer}, Company: ${bowl.company})`);
-            bowlsToMove.push(bowl);
-            return false; // Remove from prepared
-        }
-        return true; // Keep in prepared (Unknown customer)
-    });
+    // Debug: Show current data before reset
+    console.log('📊 Before reset - Total prepared bowls:', window.appData.preparedBowls.length);
+    console.log('📊 Before reset - Total active bowls:', window.appData.activeBowls.length);
+    console.log('📊 Prepared bowls to remove:', window.appData.preparedBowls);
     
-    // Add the moved bowls to active bowls
-    if (bowlsToMove.length > 0) {
-        window.appData.activeBowls.push(...bowlsToMove);
-        console.log(`✅ Moved ${bowlsToMove.length} bowls from prepared to active (had customer data)`);
-        
-        // Sync the changes
+    // Remove ALL prepared bowls (all dates)
+    const removedCount = window.appData.preparedBowls.length;
+    window.appData.preparedBowls = []; // Empty the entire prepared bowls array
+    
+    console.log('📊 After reset - Total prepared bowls:', window.appData.preparedBowls.length);
+    console.log('📊 After reset - Total active bowls:', window.appData.activeBowls.length);
+    console.log(`🗑️ Removed ALL ${removedCount} prepared bowls`);
+    
+    if (removedCount > 0) {
         syncToFirebase();
+        showMessage(`✅ Removed ALL ${removedCount} prepared bowls`, 'success');
+        updateDisplay();
+    } else {
+        showMessage('ℹ️ No prepared bowls found to remove', 'info');
     }
 }
 
