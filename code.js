@@ -225,6 +225,34 @@ function cleanupPreparedBowls() {
     }
 }
 
+// NEW FUNCTION: Reset today's prepared bowls
+function resetTodaysPreparedBowls() {
+    const today = new Date().toLocaleDateString('en-GB');
+    console.log('🔄 Resetting prepared bowls for today:', today);
+    
+    // Debug: Show current prepared bowls before reset
+    console.log('📊 Before reset - Prepared bowls:', window.appData.preparedBowls);
+    const todayBowls = window.appData.preparedBowls.filter(bowl => bowl.date === today);
+    console.log('📊 Today\'s prepared bowls to remove:', todayBowls);
+    
+    // Remove all prepared bowls from today only
+    const initialCount = window.appData.preparedBowls.length;
+    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => bowl.date !== today);
+    
+    const removedCount = initialCount - window.appData.preparedBowls.length;
+    
+    console.log('📊 After reset - Prepared bowls:', window.appData.preparedBowls);
+    console.log(`🗑️ Removed ${removedCount} prepared bowls from today (${today})`);
+    
+    if (removedCount > 0) {
+        syncToFirebase();
+        showMessage(`✅ Reset ${removedCount} prepared bowls from today`, 'success');
+        updateDisplay();
+    } else {
+        showMessage('ℹ️ No prepared bowls found for today to reset', 'info');
+    }
+}
+
 // Enhanced smart merge function - properly handles prepared bowls
 function smartMergeData(firebaseData) {
     const localData = getLocalData();
@@ -963,17 +991,18 @@ function kitchenScan(vytInfo) {
     const startTime = Date.now();
     const today = new Date().toLocaleDateString('en-GB');
 
-    // FIX: Only check if THIS USER prepared THIS bowl with THIS dish today
-    const isPreparedByThisUser = window.appData.preparedBowls.some(bowl => 
-        bowl.code === vytInfo.fullUrl && 
-        bowl.date === today && 
-        bowl.user === window.appData.user &&
-        bowl.dish === window.appData.dishLetter
+    console.log('🔍 Kitchen scan check for:', vytInfo.fullUrl);
+    console.log('📊 Current prepared bowls:', window.appData.preparedBowls.filter(b => b.date === today));
+
+    // FIX: Check if already prepared today by ANY user (not just current user)
+    const isPreparedToday = window.appData.preparedBowls.some(bowl => 
+        bowl.code === vytInfo.fullUrl && bowl.date === today
     );
 
-    if (isPreparedByThisUser) {
+    if (isPreparedToday) {
+        console.log('❌ Bowl already prepared today:', vytInfo.fullUrl);
         return { 
-            message: "❌ You already prepared this bowl today: " + vytInfo.fullUrl, 
+            message: "❌ Already prepared today: " + vytInfo.fullUrl, 
             type: "error",
             responseTime: Date.now() - startTime
         };
@@ -1439,23 +1468,6 @@ function updateOvernightStats() {
     statsBody.innerHTML = html;
 }
 
-function resetTodaysPreparedBowls() {
-    const today = new Date().toLocaleDateString('en-GB');
-    
-    // Remove all prepared bowls from today only
-    const initialCount = window.appData.preparedBowls.length;
-    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => bowl.date !== today);
-    
-    const removedCount = initialCount - window.appData.preparedBowls.length;
-    if (removedCount > 0) {
-        console.log(`🗑️ Removed ${removedCount} prepared bowls from today (${today})`);
-        syncToFirebase();
-        showMessage(`✅ Reset ${removedCount} prepared bowls from today`, 'success');
-    } else {
-        showMessage('ℹ️ No prepared bowls to reset for today', 'info');
-    }
-}
-
 // ========== CLEANUP AND MAINTENANCE FUNCTIONS ==========
 
 // Clean up VYT codes without company details
@@ -1605,3 +1617,4 @@ window.exportAllData = exportAllData;
 window.checkFirebaseData = checkFirebaseData;
 window.syncToFirebase = syncToFirebase;
 window.loadFromFirebase = loadFromFirebase;
+window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
