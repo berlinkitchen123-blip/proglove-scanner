@@ -127,7 +127,7 @@ function loadFromFirebase() {
                     window.appData.myScans = firebaseData.myScans || [];
                     window.appData.scanHistory = firebaseData.scanHistory || [];
                     window.appData.customerData = firebaseData.customerData || [];
-                    window.appData.lastCleanup = firebaseData.lastCleanup;
+                    window.appData.lastCleanup = firebaseData.lastCleanup || null;
                     window.appData.lastSync = firebaseData.lastSync;
                     
                     console.log('📊 Firebase data loaded:', {
@@ -177,13 +177,13 @@ function syncToFirebase() {
         
         const db = firebase.database();
         const backupData = {
-            activeBowls: window.appData.activeBowls,
-            preparedBowls: window.appData.preparedBowls,
-            returnedBowls: window.appData.returnedBowls,
-            myScans: window.appData.myScans,
-            scanHistory: window.appData.scanHistory,
-            customerData: window.appData.customerData,
-            lastCleanup: window.appData.lastCleanup,
+            activeBowls: window.appData.activeBowls || [],
+            preparedBowls: window.appData.preparedBowls || [],
+            returnedBowls: window.appData.returnedBowls || [],
+            myScans: window.appData.myScans || [],
+            scanHistory: window.appData.scanHistory || [],
+            customerData: window.appData.customerData || [],
+            lastCleanup: window.appData.lastCleanup || null,  // FIX: Use null instead of undefined
             lastSync: new Date().toISOString()
         };
         
