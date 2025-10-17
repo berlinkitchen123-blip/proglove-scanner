@@ -1143,8 +1143,12 @@ function downloadCSV(csvData, filename) {
     window.URL.revokeObjectURL(url);
 }
 
-// RESET FUNCTION - Remove ALL prepared bowls
+// RESET FUNCTION - Remove ALL prepared bowls - FIXED VERSION
 function resetTodaysPreparedBowls() {
+    if (!confirm('Are you sure you want to remove ALL prepared bowls? This cannot be undone.')) {
+        return;
+    }
+    
     console.log('🔄 Removing ALL prepared bowls');
     
     const removedCount = window.appData.preparedBowls.length;
@@ -1153,7 +1157,12 @@ function resetTodaysPreparedBowls() {
     console.log(`🗑️ Removed ALL ${removedCount} prepared bowls`);
     
     if (removedCount > 0) {
+        // Update lastSync to ensure our changes are newer
+        window.appData.lastSync = new Date().toISOString();
+        
+        // Force sync to Firebase
         syncToFirebase();
+        
         showMessage(`✅ Removed ALL ${removedCount} prepared bowls`, 'success');
         updateDisplay();
     } else {
