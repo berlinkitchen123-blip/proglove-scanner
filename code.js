@@ -1439,6 +1439,23 @@ function updateOvernightStats() {
     statsBody.innerHTML = html;
 }
 
+function resetTodaysPreparedBowls() {
+    const today = new Date().toLocaleDateString('en-GB');
+    
+    // Remove all prepared bowls from today only
+    const initialCount = window.appData.preparedBowls.length;
+    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => bowl.date !== today);
+    
+    const removedCount = initialCount - window.appData.preparedBowls.length;
+    if (removedCount > 0) {
+        console.log(`🗑️ Removed ${removedCount} prepared bowls from today (${today})`);
+        syncToFirebase();
+        showMessage(`✅ Reset ${removedCount} prepared bowls from today`, 'success');
+    } else {
+        showMessage('ℹ️ No prepared bowls to reset for today', 'info');
+    }
+}
+
 // ========== CLEANUP AND MAINTENANCE FUNCTIONS ==========
 
 // Clean up VYT codes without company details
