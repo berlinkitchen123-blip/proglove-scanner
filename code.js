@@ -165,6 +165,9 @@ function loadFromFirebase() {
                         mergedFromLocal: mergedData.mergeStats
                     });
                     
+                    // NEW: Clean up prepared bowls - move bowls with customer data to active
+                    cleanupPreparedBowls();
+                    
                     showMessage('✅ Cloud data loaded with smart merge', 'success');
                     document.getElementById('systemStatus').textContent = '✅ Cloud Connected';
                     
@@ -192,6 +195,33 @@ function loadFromFirebase() {
         document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Firebase Error';
         loadFromStorage();
         initializeUI();
+    }
+}
+
+// NEW FUNCTION: Clean up prepared bowls - move bowls with customer data to active
+function cleanupPreparedBowls() {
+    const bowlsToMove = [];
+    
+    // Find all prepared bowls that have customer data (not "Unknown")
+    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => {
+        const hasCustomerData = bowl.customer && bowl.customer !== "Unknown" && bowl.customer !== "";
+        const hasCompanyData = bowl.company && bowl.company !== "Unknown" && bowl.company !== "";
+        
+        if (hasCustomerData || hasCompanyData) {
+            console.log(`🔄 Moving bowl from prepared to active: ${bowl.code} (Customer: ${bowl.customer}, Company: ${bowl.company})`);
+            bowlsToMove.push(bowl);
+            return false; // Remove from prepared
+        }
+        return true; // Keep in prepared (Unknown customer)
+    });
+    
+    // Add the moved bowls to active bowls
+    if (bowlsToMove.length > 0) {
+        window.appData.activeBowls.push(...bowlsToMove);
+        console.log(`✅ Moved ${bowlsToMove.length} bowls from prepared to active (had customer data)`);
+        
+        // Sync the changes
+        syncToFirebase();
     }
 }
 
@@ -537,6 +567,9 @@ function processJSONData() {
             }
         });
 
+        // NEW: Clean up prepared bowls after JSON processing
+        cleanupPreparedBowls();
+        
         // Update display and save
         updateDisplay();
         syncToFirebase();
@@ -851,6 +884,9 @@ function loadFromStorage() {
                 scanning: window.appData.scanning
             };
             console.log('💾 Data loaded from storage - Prepared:', window.appData.preparedBowls.length);
+            
+            // NEW: Clean up prepared bowls after loading from storage
+            cleanupPreparedBowls();
             cleanupIncompleteBowls();
         }
     } catch (error) {
@@ -922,7 +958,7 @@ function processScan(input) {
     updateLastActivity();
 }
 
-// UPDATED Kitchen Scan - Allow multiple preparations per day by different users
+// UPDATED Kitchen Scan - CORRECTED LOGIC: Kitchen scan always resets to "Unknown" customer
 function kitchenScan(vytInfo) {
     const startTime = Date.now();
     const today = new Date().toLocaleDateString('en-GB');
@@ -943,7 +979,7 @@ function kitchenScan(vytInfo) {
         };
     }
 
-    // STEP 1: Check if bowl exists in active bowls and REMOVE it
+    // STEP 1: Check if bowl exists in active bowls and REMOVE it (delete customer data)
     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
     let hadCustomerData = false;
     
@@ -953,12 +989,13 @@ function kitchenScan(vytInfo) {
         console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl}`);
     }
 
+    // STEP 2: Create prepared bowl with ALWAYS "Unknown" customer
     const preparedBowl = {
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: "Unknown", 
-        customer: "Unknown",
+        company: "Unknown", // ALWAYS reset to Unknown
+        customer: "Unknown", // ALWAYS reset to Unknown
         date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
@@ -967,7 +1004,7 @@ function kitchenScan(vytInfo) {
         hadPreviousCustomer: hadCustomerData
     };
 
-    // STEP 2: ADD to prepared bowls
+    // STEP 3: ADD to prepared bowls
     window.appData.preparedBowls.push(preparedBowl);
 
     window.appData.myScans.push({
