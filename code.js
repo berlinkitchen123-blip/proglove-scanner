@@ -1165,7 +1165,7 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// FIXED: Export All Data to Excel with proper XLSX loading
+// FIXED: Export All Data to Excel with ALL sheets including empty ones
 function exportAllData() {
     console.log('📊 Starting Excel export...');
     
@@ -1178,9 +1178,9 @@ function exportAllData() {
             // Create workbook
             const wb = XLSX.utils.book_new();
             
-            // Sheet 1: Active Bowls
-            if (window.appData.activeBowls.length > 0) {
-                const activeData = window.appData.activeBowls.map(bowl => ({
+            // Sheet 1: Active Bowls - ALWAYS CREATE THIS SHEET
+            const activeData = window.appData.activeBowls.length > 0 
+                ? window.appData.activeBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1190,15 +1190,16 @@ function exportAllData() {
                     'Date': bowl.date,
                     'Time': bowl.time,
                     'Status': bowl.status
-                }));
-                const wsActive = XLSX.utils.json_to_sheet(activeData);
-                XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
-                console.log('✅ Active bowls sheet created:', activeData.length, 'rows');
-            }
+                }))
+                : [{'VYT Code': 'No active bowls', 'Dish': '', 'Company': '', 'Customer': '', 'Multiple Customers': '', 'User': '', 'Date': '', 'Time': '', 'Status': ''}];
             
-            // Sheet 2: Prepared Bowls
-            if (window.appData.preparedBowls.length > 0) {
-                const preparedData = window.appData.preparedBowls.map(bowl => ({
+            const wsActive = XLSX.utils.json_to_sheet(activeData);
+            XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
+            console.log('✅ Active bowls sheet created:', window.appData.activeBowls.length, 'bowls');
+            
+            // Sheet 2: Prepared Bowls - ALWAYS CREATE THIS SHEET
+            const preparedData = window.appData.preparedBowls.length > 0 
+                ? window.appData.preparedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1208,15 +1209,16 @@ function exportAllData() {
                     'Date': bowl.date,
                     'Time': bowl.time,
                     'Status': bowl.status
-                }));
-                const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
-                XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
-                console.log('✅ Prepared bowls sheet created:', preparedData.length, 'rows');
-            }
+                }))
+                : [{'VYT Code': 'No prepared bowls', 'Dish': '', 'Company': '', 'Customer': '', 'Multiple Customers': '', 'User': '', 'Date': '', 'Time': '', 'Status': ''}];
             
-            // Sheet 3: Returned Bowls
-            if (window.appData.returnedBowls.length > 0) {
-                const returnedData = window.appData.returnedBowls.map(bowl => ({
+            const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
+            XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
+            console.log('✅ Prepared bowls sheet created:', window.appData.preparedBowls.length, 'bowls');
+            
+            // Sheet 3: Returned Bowls - ALWAYS CREATE THIS SHEET
+            const returnedData = window.appData.returnedBowls.length > 0 
+                ? window.appData.returnedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1225,23 +1227,24 @@ function exportAllData() {
                     'Return Date': bowl.returnDate,
                     'Return Time': bowl.returnTime,
                     'Status': bowl.status
-                }));
-                const wsReturned = XLSX.utils.json_to_sheet(returnedData);
-                XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
-                console.log('✅ Returned bowls sheet created:', returnedData.length, 'rows');
-            }
-
-            // Check if we have any data to export
-            if (wb.SheetNames.length === 0) {
-                showMessage('❌ No data available to export', 'error');
-                return;
-            }
+                }))
+                : [{'VYT Code': 'No returned bowls', 'Dish': '', 'Company': '', 'Customer': '', 'Returned By': '', 'Return Date': '', 'Return Time': '', 'Status': ''}];
+            
+            const wsReturned = XLSX.utils.json_to_sheet(returnedData);
+            XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
+            console.log('✅ Returned bowls sheet created:', window.appData.returnedBowls.length, 'bowls');
 
             // Export the workbook
             const fileName = `complete_scanner_data_${getTodayStandard()}.xlsx`;
             XLSX.writeFile(wb, fileName);
-            console.log('✅ Excel file exported successfully:', fileName);
-            showMessage('✅ All data exported as Excel with 3 sheets', 'success');
+            
+            console.log('✅ Excel file exported successfully with 3 sheets:', {
+                active: window.appData.activeBowls.length,
+                prepared: window.appData.preparedBowls.length,
+                returned: window.appData.returnedBowls.length
+            });
+            
+            showMessage(`✅ All data exported: ${window.appData.activeBowls.length} active, ${window.appData.preparedBowls.length} prepared, ${window.appData.returnedBowls.length} returned bowls`, 'success');
         })
         .catch((error) => {
             console.error('Excel export error:', error);
