@@ -1184,12 +1184,13 @@ function updateDisplay() {
 
     document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
 
+    // FIXED: Show Prepared Today count and My Scans Today correctly
     if (window.appData.mode === 'kitchen') {
-        document.getElementById('prepCount').textContent = myBowlCount;
-        document.getElementById('myScansCount').textContent = myBowlCount;
+        document.getElementById('prepCount').textContent = preparedToday; // Show Prepared Today for all users
+        document.getElementById('myScansCount').textContent = window.appData.user ? myBowlCount : 0; // Show My Bowl only when user selected
     } else {
-        document.getElementById('prepCount').textContent = returnedToday;
-        document.getElementById('myScansCount').textContent = returnedToday;
+        document.getElementById('prepCount').textContent = returnedToday; // Show Returned Today in return mode
+        document.getElementById('myScansCount').textContent = window.appData.user ? returnedToday : 0; // Show Returned Today for user only when selected
     }
 
     // FIXED: Show accurate totals in export info
@@ -1489,28 +1490,40 @@ function downloadCSV(csvData, filename) {
     window.URL.revokeObjectURL(url);
 }
 
-// RESET FUNCTION - Remove ALL prepared bowls - FIXED VERSION
+// FIXED: Reset ALL prepared bowls and related scans
 function resetTodaysPreparedBowls() {
     if (!confirm('Are you sure you want to remove ALL prepared bowls? This cannot be undone.')) {
         return;
     }
     
-    console.log('🔄 Removing ALL prepared bowls');
+    console.log('🔄 Removing ALL prepared bowls and today\'s kitchen scans...');
     
-    const removedCount = window.appData.preparedBowls.length;
+    const today = getTodayStandard();
+    const initialPreparedCount = window.appData.preparedBowls.length;
+    
+    // STEP 1: Remove ALL prepared bowls
     window.appData.preparedBowls = [];
     
-    console.log(`🗑️ Removed ALL ${removedCount} prepared bowls`);
+    // STEP 2: Remove today's kitchen scans from myScans
+    const initialScanCount = window.appData.myScans.length;
+    window.appData.myScans = window.appData.myScans.filter(scan => 
+        !(scan.type === 'kitchen' && formatDateStandard(new Date(scan.timestamp)) === today)
+    );
+    const removedScans = initialScanCount - window.appData.myScans.length;
     
-    if (removedCount > 0) {
+    console.log(`🗑️ Removed ALL ${initialPreparedCount} prepared bowls and ${removedScans} kitchen scans`);
+    
+    if (initialPreparedCount > 0 || removedScans > 0) {
         // Update lastSync to ensure our changes are newer
         window.appData.lastSync = new Date().toISOString();
         
         // Force sync to Firebase
         syncToFirebase();
         
-        showMessage(`✅ Removed ALL ${removedCount} prepared bowls`, 'success');
+        // Update display to show 0
         updateDisplay();
+        
+        showMessage(`✅ Removed ALL ${initialPreparedCount} prepared bowls and ${removedScans} kitchen scans`, 'success');
     } else {
         showMessage('ℹ️ No prepared bowls found to remove', 'info');
     }
