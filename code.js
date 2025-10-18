@@ -1149,47 +1149,52 @@ function updateDisplay() {
 
     const today = getTodayStandard();
     
-    // FIXED: Count ALL scans by current user today (kitchen mode = prepared, return mode = returned)
-    const userTodayScans = window.appData.myScans.filter(scan => 
-        scan.user === window.appData.user && 
-        formatDateStandard(new Date(scan.timestamp)) === today
-    ).length;
-
-    // FIXED: Count ALL bowls prepared today (including returned ones)
-    const totalPreparedToday = window.appData.myScans.filter(scan => 
+    // FIXED: Calculate Prepared Today = (All kitchen scans today) - (All return scans today)
+    const allKitchenScansToday = window.appData.myScans.filter(scan => 
         scan.type === 'kitchen' && 
         formatDateStandard(new Date(scan.timestamp)) === today
     ).length;
+
+    const allReturnScansToday = window.appData.myScans.filter(scan => 
+        scan.type === 'return' && 
+        formatDateStandard(new Date(scan.timestamp)) === today
+    ).length;
+
+    const preparedToday = allKitchenScansToday - allReturnScansToday;
+
+    // FIXED: Calculate My Bowl = (User's kitchen scans today) - (User's bowls returned today)
+    let myBowlCount = 0;
+    if (window.appData.user) {
+        const userKitchenScansToday = window.appData.myScans.filter(scan => 
+            scan.type === 'kitchen' && 
+            scan.user === window.appData.user && 
+            formatDateStandard(new Date(scan.timestamp)) === today
+        ).length;
+
+        const userBowlsReturnedToday = window.appData.myScans.filter(scan => 
+            scan.type === 'return' && 
+            scan.user === window.appData.user && 
+            formatDateStandard(new Date(scan.timestamp)) === today
+        ).length;
+
+        myBowlCount = userKitchenScansToday - userBowlsReturnedToday;
+    }
 
     const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
 
     document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
 
     if (window.appData.mode === 'kitchen') {
-        // Show total prepared by current user today
-        const userPreparedToday = window.appData.myScans.filter(scan => 
-            scan.type === 'kitchen' && 
-            scan.user === window.appData.user && 
-            formatDateStandard(new Date(scan.timestamp)) === today
-        ).length;
-        
-        document.getElementById('prepCount').textContent = userPreparedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
+        document.getElementById('prepCount').textContent = myBowlCount;
+        document.getElementById('myScansCount').textContent = myBowlCount;
     } else {
-        // Show total returned by current user today
-        const userReturnedToday = window.appData.myScans.filter(scan => 
-            scan.type === 'return' && 
-            scan.user === window.appData.user && 
-            formatDateStandard(new Date(scan.timestamp)) === today
-        ).length;
-        
-        document.getElementById('prepCount').textContent = userReturnedToday;
-        document.getElementById('myScansCount').textContent = userTodayScans;
+        document.getElementById('prepCount').textContent = returnedToday;
+        document.getElementById('myScansCount').textContent = returnedToday;
     }
 
     // FIXED: Show accurate totals in export info
     document.getElementById('exportInfo').innerHTML = `
-       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${totalPreparedToday} today • Returns: ${returnedToday} today
+       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
    `;
 }
 
@@ -1199,7 +1204,7 @@ function showMessage(text, type) {
     element.className = 'feedback ' + type;
 }
 
-// Overnight Statistics Table (10PM-10AM) - INCLUDES DISHES 1-4
+// FIXED: Overnight Statistics with dish letter grouping
 function updateOvernightStats() {
     const statsBody = document.getElementById('overnightStatsBody');
     const cycleInfo = document.getElementById('cycleInfo');
@@ -1217,11 +1222,13 @@ function updateOvernightStats() {
     `Yesterday 10PM - Today 10AM` : 
     `Today 10PM - Tomorrow 10AM`;
 
+    // Get overnight scans
     const overnightScans = window.appData.myScans.filter(scan => {
         const scanTime = new Date(scan.timestamp);
         return scanTime >= yesterday10PM && scanTime <= today10AM;
     });
 
+    // Group by dish letter and user
     const dishStats = {};
     overnightScans.forEach(scan => {
         const key = `${scan.dish}-${scan.user}`;
@@ -1229,15 +1236,18 @@ function updateOvernightStats() {
             dishStats[key] = {
                 dish: scan.dish,
                 user: scan.user,
-                scans: [],
-                count: 0,
+                kitchenScans: [],
+                returnScans: [],
                 startTime: null,
                 endTime: null
             };
         }
 
-        dishStats[key].scans.push(scan);
-        dishStats[key].count++;
+        if (scan.type === 'kitchen') {
+            dishStats[key].kitchenScans.push(scan);
+        } else if (scan.type === 'return') {
+            dishStats[key].returnScans.push(scan);
+        }
 
         const scanTime = new Date(scan.timestamp);
         if (!dishStats[key].startTime || scanTime < new Date(dishStats[key].startTime)) {
@@ -1248,18 +1258,28 @@ function updateOvernightStats() {
         }
     });
 
-    const statsArray = Object.values(dishStats).sort((a, b) => {
-        if (a.dish !== b.dish) {
-            const aIsNumber = !isNaN(a.dish);
-            const bIsNumber = !isNaN(b.dish);
+    // Calculate net prepared count for each dish+user combination
+    const statsArray = Object.values(dishStats)
+        .filter(stat => stat.kitchenScans.length > 0) // Only show combinations with kitchen scans
+        .map(stat => ({
+            ...stat,
+            netPrepared: stat.kitchenScans.length - stat.returnScans.length,
+            count: stat.kitchenScans.length + stat.returnScans.length
+        }))
+        .sort((a, b) => {
+            // Sort by dish letter first
+            if (a.dish !== b.dish) {
+                const aIsNumber = !isNaN(a.dish);
+                const bIsNumber = !isNaN(b.dish);
 
-            if (aIsNumber && !bIsNumber) return 1;
-            if (!aIsNumber && bIsNumber) return -1;
-            if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
-            return a.dish.localeCompare(b.dish);
-        }
-        return new Date(a.startTime) - new Date(b.startTime);
-    });
+                if (aIsNumber && !bIsNumber) return 1;
+                if (!aIsNumber && bIsNumber) return -1;
+                if (aIsNumber && bIsNumber) return parseInt(a.dish) - parseInt(b.dish);
+                return a.dish.localeCompare(b.dish);
+            }
+            // Then by user name
+            return a.user.localeCompare(b.user);
+        });
 
     if (statsArray.length === 0) {
         statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans in current cycle</td></tr>';
@@ -1273,9 +1293,9 @@ function updateOvernightStats() {
 
         html += `
            <tr>
-               <td class="dish-header">${stat.dish}</td>
+               <td>${stat.dish}</td>
                <td>${stat.user}</td>
-               <td>${stat.count}</td>
+               <td>${stat.netPrepared}</td>
                <td>${startTime}</td>
                <td>${endTime}</td>
            </tr>
@@ -1311,9 +1331,9 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// FIXED: Export All Data to Excel with ALL sheets including empty ones
+// FIXED: Export All Data with merged Firebase + Local data
 function exportAllData() {
-    console.log('📊 Starting Excel export...');
+    console.log('📊 Starting Excel export with merged data...');
     
     loadXLSXLibrary()
         .then(() => {
@@ -1321,12 +1341,68 @@ function exportAllData() {
                 throw new Error('XLSX library not loaded');
             }
 
-            // Create workbook
+            // Merge Firebase data with local backup for complete dataset
+            let mergedData = {
+                activeBowls: [...window.appData.activeBowls],
+                preparedBowls: [...window.appData.preparedBowls],
+                returnedBowls: [...window.appData.returnedBowls],
+                myScans: [...window.appData.myScans]
+            };
+
+            // Try to load local backup and merge
+            try {
+                const localBackup = localStorage.getItem('proglove_data');
+                if (localBackup) {
+                    const localData = JSON.parse(localBackup);
+                    console.log('🔄 Merging local backup data with current data');
+                    
+                    // Merge arrays, avoiding duplicates based on timestamp or code
+                    if (localData.activeBowls) {
+                        const existingCodes = new Set(mergedData.activeBowls.map(bowl => bowl.code));
+                        localData.activeBowls.forEach(bowl => {
+                            if (!existingCodes.has(bowl.code)) {
+                                mergedData.activeBowls.push(bowl);
+                            }
+                        });
+                    }
+                    
+                    if (localData.preparedBowls) {
+                        const existingCodes = new Set(mergedData.preparedBowls.map(bowl => bowl.code));
+                        localData.preparedBowls.forEach(bowl => {
+                            if (!existingCodes.has(bowl.code)) {
+                                mergedData.preparedBowls.push(bowl);
+                            }
+                        });
+                    }
+                    
+                    if (localData.returnedBowls) {
+                        const existingCodes = new Set(mergedData.returnedBowls.map(bowl => bowl.code));
+                        localData.returnedBowls.forEach(bowl => {
+                            if (!existingCodes.has(bowl.code)) {
+                                mergedData.returnedBowls.push(bowl);
+                            }
+                        });
+                    }
+                    
+                    if (localData.myScans) {
+                        const existingTimestamps = new Set(mergedData.myScans.map(scan => scan.timestamp));
+                        localData.myScans.forEach(scan => {
+                            if (!existingTimestamps.has(scan.timestamp)) {
+                                mergedData.myScans.push(scan);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('Local backup merge failed, using current data only:', error);
+            }
+
+            // Create workbook with merged data
             const wb = XLSX.utils.book_new();
             
-            // Sheet 1: Active Bowls - ALWAYS CREATE THIS SHEET
-            const activeData = window.appData.activeBowls.length > 0 
-                ? window.appData.activeBowls.map(bowl => ({
+            // Sheet 1: Active Bowls
+            const activeData = mergedData.activeBowls.length > 0 
+                ? mergedData.activeBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1341,11 +1417,10 @@ function exportAllData() {
             
             const wsActive = XLSX.utils.json_to_sheet(activeData);
             XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
-            console.log('✅ Active bowls sheet created:', window.appData.activeBowls.length, 'bowls');
             
-            // Sheet 2: Prepared Bowls - ALWAYS CREATE THIS SHEET
-            const preparedData = window.appData.preparedBowls.length > 0 
-                ? window.appData.preparedBowls.map(bowl => ({
+            // Sheet 2: Prepared Bowls
+            const preparedData = mergedData.preparedBowls.length > 0 
+                ? mergedData.preparedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1360,11 +1435,10 @@ function exportAllData() {
             
             const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
             XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
-            console.log('✅ Prepared bowls sheet created:', window.appData.preparedBowls.length, 'bowls');
             
-            // Sheet 3: Returned Bowls - ALWAYS CREATE THIS SHEET
-            const returnedData = window.appData.returnedBowls.length > 0 
-                ? window.appData.returnedBowls.map(bowl => ({
+            // Sheet 3: Returned Bowls
+            const returnedData = mergedData.returnedBowls.length > 0 
+                ? mergedData.returnedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
                     'Dish': bowl.dish,
                     'Company': bowl.company,
@@ -1375,22 +1449,21 @@ function exportAllData() {
                     'Status': bowl.status
                 }))
                 : [{'VYT Code': 'No returned bowls', 'Dish': '', 'Company': '', 'Customer': '', 'Returned By': '', 'Return Date': '', 'Return Time': '', 'Status': ''}];
-            
+
             const wsReturned = XLSX.utils.json_to_sheet(returnedData);
             XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
-            console.log('✅ Returned bowls sheet created:', window.appData.returnedBowls.length, 'bowls');
 
             // Export the workbook
             const fileName = `complete_scanner_data_${getTodayStandard()}.xlsx`;
             XLSX.writeFile(wb, fileName);
             
-            console.log('✅ Excel file exported successfully with 3 sheets:', {
-                active: window.appData.activeBowls.length,
-                prepared: window.appData.preparedBowls.length,
-                returned: window.appData.returnedBowls.length
+            console.log('✅ Excel file exported successfully with merged data:', {
+                active: mergedData.activeBowls.length,
+                prepared: mergedData.preparedBowls.length,
+                returned: mergedData.returnedBowls.length
             });
             
-            showMessage(`✅ All data exported: ${window.appData.activeBowls.length} active, ${window.appData.preparedBowls.length} prepared, ${window.appData.returnedBowls.length} returned bowls`, 'success');
+            showMessage(`✅ All data exported: ${mergedData.activeBowls.length} active, ${mergedData.preparedBowls.length} prepared, ${mergedData.returnedBowls.length} returned bowls`, 'success');
         })
         .catch((error) => {
             console.error('Excel export error:', error);
