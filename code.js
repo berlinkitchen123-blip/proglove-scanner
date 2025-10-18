@@ -1126,7 +1126,7 @@ function clearReturnData() {
     updateDisplay();
 }
 
-// Display Functions
+// FIXED: Display Functions with corrected counting logic
 function updateDisplay() {
     document.getElementById('userDropdown').disabled = false;
     document.getElementById('dishDropdown').disabled = false;
@@ -1147,27 +1147,49 @@ function updateDisplay() {
         input.disabled = !window.appData.scanning;
     }
 
-    const today = getTodayStandard(); // Use standard date format
+    const today = getTodayStandard();
+    
+    // FIXED: Count ALL scans by current user today (kitchen mode = prepared, return mode = returned)
     const userTodayScans = window.appData.myScans.filter(scan => 
         scan.user === window.appData.user && 
         formatDateStandard(new Date(scan.timestamp)) === today
     ).length;
 
-    const preparedToday = window.appData.preparedBowls.filter(bowl => bowl.date === today).length;
+    // FIXED: Count ALL bowls prepared today (including returned ones)
+    const totalPreparedToday = window.appData.myScans.filter(scan => 
+        scan.type === 'kitchen' && 
+        formatDateStandard(new Date(scan.timestamp)) === today
+    ).length;
+
     const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
 
     document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
 
     if (window.appData.mode === 'kitchen') {
-        document.getElementById('prepCount').textContent = preparedToday;
+        // Show total prepared by current user today
+        const userPreparedToday = window.appData.myScans.filter(scan => 
+            scan.type === 'kitchen' && 
+            scan.user === window.appData.user && 
+            formatDateStandard(new Date(scan.timestamp)) === today
+        ).length;
+        
+        document.getElementById('prepCount').textContent = userPreparedToday;
         document.getElementById('myScansCount').textContent = userTodayScans;
     } else {
-        document.getElementById('prepCount').textContent = returnedToday;
+        // Show total returned by current user today
+        const userReturnedToday = window.appData.myScans.filter(scan => 
+            scan.type === 'return' && 
+            scan.user === window.appData.user && 
+            formatDateStandard(new Date(scan.timestamp)) === today
+        ).length;
+        
+        document.getElementById('prepCount').textContent = userReturnedToday;
         document.getElementById('myScansCount').textContent = userTodayScans;
     }
 
+    // FIXED: Show accurate totals in export info
     document.getElementById('exportInfo').innerHTML = `
-       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${preparedToday} today • Returns: ${returnedToday} today
+       <strong>Data Status:</strong> Active: ${window.appData.activeBowls.length} bowls • Prepared: ${totalPreparedToday} today • Returns: ${returnedToday} today
    `;
 }
 
