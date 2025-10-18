@@ -97,6 +97,12 @@ function getTodayStandard() {
     return `${year}-${month}-${day}`;
 }
 
+// Convert ISO string to standard date format for display/export
+function convertToStandardDate(isoString) {
+    if (!isoString) return getTodayStandard();
+    return formatDateStandard(isoString);
+}
+
 // ========== FIREBASE FUNCTIONS ==========
 
 // Load Firebase SDK dynamically
@@ -786,58 +792,61 @@ function processScan(input) {
     updateLastActivity();
 }
 
-// FIXED: Kitchen Scan - CORRECTED DUPLICATE CHECKING
+// FIXED: Kitchen Scan - Handle active bowls and re-scanning
 function kitchenScan(vytInfo) {
     const startTime = Date.now();
-    const today = getTodayStandard(); // Use standard date format
+    const today = getTodayStandard();
 
-    console.log(`🔍 Checking if bowl ${vytInfo.fullUrl} was prepared today...`);
+    console.log(`🔍 Checking bowl ${vytInfo.fullUrl} status...`);
 
-    // FIXED: Check if ANY user prepared this bowl today (not just current user)
-    const isPreparedToday = window.appData.preparedBowls.some(bowl => 
+    // CHECK 1: Is bowl currently prepared and waiting for return?
+    const isCurrentlyPrepared = window.appData.preparedBowls.some(bowl => 
         bowl.code === vytInfo.fullUrl && bowl.date === today
     );
 
-    if (isPreparedToday) {
-        console.log(`❌ Bowl ${vytInfo.fullUrl} was already prepared today by another user`);
+    if (isCurrentlyPrepared) {
+        console.log(`❌ Bowl ${vytInfo.fullUrl} is already prepared and waiting for return`);
         return { 
-            message: "❌ Already prepared today: " + vytInfo.fullUrl, 
+            message: "❌ Already prepared and waiting: " + vytInfo.fullUrl, 
             type: "error",
             responseTime: Date.now() - startTime
         };
     }
 
-    // STEP 1: Check if bowl exists in active bowls and REMOVE it
+    // CHECK 2: Is bowl in active bowls? (has customer data)
     const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => bowl.code === vytInfo.fullUrl);
     let hadCustomerData = false;
+    let removedActiveBowl = null;
     
     if (activeBowlIndex !== -1) {
         // Remove from active bowls (delete Customer A data)
-        const removedBowl = window.appData.activeBowls[activeBowlIndex];
+        removedActiveBowl = window.appData.activeBowls[activeBowlIndex];
         window.appData.activeBowls.splice(activeBowlIndex, 1);
         hadCustomerData = true;
-        console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl} (Customer: ${removedBowl.customer}, Company: ${removedBowl.company})`);
+        console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl} (Customer: ${removedActiveBowl.customer}, Company: ${removedActiveBowl.company})`);
     }
 
-    // STEP 2: Create prepared bowl with ALWAYS "Unknown" customer
+    // Create prepared bowl with ALWAYS "Unknown" customer (fresh preparation)
     const preparedBowl = {
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
         company: "Unknown", // ALWAYS reset to Unknown
         customer: "Unknown", // ALWAYS reset to Unknown
-        date: today, // Use standard date format
+        date: today,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
         status: 'PREPARED',
         multipleCustomers: false,
-        hadPreviousCustomer: hadCustomerData // Track if it had previous customer data
+        hadPreviousCustomer: hadCustomerData,
+        previousCustomer: hadCustomerData ? removedActiveBowl.customer : null,
+        previousCompany: hadCustomerData ? removedActiveBowl.company : null
     };
 
-    // STEP 3: ADD to prepared bowls
+    // ADD to prepared bowls
     window.appData.preparedBowls.push(preparedBowl);
 
-    // STEP 4: Log the scan
+    // Log the scan
     window.appData.myScans.push({
         type: 'kitchen',
         code: vytInfo.fullUrl,
@@ -846,12 +855,16 @@ function kitchenScan(vytInfo) {
         company: "Unknown",
         customer: "Unknown",
         timestamp: new Date().toISOString(),
-        hadPreviousCustomer: hadCustomerData
+        hadPreviousCustomer: hadCustomerData,
+        previousCustomer: hadCustomerData ? removedActiveBowl.customer : null,
+        previousCompany: hadCustomerData ? removedActiveBowl.company : null
     });
 
-    const message = hadCustomerData ? 
-        `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl} (customer data reset)` :
-        `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`;
+    let message = `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl}`;
+    
+    if (hadCustomerData) {
+        message = `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl} (removed customer data)`;
+    }
 
     window.appData.scanHistory.unshift({
         type: 'kitchen',
@@ -864,7 +877,6 @@ function kitchenScan(vytInfo) {
     console.log(`✅ Successfully prepared bowl: ${vytInfo.fullUrl}`);
     console.log(`📊 Current prepared bowls count: ${window.appData.preparedBowls.length}`);
 
-    // IMMEDIATELY SYNC TO SAVE THE PREPARED BOWL
     syncToFirebase();
 
     return { 
@@ -874,56 +886,94 @@ function kitchenScan(vytInfo) {
     };
 }
 
-// CORRECTED Return Scan - NO wait time, immediate scanning
+// FIXED: Return Scan - Return from both prepared and active bowls
 function returnScan(vytInfo) {
     const startTime = Date.now();
-    const today = getTodayStandard(); // Use standard date format
+    const today = getTodayStandard();
 
     console.log(`🔍 Looking for bowl to return: ${vytInfo.fullUrl}`);
 
-    // Find in prepared bowls (should be here after kitchen scan)
+    let returnSource = null;
+    let returnedBowl = null;
+
+    // CHECK 1: Is bowl in prepared bowls?
     const preparedIndex = window.appData.preparedBowls.findIndex(bowl => 
-        bowl.code === vytInfo.fullUrl && bowl.date === today
+        bowl.code === vytInfo.fullUrl
     );
 
-    if (preparedIndex === -1) {
-        return { 
-            message: "❌ Bowl not prepared today: " + vytInfo.fullUrl, 
-            type: "error",
-            responseTime: Date.now() - startTime
+    if (preparedIndex !== -1) {
+        // Return from prepared bowls
+        const preparedBowl = window.appData.preparedBowls[preparedIndex];
+        window.appData.preparedBowls.splice(preparedIndex, 1);
+        returnSource = 'prepared';
+        
+        returnedBowl = {
+            code: vytInfo.fullUrl,
+            dish: preparedBowl.dish,
+            user: preparedBowl.user,
+            company: "", // Reset to empty for return
+            customer: "", // Reset to empty for return
+            returnedBy: window.appData.user,
+            returnDate: today,
+            returnTime: new Date().toLocaleTimeString(),
+            returnTimestamp: new Date().toISOString(),
+            status: 'RETURNED',
+            source: 'prepared'
         };
+        
+        console.log(`✅ Returning bowl from prepared: ${vytInfo.fullUrl}`);
+    }
+    // CHECK 2: Is bowl in active bowls?
+    else {
+        const activeBowlIndex = window.appData.activeBowls.findIndex(bowl => 
+            bowl.code === vytInfo.fullUrl
+        );
+
+        if (activeBowlIndex !== -1) {
+            // Return from active bowls
+            const activeBowl = window.appData.activeBowls[activeBowlIndex];
+            window.appData.activeBowls.splice(activeBowlIndex, 1);
+            returnSource = 'active';
+            
+            returnedBowl = {
+                code: vytInfo.fullUrl,
+                dish: activeBowl.dish,
+                user: activeBowl.user,
+                company: "", // Reset to empty for return
+                customer: "", // Reset to empty for return
+                returnedBy: window.appData.user,
+                returnDate: today,
+                returnTime: new Date().toLocaleTimeString(),
+                returnTimestamp: new Date().toISOString(),
+                status: 'RETURNED',
+                source: 'active'
+            };
+            
+            console.log(`✅ Returning bowl from active: ${vytInfo.fullUrl}`);
+        }
+        else {
+            // Bowl not found in either prepared or active
+            console.log(`❌ Bowl ${vytInfo.fullUrl} not found in prepared or active bowls`);
+            return { 
+                message: "❌ Bowl not found: " + vytInfo.fullUrl, 
+                type: "error",
+                responseTime: Date.now() - startTime
+            };
+        }
     }
 
-    const preparedBowl = window.appData.preparedBowls[preparedIndex];
-
-    // STEP 1: Remove from prepared bowls
-    window.appData.preparedBowls.splice(preparedIndex, 1);
-
-    // STEP 2: Create returned bowl (already blank data from prepared)
-    const returnedBowl = {
-        code: vytInfo.fullUrl,
-        dish: preparedBowl.dish,
-        user: window.appData.user,
-        company: "",
-        customer: "",
-        returnedBy: window.appData.user,
-        returnDate: today, // Use standard date format
-        returnTime: new Date().toLocaleTimeString(),
-        returnTimestamp: new Date().toISOString(),
-        status: 'RETURNED'
-    };
-
-    // STEP 3: Add to returnedBowls
+    // Add to returnedBowls
     window.appData.returnedBowls.push(returnedBowl);
 
-    // STEP 4: Log the return scan
+    // Log the return scan
     window.appData.myScans.push({
         type: 'return',
         code: vytInfo.fullUrl,
         user: window.appData.user,
         company: "",
         customer: "",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        source: returnSource
     });
 
     window.appData.scanHistory.unshift({
@@ -931,10 +981,11 @@ function returnScan(vytInfo) {
         code: vytInfo.fullUrl,
         user: window.appData.user,
         timestamp: new Date().toISOString(),
-        message: `✅ Returned: ${vytInfo.fullUrl}`
+        message: `✅ Returned: ${vytInfo.fullUrl} (from ${returnSource})`
     });
 
-    console.log(`✅ Bowl returned: ${vytInfo.fullUrl}`);
+    console.log(`✅ Bowl returned successfully from ${returnSource}: ${vytInfo.fullUrl}`);
+    console.log(`🔄 Bowl is now available for fresh kitchen scan`);
 
     syncToFirebase();
 
@@ -1104,7 +1155,7 @@ function selectDishLetter() {
     updateLastActivity();
 }
 
-// Daily Cleanup Timer (7PM Return Data Clear)
+// FIXED: Daily Cleanup Timer with standard date format
 function startDailyCleanupTimer() {
     setInterval(() => {
         const now = new Date();
@@ -1119,7 +1170,7 @@ function clearReturnData() {
     if (window.appData.lastCleanup === today) return;
 
     window.appData.returnedBowls = [];
-    window.appData.lastCleanup = today;
+    window.appData.lastCleanup = today; // Store in standard format
     syncToFirebase(); // SYNC TO FIREBASE ONLY
 
     showMessage('✅ Return data cleared for new day', 'success');
@@ -1160,7 +1211,7 @@ function updateDisplay() {
         formatDateStandard(new Date(scan.timestamp)) === today
     ).length;
 
-    const preparedToday = allKitchenScansToday - allReturnScansToday;
+    const preparedToday = Math.max(0, allKitchenScansToday - allReturnScansToday);
 
     // FIXED: Calculate My Bowl = (User's kitchen scans today) - (User's bowls returned today)
     let myBowlCount = 0;
@@ -1177,7 +1228,7 @@ function updateDisplay() {
             formatDateStandard(new Date(scan.timestamp)) === today
         ).length;
 
-        myBowlCount = userKitchenScansToday - userBowlsReturnedToday;
+        myBowlCount = Math.max(0, userKitchenScansToday - userBowlsReturnedToday);
     }
 
     const returnedToday = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today).length;
@@ -1264,7 +1315,7 @@ function updateOvernightStats() {
         .filter(stat => stat.kitchenScans.length > 0) // Only show combinations with kitchen scans
         .map(stat => ({
             ...stat,
-            netPrepared: stat.kitchenScans.length - stat.returnScans.length,
+            netPrepared: Math.max(0, stat.kitchenScans.length - stat.returnScans.length),
             count: stat.kitchenScans.length + stat.returnScans.length
         }))
         .sort((a, b) => {
@@ -1332,9 +1383,9 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// FIXED: Export All Data with merged Firebase + Local data
+// FIXED: Export All Data with standard date format
 function exportAllData() {
-    console.log('📊 Starting Excel export with merged data...');
+    console.log('📊 Starting Excel export with standard date format...');
     
     loadXLSXLibrary()
         .then(() => {
@@ -1401,7 +1452,7 @@ function exportAllData() {
             // Create workbook with merged data
             const wb = XLSX.utils.book_new();
             
-            // Sheet 1: Active Bowls
+            // Sheet 1: Active Bowls - Convert dates to standard format
             const activeData = mergedData.activeBowls.length > 0 
                 ? mergedData.activeBowls.map(bowl => ({
                     'VYT Code': bowl.code,
@@ -1410,7 +1461,7 @@ function exportAllData() {
                     'Customer': bowl.customer,
                     'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
                     'User': bowl.user,
-                    'Date': bowl.date,
+                    'Date': convertToStandardDate(bowl.date), // Convert to standard format
                     'Time': bowl.time,
                     'Status': bowl.status
                 }))
@@ -1419,7 +1470,7 @@ function exportAllData() {
             const wsActive = XLSX.utils.json_to_sheet(activeData);
             XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
             
-            // Sheet 2: Prepared Bowls
+            // Sheet 2: Prepared Bowls - Convert dates to standard format
             const preparedData = mergedData.preparedBowls.length > 0 
                 ? mergedData.preparedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
@@ -1428,7 +1479,7 @@ function exportAllData() {
                     'Customer': bowl.customer,
                     'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
                     'User': bowl.user,
-                    'Date': bowl.date,
+                    'Date': convertToStandardDate(bowl.date), // Convert to standard format
                     'Time': bowl.time,
                     'Status': bowl.status
                 }))
@@ -1437,7 +1488,7 @@ function exportAllData() {
             const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
             XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
             
-            // Sheet 3: Returned Bowls
+            // Sheet 3: Returned Bowls - Convert dates to standard format
             const returnedData = mergedData.returnedBowls.length > 0 
                 ? mergedData.returnedBowls.map(bowl => ({
                     'VYT Code': bowl.code,
@@ -1445,7 +1496,7 @@ function exportAllData() {
                     'Company': bowl.company,
                     'Customer': bowl.customer,
                     'Returned By': bowl.returnedBy,
-                    'Return Date': bowl.returnDate,
+                    'Return Date': convertToStandardDate(bowl.returnDate), // Convert to standard format
                     'Return Time': bowl.returnTime,
                     'Status': bowl.status
                 }))
@@ -1458,7 +1509,7 @@ function exportAllData() {
             const fileName = `complete_scanner_data_${getTodayStandard()}.xlsx`;
             XLSX.writeFile(wb, fileName);
             
-            console.log('✅ Excel file exported successfully with merged data:', {
+            console.log('✅ Excel file exported successfully with standard date format:', {
                 active: mergedData.activeBowls.length,
                 prepared: mergedData.preparedBowls.length,
                 returned: mergedData.returnedBowls.length
@@ -1475,7 +1526,14 @@ function exportAllData() {
 function convertToCSV(data, fields) {
     const headers = fields.join(',');
     const rows = data.map(item => {
-        return fields.map(field => `"${item[field] || ''}"`).join(',');
+        return fields.map(field => {
+            let value = item[field] || '';
+            // Convert dates to standard format for CSV export
+            if ((field === 'date' || field === 'returnDate') && value) {
+                value = convertToStandardDate(value);
+            }
+            return `"${value}"`;
+        }).join(',');
     });
     return [headers, ...rows].join('\n');
 }
