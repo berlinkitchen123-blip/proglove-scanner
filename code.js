@@ -41,6 +41,32 @@ const firebaseConfig = {
     appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0"
 };
 
+// ========== XLSX LIBRARY LOADING ==========
+
+// Load XLSX library dynamically
+function loadXLSXLibrary() {
+    return new Promise((resolve, reject) => {
+        if (typeof XLSX !== 'undefined') {
+            console.log('✅ XLSX already loaded');
+            resolve();
+            return;
+        }
+
+        console.log('🔄 Loading XLSX library...');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+        script.onload = function() {
+            console.log('✅ XLSX library loaded');
+            resolve();
+        };
+        script.onerror = function() {
+            console.error('❌ Failed to load XLSX library');
+            reject(new Error('Failed to load XLSX library'));
+        };
+        document.head.appendChild(script);
+    });
+}
+
 // ========== DATE FORMATTING FUNCTIONS ==========
 
 // Convert to standard date format YYYY-MM-DD
@@ -69,22 +95,6 @@ function getTodayStandard() {
     const day = String(today.getDate()).padStart(2, '0');
     
     return `${year}-${month}-${day}`;
-}
-
-// Convert from standard format to display format if needed
-function formatDateForDisplay(dateString) {
-    if (!dateString) return '';
-    
-    // If already in display format, return as is
-    if (dateString.includes('/')) return dateString;
-    
-    // Convert from YYYY-MM-DD to DD/MM/YYYY for display
-    const parts = dateString.split('-');
-    if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    
-    return dateString;
 }
 
 // ========== FIREBASE FUNCTIONS ==========
@@ -1155,59 +1165,88 @@ function exportReturnData() {
     showMessage('✅ Return data exported as CSV', 'success');
 }
 
-// Export All Data to Excel with 3 sheets
+// FIXED: Export All Data to Excel with proper XLSX loading
 function exportAllData() {
-    // Create workbook
-    const wb = XLSX.utils.book_new();
+    console.log('📊 Starting Excel export...');
     
-    // Sheet 1: Active Bowls
-    const activeData = window.appData.activeBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
-        'User': bowl.user,
-        'Date': bowl.date,
-        'Time': bowl.time,
-        'Status': bowl.status
-    }));
-    const wsActive = XLSX.utils.json_to_sheet(activeData);
-    XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
-    
-    // Sheet 2: Prepared Bowls
-    const preparedData = window.appData.preparedBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
-        'User': bowl.user,
-        'Date': bowl.date,
-        'Time': bowl.time,
-        'Status': bowl.status,
-        'Was In Active': bowl.wasInActive ? 'Yes' : 'No'
-    }));
-    const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
-    XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
-    
-    // Sheet 3: Returned Bowls
-    const returnedData = window.appData.returnedBowls.map(bowl => ({
-        'Code': bowl.code,
-        'Dish': bowl.dish,
-        'Company': bowl.company,
-        'Customer': bowl.customer,
-        'Returned By': bowl.returnedBy,
-        'Return Date': bowl.returnDate,
-        'Return Time': bowl.returnTime,
-        'Status': bowl.status
-    }));
-    const wsReturned = XLSX.utils.json_to_sheet(returnedData);
-    XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
-    
-    // Export the workbook
-    XLSX.writeFile(wb, 'complete_scanner_data.xlsx');
-    showMessage('✅ All data exported as Excel with 3 sheets', 'success');
+    loadXLSXLibrary()
+        .then(() => {
+            if (typeof XLSX === 'undefined') {
+                throw new Error('XLSX library not loaded');
+            }
+
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            
+            // Sheet 1: Active Bowls
+            if (window.appData.activeBowls.length > 0) {
+                const activeData = window.appData.activeBowls.map(bowl => ({
+                    'VYT Code': bowl.code,
+                    'Dish': bowl.dish,
+                    'Company': bowl.company,
+                    'Customer': bowl.customer,
+                    'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
+                    'User': bowl.user,
+                    'Date': bowl.date,
+                    'Time': bowl.time,
+                    'Status': bowl.status
+                }));
+                const wsActive = XLSX.utils.json_to_sheet(activeData);
+                XLSX.utils.book_append_sheet(wb, wsActive, 'Active Bowls');
+                console.log('✅ Active bowls sheet created:', activeData.length, 'rows');
+            }
+            
+            // Sheet 2: Prepared Bowls
+            if (window.appData.preparedBowls.length > 0) {
+                const preparedData = window.appData.preparedBowls.map(bowl => ({
+                    'VYT Code': bowl.code,
+                    'Dish': bowl.dish,
+                    'Company': bowl.company,
+                    'Customer': bowl.customer,
+                    'Multiple Customers': bowl.multipleCustomers ? 'Yes' : 'No',
+                    'User': bowl.user,
+                    'Date': bowl.date,
+                    'Time': bowl.time,
+                    'Status': bowl.status
+                }));
+                const wsPrepared = XLSX.utils.json_to_sheet(preparedData);
+                XLSX.utils.book_append_sheet(wb, wsPrepared, 'Prepared Bowls');
+                console.log('✅ Prepared bowls sheet created:', preparedData.length, 'rows');
+            }
+            
+            // Sheet 3: Returned Bowls
+            if (window.appData.returnedBowls.length > 0) {
+                const returnedData = window.appData.returnedBowls.map(bowl => ({
+                    'VYT Code': bowl.code,
+                    'Dish': bowl.dish,
+                    'Company': bowl.company,
+                    'Customer': bowl.customer,
+                    'Returned By': bowl.returnedBy,
+                    'Return Date': bowl.returnDate,
+                    'Return Time': bowl.returnTime,
+                    'Status': bowl.status
+                }));
+                const wsReturned = XLSX.utils.json_to_sheet(returnedData);
+                XLSX.utils.book_append_sheet(wb, wsReturned, 'Returned Bowls');
+                console.log('✅ Returned bowls sheet created:', returnedData.length, 'rows');
+            }
+
+            // Check if we have any data to export
+            if (wb.SheetNames.length === 0) {
+                showMessage('❌ No data available to export', 'error');
+                return;
+            }
+
+            // Export the workbook
+            const fileName = `complete_scanner_data_${getTodayStandard()}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            console.log('✅ Excel file exported successfully:', fileName);
+            showMessage('✅ All data exported as Excel with 3 sheets', 'success');
+        })
+        .catch((error) => {
+            console.error('Excel export error:', error);
+            showMessage('❌ Excel export failed: ' + error.message, 'error');
+        });
 }
 
 function convertToCSV(data, fields) {
