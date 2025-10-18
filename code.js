@@ -149,34 +149,68 @@ function initializeFirebase() {
         })
         .catch((error) => {
             console.error('❌ Failed to load Firebase SDK:', error);
-            loadFromStorage();
-            initializeUI();
-            showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
-            document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
+            // Only use local storage as emergency backup when Firebase completely fails to load
+            try {
+                const saved = localStorage.getItem('proglove_data');
+                if (saved) {
+                    const localData = JSON.parse(saved);
+                    console.log('⚠️ Using local backup due to Firebase load failure');
+                    showMessage('⚠️ Using local backup data (cloud unavailable)', 'warning');
+                    
+                    window.appData.activeBowls = localData.activeBowls || [];
+                    window.appData.preparedBowls = localData.preparedBowls || [];
+                    window.appData.returnedBowls = localData.returnedBowls || [];
+                    window.appData.myScans = localData.myScans || [];
+                    window.appData.scanHistory = localData.scanHistory || [];
+                    window.appData.customerData = localData.customerData || [];
+                    window.appData.lastCleanup = localData.lastCleanup;
+                    window.appData.lastSync = localData.lastSync;
+                    
+                    updateDisplay();
+                    initializeUI();
+                } else {
+                    throw new Error('No local backup available');
+                }
+            } catch (localError) {
+                console.error('Local backup also failed:', localError);
+                showMessage('❌ No data available - please check connection', 'error');
+                initializeUI(); // Initialize with empty data
+            }
         });
 }
 
-// Load data from Firebase - USE ONLY FIREBASE DATA
+// FIXED: Always use Firebase as primary, local storage only for emergency backup
 function loadFromFirebase() {
     try {
-        console.log('🔄 Loading data from Firebase...');
+        console.log('🔄 Loading data from Firebase (primary source)...');
         const db = firebase.database();
         const appDataRef = db.ref('progloveData');
         
-        showMessage('🔄 Loading from cloud...', 'info');
+        showMessage('🔄 Connecting to cloud...', 'info');
         document.getElementById('systemStatus').textContent = '🔄 Connecting to Cloud...';
-        
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Firebase connection timeout')), 10000);
+
+        // Monitor connection status
+        const connectedRef = db.ref(".info/connected");
+        connectedRef.on("value", (snap) => {
+            if (snap.val() === true) {
+                console.log('✅ Firebase connection established');
+                document.getElementById('systemStatus').textContent = '✅ Cloud Connected';
+                showMessage('✅ Connected to cloud - using live data', 'success');
+            } else {
+                console.log('❌ Firebase connection lost');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline Mode';
+                showMessage('❌ OFFLINE: No connection to cloud server', 'error');
+            }
         });
 
-        Promise.race([appDataRef.once('value'), timeoutPromise])
+        // Load data from Firebase (primary source)
+        appDataRef.once('value')
             .then((snapshot) => {
                 if (snapshot.exists()) {
                     const firebaseData = snapshot.val();
-                    console.log('✅ Firebase data loaded, using Firebase data only');
+                    console.log('✅ Firebase data loaded (primary source)');
                     
-                    // USE ONLY FIREBASE DATA - NO LOCAL MERGE
+                    // USE FIREBASE DATA AS PRIMARY SOURCE
                     window.appData.activeBowls = firebaseData.activeBowls || [];
                     window.appData.preparedBowls = firebaseData.preparedBowls || [];
                     window.appData.returnedBowls = firebaseData.returnedBowls || [];
@@ -192,6 +226,9 @@ function loadFromFirebase() {
                         returned: window.appData.returnedBowls.length
                     });
                     
+                    // Update display with Firebase data
+                    updateDisplay();
+                    
                     showMessage('✅ Cloud data loaded successfully', 'success');
                     document.getElementById('systemStatus').textContent = '✅ Cloud Connected';
                     
@@ -199,66 +236,141 @@ function loadFromFirebase() {
                     initializeUI();
                     
                 } else {
-                    console.log('❌ No data in Firebase, using local data');
-                    showMessage('❌ No cloud data - using local data', 'warning');
-                    document.getElementById('systemStatus').textContent = '✅ Cloud Connected (No Data)';
-                    loadFromStorage();
+                    console.log('❌ No data in Firebase');
+                    showMessage('❌ No data found in cloud server', 'error');
+                    document.getElementById('systemStatus').textContent = '⚠️ No Cloud Data';
+                    // Initialize with empty data
                     initializeUI();
                 }
             })
             .catch((error) => {
                 console.error('Firebase load error:', error);
-                showMessage('❌ Cloud load failed: ' + error.message, 'error');
-                document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Load Error';
-                loadFromStorage();
-                initializeUI();
+                showMessage('❌ Failed to load from cloud: ' + error.message, 'error');
+                document.getElementById('systemStatus').textContent = '⚠️ Cloud Load Error';
+                
+                // ONLY AS LAST RESORT: Try local storage
+                try {
+                    const saved = localStorage.getItem('proglove_data');
+                    if (saved) {
+                        const localData = JSON.parse(saved);
+                        console.log('⚠️ Using local backup due to Firebase error');
+                        showMessage('⚠️ Using local backup data (cloud unavailable)', 'warning');
+                        
+                        window.appData.activeBowls = localData.activeBowls || [];
+                        window.appData.preparedBowls = localData.preparedBowls || [];
+                        window.appData.returnedBowls = localData.returnedBowls || [];
+                        window.appData.myScans = localData.myScans || [];
+                        window.appData.scanHistory = localData.scanHistory || [];
+                        window.appData.customerData = localData.customerData || [];
+                        window.appData.lastCleanup = localData.lastCleanup;
+                        window.appData.lastSync = localData.lastSync;
+                        
+                        updateDisplay();
+                        initializeUI();
+                    } else {
+                        throw new Error('No local backup available');
+                    }
+                } catch (localError) {
+                    console.error('Local backup also failed:', localError);
+                    showMessage('❌ No data available - please check connection', 'error');
+                    initializeUI(); // Initialize with empty data
+                }
             });
+
     } catch (error) {
-        console.error('Firebase error:', error);
-        showMessage('❌ Firebase error: ' + error.message, 'error');
-        document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Firebase Error';
-        loadFromStorage();
+        console.error('Firebase setup error:', error);
+        showMessage('❌ System error: ' + error.message, 'error');
+        document.getElementById('systemStatus').textContent = '⚠️ System Error';
         initializeUI();
     }
 }
 
-// Sync to Firebase - ALWAYS SYNC AFTER CHANGES
+// FIXED: Sync to Firebase only, local storage is emergency backup
 function syncToFirebase() {
     try {
         if (typeof firebase === 'undefined') {
-            console.log('Firebase not available, saving to local storage only');
-            saveToStorage();
+            console.log('❌ Firebase not available');
+            showMessage('❌ Cannot sync: Firebase not available', 'error');
             return;
         }
-        
+
         const db = firebase.database();
         
-        // Create a clean copy for Firebase - handle null values
-        const firebaseData = {
-            activeBowls: window.appData.activeBowls || [],
-            preparedBowls: window.appData.preparedBowls || [],
-            returnedBowls: window.appData.returnedBowls || [],
-            myScans: window.appData.myScans || [],
-            scanHistory: window.appData.scanHistory || [],
-            customerData: window.appData.customerData || [],
-            lastCleanup: window.appData.lastCleanup || "", // Convert null to empty string
-            lastSync: new Date().toISOString()
-        };
-        
-        db.ref('progloveData').set(firebaseData)
-            .then(() => {
-                window.appData.lastSync = new Date().toISOString();
-                console.log('✅ Data synced to Firebase');
-                document.getElementById('systemStatus').textContent = '✅ Cloud Synced';
-            })
-            .catch((error) => {
-                console.error('Firebase sync failed:', error);
-                saveToStorage();
-                document.getElementById('systemStatus').textContent = '⚠️ Sync Failed - Using Local';
-            });
+        // Check connection status
+        const connectedRef = db.ref(".info/connected");
+        connectedRef.once("value").then((snap) => {
+            if (snap.val() === true) {
+                // Online - sync to Firebase (primary)
+                const firebaseData = {
+                    activeBowls: window.appData.activeBowls || [],
+                    preparedBowls: window.appData.preparedBowls || [],
+                    returnedBowls: window.appData.returnedBowls || [],
+                    myScans: window.appData.myScans || [],
+                    scanHistory: window.appData.scanHistory || [],
+                    customerData: window.appData.customerData || [],
+                    lastCleanup: window.appData.lastCleanup || "",
+                    lastSync: new Date().toISOString()
+                };
+
+                console.log('🔄 Syncing to Firebase...');
+                showMessage('🔄 Syncing to cloud...', 'info');
+
+                db.ref('progloveData').set(firebaseData)
+                    .then(() => {
+                        window.appData.lastSync = new Date().toISOString();
+                        console.log('✅ Data synced to Firebase');
+                        
+                        // ONLY AFTER SUCCESSFUL FIREBASE SYNC: Save to local as backup
+                        try {
+                            localStorage.setItem('proglove_data', JSON.stringify({
+                                activeBowls: window.appData.activeBowls,
+                                preparedBowls: window.appData.preparedBowls,
+                                returnedBowls: window.appData.returnedBowls,
+                                myScans: window.appData.myScans,
+                                scanHistory: window.appData.scanHistory,
+                                customerData: window.appData.customerData,
+                                lastCleanup: window.appData.lastCleanup,
+                                lastSync: window.appData.lastSync
+                            }));
+                            console.log('💾 Backup saved to local storage');
+                        } catch (storageError) {
+                            console.warn('Local storage backup failed:', storageError);
+                        }
+                        
+                        document.getElementById('systemStatus').textContent = '✅ Cloud Synced';
+                        showMessage('✅ Data synced to cloud successfully', 'success');
+                    })
+                    .catch((error) => {
+                        console.error('Firebase sync failed:', error);
+                        showMessage('❌ Cloud sync failed: ' + error.message, 'error');
+                        document.getElementById('systemStatus').textContent = '⚠️ Sync Failed';
+                    });
+            } else {
+                // Offline - cannot sync
+                console.log('❌ Offline - cannot sync to Firebase');
+                showMessage('❌ OFFLINE: Cannot sync to cloud server', 'error');
+                document.getElementById('systemStatus').textContent = '⚠️ Offline - Cannot Sync';
+            }
+        }).catch((error) => {
+            console.error('Connection check failed:', error);
+            showMessage('❌ Connection check failed', 'error');
+        });
+
     } catch (error) {
         console.error('Sync error:', error);
-        saveToStorage();
+        showMessage('❌ Sync error: ' + error.message, 'error');
+    }
+}
+
+// Function to clear local storage (manual cleanup)
+function clearLocalBackup() {
+    try {
+        localStorage.removeItem('proglove_data');
+        console.log('🗑️ Local backup cleared');
+        showMessage('✅ Local backup data cleared', 'success');
+    } catch (error) {
+        console.error('Failed to clear local storage:', error);
+        showMessage('❌ Failed to clear local backup', 'error');
     }
 }
 
@@ -851,14 +963,18 @@ function startScanning() {
     showMessage(`🎯 SCANNING ACTIVE - Ready to scan`, 'success');
 }
 
+// ENHANCED: Stop scanning with clear sync status
 function stopScanning() {
     window.appData.scanning = false;
     updateDisplay();
     updateLastActivity();
-    showMessage(`⏹ Scanning stopped`, 'info');
+    
+    // Always try to sync when stopping scanning
+    syncToFirebase();
+    showMessage('⏹ Scanning stopped - syncing to cloud...', 'info');
 }
 
-// Storage Functions (ONLY FOR BACKUP)
+// Storage Functions (ONLY FOR BACKUP - kept for compatibility)
 function saveToStorage() {
     try {
         localStorage.setItem('proglove_data', JSON.stringify(window.appData));
@@ -1319,3 +1435,5 @@ window.checkFirebaseData = checkFirebaseData;
 window.syncToFirebase = syncToFirebase;
 window.loadFromFirebase = loadFromFirebase;
 window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
+window.manualSyncToFirebase = syncToFirebase;
+window.clearLocalBackup = clearLocalBackup;
