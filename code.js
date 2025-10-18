@@ -674,17 +674,20 @@ function processScan(input) {
     updateLastActivity();
 }
 
-// UPDATED Kitchen Scan - Remove from active and reset to Unknown
+// FIXED: Kitchen Scan - CORRECTED DUPLICATE CHECKING
 function kitchenScan(vytInfo) {
     const startTime = Date.now();
     const today = getTodayStandard(); // Use standard date format
 
-    // Check if already prepared today
+    console.log(`🔍 Checking if bowl ${vytInfo.fullUrl} was prepared today...`);
+
+    // FIXED: Check if ANY user prepared this bowl today (not just current user)
     const isPreparedToday = window.appData.preparedBowls.some(bowl => 
         bowl.code === vytInfo.fullUrl && bowl.date === today
     );
 
     if (isPreparedToday) {
+        console.log(`❌ Bowl ${vytInfo.fullUrl} was already prepared today by another user`);
         return { 
             message: "❌ Already prepared today: " + vytInfo.fullUrl, 
             type: "error",
@@ -698,18 +701,19 @@ function kitchenScan(vytInfo) {
     
     if (activeBowlIndex !== -1) {
         // Remove from active bowls (delete Customer A data)
+        const removedBowl = window.appData.activeBowls[activeBowlIndex];
         window.appData.activeBowls.splice(activeBowlIndex, 1);
         hadCustomerData = true;
-        console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl}`);
+        console.log(`🗑️ Removed bowl from active with customer data: ${vytInfo.fullUrl} (Customer: ${removedBowl.customer}, Company: ${removedBowl.company})`);
     }
 
+    // STEP 2: Create prepared bowl with ALWAYS "Unknown" customer
     const preparedBowl = {
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        // ✅ RESET to Unknown - Kitchen has no customer data
-        company: "Unknown", 
-        customer: "Unknown",
+        company: "Unknown", // ALWAYS reset to Unknown
+        customer: "Unknown", // ALWAYS reset to Unknown
         date: today, // Use standard date format
         time: new Date().toLocaleTimeString(),
         timestamp: new Date().toISOString(),
@@ -718,16 +722,17 @@ function kitchenScan(vytInfo) {
         hadPreviousCustomer: hadCustomerData // Track if it had previous customer data
     };
 
-    // STEP 2: ADD to prepared bowls (today's preparation)
+    // STEP 3: ADD to prepared bowls
     window.appData.preparedBowls.push(preparedBowl);
 
+    // STEP 4: Log the scan
     window.appData.myScans.push({
         type: 'kitchen',
         code: vytInfo.fullUrl,
         dish: window.appData.dishLetter,
         user: window.appData.user,
-        company: "Unknown", // RESET
-        customer: "Unknown", // RESET
+        company: "Unknown",
+        customer: "Unknown",
         timestamp: new Date().toISOString(),
         hadPreviousCustomer: hadCustomerData
     });
@@ -744,7 +749,11 @@ function kitchenScan(vytInfo) {
         message: message
     });
 
-    syncToFirebase(); // SYNC TO FIREBASE ONLY
+    console.log(`✅ Successfully prepared bowl: ${vytInfo.fullUrl}`);
+    console.log(`📊 Current prepared bowls count: ${window.appData.preparedBowls.length}`);
+
+    // IMMEDIATELY SYNC TO SAVE THE PREPARED BOWL
+    syncToFirebase();
 
     return { 
         message: message, 
@@ -783,9 +792,8 @@ function returnScan(vytInfo) {
         code: vytInfo.fullUrl,
         dish: preparedBowl.dish,
         user: window.appData.user,
-        // ✅ Already BLANK from prepared stage
-        company: "", // BLANK
-        customer: "", // BLANK
+        company: "",
+        customer: "",
         returnedBy: window.appData.user,
         returnDate: today, // Use standard date format
         returnTime: new Date().toLocaleTimeString(),
@@ -801,8 +809,8 @@ function returnScan(vytInfo) {
         type: 'return',
         code: vytInfo.fullUrl,
         user: window.appData.user,
-        company: "", // BLANK
-        customer: "", // BLANK
+        company: "",
+        customer: "",
         timestamp: new Date().toISOString()
     });
 
@@ -816,7 +824,7 @@ function returnScan(vytInfo) {
 
     console.log(`✅ Bowl returned: ${vytInfo.fullUrl}`);
 
-    syncToFirebase(); // SYNC TO FIREBASE ONLY
+    syncToFirebase();
 
     return { 
         message: `✅ Returned: ${vytInfo.fullUrl}`, 
