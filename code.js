@@ -24,6 +24,7 @@ window.appData = {
     lastSync: null,
     isDomReady: false, 
     isInitialized: false, 
+    scanTimer: null, // NEW: Added timer for debouncing scanner input
 };
 
 const USERS = [
@@ -1113,8 +1114,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const scanInput = document.getElementById('scanInput');
     if(scanInput) {
+        // 💥 FIX: Switched from keydown (requiring Enter) to debounced input (instant scan)
+        let scanTimer = null;
+        scanInput.addEventListener('input', (e) => {
+            const scannedValue = e.target.value.trim();
+            if (scannedValue.length > 5) { // Check length to avoid processing single keystrokes
+                
+                // Clear any existing timer to wait for typing to stop
+                if (window.appData.scanTimer) {
+                    clearTimeout(window.appData.scanTimer);
+                }
+
+                // Set a short delay (20ms) to ensure the entire VYT string has been written
+                window.appData.scanTimer = setTimeout(() => {
+                    if (scanInput.value.trim() === scannedValue) { // Final check to confirm value is stable
+                        processScan(scannedValue);
+                        scanInput.value = ''; // Clear after processing
+                    }
+                }, 20); // 20ms is standard for fast scanner input
+            }
+        });
+        
+        // Retain the keydown listener for explicit Enter presses (good fallback/manual entry)
         scanInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && scanInput.value.trim()) {
+            if (e.key === 'Enter') {
                 e.preventDefault(); 
                 const scannedValue = scanInput.value.trim();
                 if (scannedValue) {
