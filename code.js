@@ -687,7 +687,7 @@ function flattenOrderData(order) {
                 : [];
             
             // Get standard dish fields
-            const dishIdentifier = String(dishLabel || dish.name || dish.id || 'N/A').trim().toUpperCase();
+            const dishIdentifier = String(dish.label || dish.name || dish.id || 'N/A').trim().toUpperCase();
             const safeDishId = dishIdentifier.length > 10 ? dishIdentifier.substring(0, 8) : dishIdentifier; 
             
             if (!dish.users || !Array.isArray(dish.users)) continue;
@@ -708,7 +708,6 @@ function flattenOrderData(order) {
 
                     if (existingRecord) {
                         // FIX: Ensure customer is an array before concat; merge customer list
-                        // This uses Array.from() to safely handle merging if 'customer' was initialized as a string
                         existingRecord.customer = Array.from(existingRecord.customer).concat(usernames);
                     } else {
                         // Create a new unique record for this specific VYT URL
@@ -723,24 +722,30 @@ function flattenOrderData(order) {
                 }
             } 
             // --- 2. HANDLE VIRTUAL VYT CODES (Fallback for Missing Codes) ---
-            // This path should only be taken if bowlCodes is genuinely missing (e.g., historical data structure difference)
-            // This is the source of the missing records if the physical VYT codes were missing in the manifest.
+            // This path should only be taken if bowlCodes is genuinely missing.
             else {
-                // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISH_IDENTIFIER)
-                // This creates ONE single bowl entry for all users of this dish, IF no VYT codes are provided.
-                const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${safeDishId}`;
-                const existingRecord = dishVytMap.get(virtualVytBase);
+                // If VYT codes are missing, we use the ordered quantity to determine how many bowls to create.
+                const totalOrdered = dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 0), 0);
+                
+                // FIX: If VYT codes are missing, we MUST check if the ordered quantity is > 0.
+                if (totalOrdered > 0) {
+                    
+                    // The safe identifier uses the Dish ID as a guaranteed unique string fallback
+                    const finalIdentifier = String(dish.id || 'VIRTUAL_DISH').substring(0, 10).toUpperCase();
 
-                if (existingRecord) {
-                    existingRecord.customer = Array.from(existingRecord.customer).concat(usernames);
-                } else {
-                    dishVytMap.set(virtualVytBase, {
-                        vytUrl: virtualVytBase, 
-                        dishLetter: dishLabel,
-                        company: companyName,
-                        customer: usernames, 
-                        preparedDate: preparedDate,
-                    });
+                    for (let i = 0; i < totalOrdered; i++) {
+                         // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISHID-INDEX)
+                        const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${finalIdentifier}-${i}`;
+                        
+                        // We do not check for existing records here; each iteration is assumed to be a new item.
+                        flattenedBowls.push({
+                            vytUrl: virtualVytBase, 
+                            dishLetter: dishLabel,
+                            company: companyName,
+                            customer: usernames.join(', '), 
+                            preparedDate: preparedDate,
+                        });
+                    }
                 }
             }
         }
