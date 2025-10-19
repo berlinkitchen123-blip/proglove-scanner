@@ -616,6 +616,16 @@ function processScan(vytUrl) {
         window.appData.isProcessingScan = false; // Release lock
         return; // Stop processing and logging immediately
     }
+    
+    // Check for duplicate in RETURN mode (Bowl must be returned only once per cycle)
+    if (window.appData.mode === 'return') {
+        const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
+        if (isAlreadyReturned) {
+            showMessage("⚠️ DUPLICATE SCAN: This bowl has already been returned today.", 'error', 7000);
+            window.appData.isProcessingScan = false; // Release lock
+            return; // Stop processing and logging immediately
+        }
+    }
     // ---------------------------------
     
     const scanRecord = {
@@ -691,8 +701,11 @@ function kitchenScan(vytUrl, timestamp) {
  * Handles bowl return (Return Scan).
  */
 function returnScan(vytUrl, timestamp) {
+    // Note: Duplicate check moved to processScan to run before anything is logged.
+
     const returnDate = formatDateStandard(new Date(timestamp));
 
+    // 1. Try to find the bowl in Prepared state and move to Returned
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     if (preparedIndex !== -1) {
         const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
@@ -705,6 +718,7 @@ function returnScan(vytUrl, timestamp) {
         };
     }
 
+    // 2. Try to find the bowl in Active state and move to Returned (CLOSES THE ACTIVE CYCLE)
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
@@ -717,6 +731,7 @@ function returnScan(vytUrl, timestamp) {
         };
     }
     
+    // 3. If the bowl is not found in either state
     return { 
         success: false, 
         message: `❌ ERROR: ${vytUrl.slice(-10)} not found in Prepared or Active inventory.` 
@@ -1172,7 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearTimeout(window.appData.scanTimer);
                 }
 
-                // Set a short delay (5ms) to ensure the entire VYT string has been written
+                // Set a short delay (50ms) to ensure the entire VYT string has been written
                 window.appData.scanTimer = setTimeout(() => {
                     // Check if input value is stable and scanning is active
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
@@ -1180,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 5); // Reduced to 5ms for aggressive, high-speed capture
+                }, 50); // Set to 50ms as per your request for stable physical scanner timing
             }
         });
         
