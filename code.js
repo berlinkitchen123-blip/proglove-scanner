@@ -1,5 +1,5 @@
 // ProGlove Scanner - Complete Bowl Tracking System
-// VYT codes are treated as full URLs. Logic updated for immediate statistics refresh.
+// This file is configured for Firebase Realtime Database connection using Canvas environment variables.
 
 // --- GLOBAL STATE ---
 window.appData = {
@@ -91,6 +91,8 @@ function getReportingDayTimestamp() {
 
 function showMessage(message, type = 'info', duration = 3000) {
     const messageContainer = document.getElementById('messageContainer');
+    if (!messageContainer) return; // Exit if container isn't ready
+    
     const msgElement = document.createElement('div');
     msgElement.className = `p-3 rounded-lg shadow-xl text-center text-sm mb-2 transition-all duration-300`;
     
@@ -104,13 +106,9 @@ function showMessage(message, type = 'info', duration = 3000) {
     msgElement.className += ' ' + backgroundClass;
     msgElement.innerHTML = message;
     
-    // Prepend the new message to the container
-    if (messageContainer) {
-        messageContainer.prepend(msgElement);
-    }
+    messageContainer.prepend(msgElement);
     
     setTimeout(() => {
-        // Fade out and remove the message
         msgElement.style.opacity = '0';
         msgElement.style.maxHeight = '0';
         msgElement.style.padding = '0';
@@ -121,36 +119,36 @@ function showMessage(message, type = 'info', duration = 3000) {
 // --- FIREBASE SETUP & SYNC (SOLE SOURCE OF TRUTH) ---
 
 /**
- * Initializes Firebase, sets up the Realtime Database reference.
+ * Initializes Firebase using environment variables (__firebase_config, __app_id).
  */
 async function initializeFirebase() {
     try {
+        // Use global environment variables for secure setup
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         if (!firebaseConfig) {
             console.error("Firebase config is missing.");
-            showMessage("❌ Firebase configuration is missing.", 'error');
+            showMessage("❌ Firebase configuration is missing. Running local-only mode.", 'error');
             return;
         }
 
-        // Check for required global firebase object (assuming the SDK is loaded in the HTML)
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
-             showMessage("❌ Firebase library not loaded. Check HTML scripts.", 'error');
+             showMessage("❌ Firebase SDK not loaded. Check HTML scripts.", 'error');
              return;
         }
 
+        // Initialize the app and database connection
         const app = firebase.initializeApp(firebaseConfig);
-        // Using Realtime Database reference as per original code structure
         window.appData.db = firebase.database();
         
-        // Public data path: /artifacts/{appId}/public/data/bowl_data
+        // Define the public data path in Realtime Database: /artifacts/{appId}/public/data/bowl_data
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
         loadFromFirebase();
 
-        showMessage("✅ Application initialized. Waiting for user selection.", 'success');
+        showMessage("✅ Application initialized and connecting to Cloud.", 'success');
     } catch (error) {
         console.error("Firebase initialization failed:", error);
         showMessage("❌ Firebase failed to initialize. Check configuration.", 'error');
@@ -159,7 +157,6 @@ async function initializeFirebase() {
 
 /**
  * Fetches data from Firebase using the ON listener for real-time consistency.
- * This function also triggers the initial display update for the Live Prep Report.
  */
 function loadFromFirebase() {
     if (!window.appData.appDataRef) return;
@@ -176,7 +173,7 @@ function loadFromFirebase() {
             
             checkDailyDataReset(); 
             
-            updateDisplay(); // Triggers the Live Prep Report refresh
+            updateDisplay();
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
             console.log("🆕 Initializing new data structure in Firebase.");
@@ -206,8 +203,7 @@ function syncToFirebase() {
     };
 
     const path = window.appData.appDataRef.path.toString();
-    // Using firebase.database().ref(path).set() for data write
-    firebase.database().ref(path).set(dataToSave) 
+    firebase.database().ref(path).set(dataToSave)
         .then(() => {
             console.log("⬇️ Data successfully written to Firebase.");
         })
@@ -224,9 +220,12 @@ function updateDisplay() {
 
     // Update Mode Display
     const modeText = window.appData.mode === 'kitchen' ? 'Kitchen Prep Mode' : 'Return Scan Mode';
-    document.getElementById('modeDisplay').textContent = modeText;
-    document.getElementById('modeDisplay').className = 
-        `text-xl font-bold p-2 rounded-lg text-center ${window.appData.mode === 'kitchen' ? 'bg-indigo-600 text-white' : 'bg-red-600 text-white'}`;
+    const modeDisplay = document.getElementById('modeDisplay');
+    if(modeDisplay) {
+        modeDisplay.textContent = modeText;
+        modeDisplay.className = 
+            `text-xl font-bold p-2 rounded-lg text-center ${window.appData.mode === 'kitchen' ? 'bg-indigo-600 text-white' : 'bg-red-600 text-white'}`;
+    }
     
     // --- MAIN METRICS (Accurate Inventory/History Count) ---
 
@@ -273,7 +272,7 @@ function updateDisplay() {
     document.getElementById('selectedDishLetter').textContent = window.appData.dishLetter || 'A';
     
     // --- LIVE PREP REPORT (REAL-TIME UPDATE - ALWAYS ON) ---
-    // This is run every time data changes, regardless of user/mode selection.
+    // This runs every time data changes from the database, satisfying the "without selecting user" requirement.
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
 }
@@ -309,8 +308,6 @@ function selectDishLetter(value) {
             showMessage("❌ Invalid Dish Letter/Number selected.", 'error');
         }
     } else {
-        // Allow dish selection to be informational even if user is not fully selected,
-        // but alert that user selection is needed for scanning.
         showMessage("❌ Please select a User first.", 'error');
     }
 }
@@ -326,14 +323,16 @@ function startScanning() {
     }
     window.appData.scanning = true;
     // Set focus so the ProGlove input is immediately received
-    document.getElementById('scanInput').focus(); 
+    const scanInput = document.getElementById('scanInput');
+    if(scanInput) scanInput.focus(); 
     showMessage("✅ Scanner Activated. Ready to scan.", 'success');
     updateDisplay();
 }
 
 function stopScanning() {
     window.appData.scanning = false;
-    document.getElementById('scanInput').blur();
+    const scanInput = document.getElementById('scanInput');
+    if(scanInput) scanInput.blur();
     showMessage("🛑 Scanner Deactivated.", 'info');
     updateDisplay();
 }
@@ -360,7 +359,7 @@ function processScan(vytUrl) {
         timestamp: timestamp,
         type: window.appData.mode,
         user: window.appData.user,
-        // Only include dishLetter if in kitchen mode (avoids cluttering return scans)
+        // Only include dishLetter if in kitchen mode
         dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A'
     };
     window.appData.myScans.push(scanRecord);
@@ -382,7 +381,8 @@ function processScan(vytUrl) {
     
     // 4. Update the display and clear the input for the next scan
     updateDisplay(); 
-    document.getElementById('scanInput').value = '';
+    const scanInput = document.getElementById('scanInput');
+    if(scanInput) scanInput.value = '';
 }
 
 /**
@@ -751,41 +751,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const option = document.createElement('option');
         option.value = user.name;
         option.textContent = `${user.name} (${user.role})`;
-        userSelect.appendChild(option);
+        if(userSelect) userSelect.appendChild(option);
     });
 
-    userSelect.addEventListener('change', (e) => selectUser(e.target.value));
+    if(userSelect) userSelect.addEventListener('change', (e) => selectUser(e.target.value));
 
     const dishLetterSelect = document.getElementById('dishLetterSelect');
     DISH_LETTERS.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
-        dishLetterSelect.appendChild(option);
+        if(dishLetterSelect) dishLetterSelect.appendChild(option);
     });
 
-    dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
+    if(dishLetterSelect) dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
     
-    // Set initial values (This assumes the HTML has default selections)
+    // Set initial values (These selections will trigger the initial UI mode)
     selectUser(USERS[0].name); 
     selectDishLetter(DISH_LETTERS[0]); 
 
     // Setup scanning input listener: Catches the 'Enter' keypress simulated by the ProGlove scanner.
     const scanInput = document.getElementById('scanInput');
-    scanInput.addEventListener('keydown', (e) => {
-        // The ProGlove scanner sends the full code followed by 'Enter' (key === 'Enter')
-        if (e.key === 'Enter') {
-            e.preventDefault(); // Stop the browser from submitting forms or scrolling
-            
-            const scannedValue = scanInput.value.trim();
+    if(scanInput) {
+        scanInput.addEventListener('keydown', (e) => {
+            // The ProGlove scanner sends the full code followed by 'Enter' (key === 'Enter')
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Stop the browser from submitting forms or scrolling
+                
+                const scannedValue = scanInput.value.trim();
 
-            if (scannedValue) {
-                // Trigger the main processing function immediately
-                processScan(scannedValue);
+                if (scannedValue) {
+                    // Trigger the main processing function immediately
+                    processScan(scannedValue);
+                }
+                // Note: processScan clears the input field at the end, resetting it for the next scan.
             }
-            // Note: processScan clears the input field at the end, resetting it for the next scan.
-        }
-    });
+        });
+    }
 
     // Make core functions globally accessible for HTML button clicks
     window.setMode = setMode;
