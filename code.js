@@ -13,7 +13,13 @@ window.appData = {
     
     // Internal state
     db: null,
-    appDataRef: null,
+    // CRITICAL FIX: Breaking the data into separate references to avoid the 32MB limit
+    appDataRef: null,        // General reference for metadata
+    refActive: null,         // Reference for Active Bowls
+    refPrepared: null,       // Reference for Prepared Bowls
+    refReturned: null,       // Reference for Returned Bowls (History)
+    refScans: null,          // Reference for Scan Log (History)
+    
     lastDataReset: null, 
     lastSync: null,
     isDomReady: false, 
@@ -128,11 +134,15 @@ function initializeFirebase() {
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
         
-        // Define the public data path.
-        window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
+        // --- NEW: Define separate references to flatten the data structure ---
+        const basePath = `artifacts/${appId}/public/data/`;
+        window.appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
+        window.appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
+        window.appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
+        window.appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
         
         // Asynchronously check if data exists and start listener.
-        ensureDatabaseInitialized(window.appData.appDataRef); 
+        ensureDatabaseInitialized(window.appData.refActive); // Use one ref to check for initialization
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
@@ -146,31 +156,25 @@ function initializeFirebase() {
  */
 async function ensureDatabaseInitialized(ref) {
     try {
-        // Use .once to check data existence without starting a perpetual listener yet
+        // Use .once on the *Active Bowls* ref to check for initialization
         const snapshot = await ref.once('value'); 
         
         if (!snapshot.exists() || snapshot.val() === null) {
-            console.log("🆕 Database is empty. Writing initial structure.");
+            console.log("🆕 Database structure is empty. Writing initial structure.");
             
-            // Create minimal initial structure safely and asynchronously
-            const initialData = {
-                myScans: [],
-                activeBowls: [],
-                preparedBowls: [],
-                returnedBowls: [],
-                lastDataReset: new Date().toISOString(),
-                lastSync: new Date().toISOString(),
-            };
+            // Set empty arrays for all core paths to guarantee existence
+            await window.appData.refActive.set([]); 
+            await window.appData.refPrepared.set([]); 
+            await window.appData.refReturned.set([]);
+            await window.appData.refScans.set([]); 
             
-            // Wait for the initial write to complete successfully
-            await ref.set(initialData); 
             console.log("⬇️ Initial data structure written successfully.");
         } else {
             console.log("⬆️ Database contains existing data.");
         }
         
         // ONLY after the initial data structure is guaranteed to exist (read or written),
-        // we set the flag and start the continuous read listener.
+        // we set the flag and start the continuous read listeners.
         window.appData.isInitialized = true;
         loadFromFirebase();
 
@@ -182,78 +186,73 @@ async function ensureDatabaseInitialized(ref) {
 
 
 /**
- * Sets up the perpetual Firebase listener (Continuous Read).
+ * Sets up the perpetual Firebase listeners (Continuous Read) for all separate paths.
  */
 function loadFromFirebase() {
-    // This listener runs perpetually (continuous read)
-    window.appData.appDataRef.on('value', (snapshot) => {
-        const data = snapshot.val();
-        
-        // Note: data should NEVER be null here if ensureDatabaseInitialized worked, 
-        // but we check isInitialized to prevent running before setup is complete.
-        if (data && window.appData.isInitialized) {
-            // Data received successfully. Update local state.
-            window.appData.myScans = data.myScans || [];
-            window.appData.activeBowls = data.activeBowls || [];
-            window.appData.preparedBowls = data.preparedBowls || [];
-            window.appData.returnedBowls = data.returnedBowls || [];
-            window.appData.lastDataReset = data.lastDataReset || null;
-            window.appData.lastSync = data.lastSync || null;
-            
-            // We NO LONGER check daily data reset here, as requested by user
-            // checkDailyDataReset(); 
+    // 1. Listen to Active Bowls
+    window.appData.refActive.on('value', (snapshot) => {
+        if (window.appData.isInitialized) {
+            window.appData.activeBowls = snapshot.val() || [];
             updateDisplay(); 
-            console.log("⬆️ Data synchronized from Firebase.");
+        }
+    });
+
+    // 2. Listen to Prepared Bowls
+    window.appData.refPrepared.on('value', (snapshot) => {
+        if (window.appData.isInitialized) {
+            window.appData.preparedBowls = snapshot.val() || [];
+            updateDisplay(); 
+        }
+    });
+
+    // 3. Listen to Returned Bowls (History)
+    window.appData.refReturned.on('value', (snapshot) => {
+        if (window.appData.isInitialized) {
+            window.appData.returnedBowls = snapshot.val() || [];
+            updateDisplay(); 
+        }
+    });
+
+    // 4. Listen to Scan Logs (History/Metrics Source)
+    window.appData.refScans.on('value', (snapshot) => {
+        if (window.appData.isInitialized) {
+            window.appData.myScans = snapshot.val() || [];
+            updateDisplay(); 
+            console.log("⬆️ All data synchronized from Firebase.");
 
             const lastSyncInfoEl = document.getElementById('lastSyncInfo');
             if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
-            
-        } else if (!window.appData.isInitialized) {
-            // This is the clean exit now, as the listener is attached before the flag is true.
-            console.warn("Listener triggered before initialization was complete. Skipping update.");
         }
-        
-    }, (error) => {
-        console.error("Firebase ON listener failed:", error);
-        showMessage("❌ ERROR: Live data feed failed. Check Firebase Security Rules.", 'error');
     });
 }
 
 /**
- * Pushes the current local state to Firebase (Continuous Write).
+ * Pushes the current local state to Firebase (Continuous Write) across all relevant paths.
  */
 function syncToFirebase() {
-    // We only sync data if the database has been successfully initialized (write confirmed).
     if (!window.appData.isInitialized) {
-        // This should not happen in the new flow, but we keep it defensive.
         console.warn("Sync attempted before full initialization. Skipping write.");
         return; 
     }
     
-    window.appData.lastSync = new Date().toISOString();
+    // Perform writes only on the arrays that changed.
+    // Use Promises to ensure all updates are initiated correctly.
+    const writes = [
+        window.appData.refActive.set(window.appData.activeBowls),
+        window.appData.refPrepared.set(window.appData.preparedBowls),
+        window.appData.refReturned.set(window.appData.returnedBowls),
+        window.appData.refScans.set(window.appData.myScans),
+    ];
 
-    const dataToSave = {
-        myScans: window.appData.myScans,
-        activeBowls: window.appData.activeBowls,
-        preparedBowls: window.appData.preparedBowls,
-        returnedBowls: window.appData.returnedBowls,
-        lastDataReset: window.appData.lastDataReset,
-        lastSync: window.appData.lastSync,
-    };
-
-    try {
-        // Use the defined reference to set the data.
-        window.appData.appDataRef.set(dataToSave)
-            .then(() => {
-                console.log("⬇️ Data successfully written to Firebase.");
-            })
-            .catch(error => {
-                console.error("Firebase synchronization failed:", error);
-                showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
-            });
-    } catch(e) {
-         console.error("CRITICAL ERROR: Failed to execute database write.", e);
-    }
+    Promise.all(writes)
+        .then(() => {
+            window.appData.lastSync = new Date().toISOString();
+            console.log("⬇️ Data successfully written to Firebase.");
+        })
+        .catch(error => {
+            console.error("Firebase synchronization failed:", error);
+            showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
+        });
 }
 
 // --- UI AND MODE MANAGEMENT ---
@@ -367,7 +366,7 @@ function updateDisplay() {
         bowl.returnDate === today
     ).length;
     const exportReturnCountEl = document.getElementById('exportReturnCount');
-    if (exportReturnCountEl) exportReturnCountEl.textContent = returnedTodayCount;
+    if (exportReturnCountEl) exportReturnCountEl.textContent = window.appData.returnedBowls.length; // Show total history count
     
     
     // --- User Scan Count (Kitchen Team Productivity) ---
@@ -668,58 +667,92 @@ function flattenOrderData(order) {
     const companyName = String(order.name).trim();
     const orderId = order.id;
 
-    // Use a Map to group users by their Dish Label and Name combination
-    const dishUserMap = new Map();
+    // Use a Map to group dishes by their unique physical VYT URL
+    const dishVytMap = new Map();
 
     for (const box of order.boxes) {
         if (!box.dishes || !Array.isArray(box.dishes)) continue;
 
         for (const dish of box.dishes) {
-            // Use 'label' as dish letter (e.g., 'K', 'O')
-            const dishLetter = String(dish.label || dish.name || 'N/A').trim().toUpperCase();
+            
+            // 🛑 EXPLICITLY SKIP ADDONS 🛑
+            const dishLabel = String(dish.label || 'N/A').trim().toUpperCase();
+            if (dishLabel === 'ADDONS') {
+                continue; 
+            }
+            
+            // CRITICAL: Determine the VYT URL source. 
+            const codes = dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0
+                ? dish.bowlCodes
+                : [];
+            
+            // Get standard dish fields
+            // Fallback to dish ID if label/name is missing.
+            const dishIdentifier = String(dishLabel || dish.name || dish.id || 'N/A').trim().toUpperCase();
+            const safeDishId = dishIdentifier.length > 10 ? dishIdentifier.substring(0, 8) : dishIdentifier; // Truncate long IDs
             
             if (!dish.users || !Array.isArray(dish.users)) continue;
             
-            // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISH_LETTER)
-            const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${dishLetter}`;
-            
-            // Collect all usernames for this specific dish letter/type
-            const usernames = dish.users.map(user => String(user.username).trim());
-            
-            // This is the core logic: check if this dish/order combination already exists in the map
-            const existingRecord = dishUserMap.get(virtualVytBase);
+            // Map users to get an array of just usernames/IDs
+            const usernames = dish.users.map(user => String(user.username || user.id).trim());
+            const preparedDate = order.readyTime;
 
-            if (existingRecord) {
-                // FIX: Ensure customer is an array before using concat
-                // This resolves the TypeError: Cannot read properties of undefined (reading 'concat')
-                existingRecord.customer = (existingRecord.customer || []).concat(usernames);
-            } else {
-                // Create the base record
-                dishUserMap.set(virtualVytBase, {
-                    vytUrl: virtualVytBase,
-                    dishLetter: dishLetter,
-                    company: companyName,
-                    customer: usernames, // Store array of users temporarily
-                    preparedDate: order.readyTime,
-                    orderedQuantity: dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 1), 0)
-                });
+            // --- 1. HANDLE VYT CODES (Preferred - One record per VYT Code) ---
+            if (codes.length > 0) {
+                for (const vytUrl of codes) {
+                    const safeVytUrl = vytUrl.trim(); // Preserve original URL case/format for export!
+
+                    const existingRecord = dishVytMap.get(safeVytUrl);
+
+                    if (existingRecord) {
+                        // If this explicit VYT code is repeated, merge the customer list
+                        // FIX: Use (existingRecord.customer || []) to guarantee it's an array before concat
+                        existingRecord.customer = (existingRecord.customer || []).concat(usernames);
+                    } else {
+                        // Create a new unique record for this specific VYT URL
+                        dishVytMap.set(safeVytUrl, {
+                            vytUrl: safeVytUrl, // Keep original URL case/format
+                            dishLetter: dishLabel,
+                            company: companyName,
+                            customer: usernames, // Store array of users temporarily
+                            preparedDate: preparedDate,
+                        });
+                    }
+                }
+            } 
+            // --- 2. HANDLE VIRTUAL VYT CODES (Fallback for Missing Codes) ---
+            else {
+                // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISH_IDENTIFIER)
+                const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${safeDishId}`;
+                const existingRecord = dishVytMap.get(virtualVytBase);
+
+                if (existingRecord) {
+                    existingRecord.customer = (existingRecord.customer || []).concat(usernames);
+                } else {
+                    dishVytMap.set(virtualVytBase, {
+                        vytUrl: virtualVytBase, // Use virtual code as the VYT URL
+                        dishLetter: dishLabel,
+                        company: companyName,
+                        customer: usernames, // Store array of users temporarily
+                        preparedDate: preparedDate,
+                    });
+                }
             }
         }
     }
     
     // Convert the map entries into final bowl records
-    dishUserMap.forEach(record => {
+    dishVytMap.forEach(record => {
         // Concatenate all customer names into a single string for the 'customer' field
         const customerString = record.customer.join(', ');
 
-        // Create one final bowl record for the unique VYT URL
+        // Push the final record (one record per unique VYT URL)
         flattenedBowls.push({
-            vytUrl: record.vytUrl,
+            vytUrl: record.vytUrl, // Use the full, preserved VYT URL
             dishLetter: record.dishLetter,
             company: record.company,
             customer: customerString, // Final string of all customers
             preparedDate: record.preparedDate,
-            // You only need one entry per unique bowl code
         });
     });
 
@@ -749,12 +782,34 @@ function processJSONData(jsonString) {
     const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
     
     let allFlattenedBowls = [];
+    let totalItemsExpected = 0;
 
     // Flatten all nested orders into a single list of assignable bowls
     ordersToProcess.forEach(order => {
         const flattened = flattenOrderData(order);
         allFlattenedBowls = allFlattenedBowls.concat(flattened);
+        
+        // Accurate count of items expected (for debugging)
+        order.boxes.forEach(box => {
+            box.dishes.forEach(dish => {
+                const dishLabel = String(dish.label || 'N/A').trim().toUpperCase();
+                
+                // Only count non-addons
+                if (dishLabel !== 'ADDONS') {
+                    // Count items based on bowlCodes (preferred) or ordered quantity
+                    totalItemsExpected += (dish.bowlCodes && dish.bowlCodes.length > 0) 
+                        ? dish.bowlCodes.length 
+                        : dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 0), 0);
+                }
+            });
+        });
     });
+    
+    const totalItemsPatched = allFlattenedBowls.length;
+    
+    // FIX: Using the totalItemsExpected from the robust counting logic for logging
+    console.log(`JSON Patch Summary: Total items expected: ${totalItemsExpected}. Total unique bowls patched: ${totalItemsPatched}`);
+
 
     if (allFlattenedBowls.length === 0) {
         showMessage("❌ ERROR: No assignable bowl records found in the pasted data.", 'error');
@@ -840,38 +895,64 @@ function processJSONData(jsonString) {
 }
 
 /**
- * Exports data structures as JSON files.
+ * Exports data structures as CSV files (for Excel/Spreadsheets).
  */
-function exportData(data, filename) {
-    const jsonString = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
+function exportData(data, filename, source) {
+    if (!data || data.length === 0) {
+        showMessage(`ℹ️ Cannot export. ${source} is empty.`, 'warning');
+        return;
+    }
+
+    // Use keys from the first object as headers
+    const headers = Object.keys(data[0]);
+    
+    // Create the header row
+    let csvContent = headers.join(',') + '\n';
+
+    // Create data rows
+    data.forEach(row => {
+        const values = headers.map(header => {
+            let value = row[header] === null || typeof row[header] === 'undefined' ? '' : String(row[header]);
+            
+            // Escape values that contain commas or quotes (CRITICAL for CSV integrity)
+            value = value.replace(/"/g, '""');
+            // Ensure VYT URLs that contain non-standard characters are wrapped in quotes
+            if (value.includes(',') || value.includes('\n') || value.includes(':')) {
+                value = `"${value}"`;
+            }
+            return value;
+        });
+        csvContent += values.join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = filename.replace('.json', '.csv'); // Change extension to CSV
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showMessage(`💾 Exported data to ${filename}`, 'info');
+    showMessage(`💾 Exported data to ${a.download} (CSV format for Excel)`, 'success');
 }
 
 function exportActiveBowls() {
-    exportData(window.appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.json`);
+    exportData(window.appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.csv`, 'Active Bowls');
 }
 
 function exportReturnData() {
-    exportData(window.appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.json`);
+    exportData(window.appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.csv`, 'Returned Bowls');
 }
 
 function exportAllData() {
-    const fullData = {
-        myScans: window.appData.myScans,
-        activeBowls: window.appData.activeBowls,
-        preparedBowls: window.appData.preparedBowls,
-        returnedBowls: window.appData.returnedBowls,
-    };
-    exportData(fullData, `full_bowl_data_${formatDateStandard(new Date())}.json`);
+    const fullData = [
+        ...window.appData.activeBowls.map(b => ({ ...b, source: 'Active' })),
+        ...window.appData.preparedBowls.map(b => ({ ...b, source: 'Prepared' })),
+        ...window.appData.returnedBowls.map(b => ({ ...b, source: 'Returned' })),
+    ];
+    // NOTE: This aggregates the three main lists. myScans is huge and often skipped.
+    exportData(fullData, `all_combined_bowl_data_${formatDateStandard(new Date())}.csv`, 'Combined Data');
 }
 
 /**
