@@ -133,8 +133,6 @@ function initializeFirebase() {
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
         // Asynchronously check if data exists and start listener.
-        // This solves the CRITICAL timing bug by waiting for the initial write (if needed) 
-        // BEFORE starting the perpetual listener and setting the initialized flag.
         ensureDatabaseInitialized(window.appData.appDataRef); 
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
@@ -305,21 +303,21 @@ function updateDisplay() {
         const modeText = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
         if(modeDisplay) {
             modeDisplay.textContent = modeText;
-            modeDisplay.classList.remove('bg-gray-500', 'bg-red-600', 'bg-emerald-600');
-            modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'bg-emerald-600' : 'bg-red-600');
+            modeDisplay.classList.remove('bg-gray-500', 'accent-red', 'accent-green');
+            modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'accent-green' : 'accent-red');
         }
         if(userSelectionCard) userSelectionCard.style.opacity = 1; 
         if(userSelect) userSelect.disabled = false;
 
-        if(kitchenBtn) kitchenBtn.classList.remove('ring-2', 'ring-emerald-400', 'bg-gray-600', 'bg-emerald-600');
-        if(returnBtn) returnBtn.classList.remove('ring-2', 'ring-red-400', 'bg-gray-600', 'bg-red-600');
+        if(kitchenBtn) kitchenBtn.classList.remove('accent-green', 'btn-neutral');
+        if(returnBtn) returnBtn.classList.remove('accent-red', 'btn-neutral');
 
         if (window.appData.mode === 'kitchen') {
-            if(kitchenBtn) kitchenBtn.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-600');
-            if(returnBtn) returnBtn.classList.add('bg-gray-600');
+            if(kitchenBtn) kitchenBtn.classList.add('accent-green');
+            if(returnBtn) returnBtn.classList.add('btn-neutral');
         } else {
-            if(returnBtn) returnBtn.classList.add('ring-2', 'ring-red-400', 'bg-red-600');
-            if(kitchenBtn) kitchenBtn.classList.add('bg-gray-600');
+            if(returnBtn) returnBtn.classList.add('accent-red');
+            if(kitchenBtn) kitchenBtn.classList.add('btn-neutral');
         }
 
     } else {
@@ -327,13 +325,14 @@ function updateDisplay() {
         if(userSelectionCard) userSelectionCard.style.opacity = 0.5; 
         if(scanningCard) scanningCard.style.opacity = 0.5; 
         if(userSelect) userSelect.disabled = true;
-        if(kitchenBtn) kitchenBtn.classList.remove('ring-2', 'ring-emerald-400');
-        if(returnBtn) returnBtn.classList.remove('ring-2', 'ring-red-400');
+        if(kitchenBtn) kitchenBtn.classList.add('btn-neutral');
+        if(returnBtn) returnBtn.classList.add('btn-neutral');
     }
 
     // 2. Dish Section Visibility (Only for Kitchen mode)
     if (dishSection) {
-        if (window.appData.mode === 'kitchen' && userSelectionCard) {
+        // If mode is 'kitchen', show it. Otherwise, hide it using the class defined in CSS.
+        if (window.appData.mode === 'kitchen') {
             dishSection.classList.remove('hidden');
         } else {
             dishSection.classList.add('hidden');
@@ -355,19 +354,16 @@ function updateDisplay() {
     }
 
 
-    // --- Core Metrics Update (Added Null Checks) ---
-    const activeCountEl = document.getElementById('activeCount');
-    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length;
-    
+    // --- Core Metrics Update (Kitchen Team Focus) ---
+    // Removed activeCountEl and exportReturnCountEl updates.
+
     const preparedTodayCountEl = document.getElementById('preparedTodayCount');
     if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
     
-    const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
-        bowl.returnDate === today
-    ).length;
-    const exportReturnCountEl = document.getElementById('exportReturnCount');
-    if (exportReturnCountEl) exportReturnCountEl.textContent = returnedTodayCount;
-    
+    // Note: returnedTodayCount and activeBowls.length calculations are kept 
+    // for other functions (like daily reset and missing bowls report) 
+    // even though their specific UI elements were removed from the main panel.
+
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp(); 
 
@@ -413,14 +409,12 @@ function updateDisplay() {
     const selectedDishLetterEl = document.getElementById('selectedDishLetter');
     if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
     
-    const exportActiveCountEl = document.getElementById('exportActiveCount');
-    if(exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
-    
-    const exportPreparedCountEl = document.getElementById('exportPreparedCount');
-    if(exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
+    // NOTE: Removed exportActiveCountEl and exportPreparedCountEl updates.
     
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
+    
+    // NOTE: Removed call to renderMissingBowlsReport();
 }
 
 /**
@@ -647,38 +641,106 @@ function returnScan(vytUrl, timestamp) {
 }
 
 /**
+ * Flattens the complex JSON delivery order into an array of simple bowl records.
+ * @param {object} order The single, nested order object.
+ * @returns {Array} An array of flattened bowl records.
+ */
+function flattenOrderData(order) {
+    const flattenedBowls = [];
+    
+    // Safety checks for crucial top-level fields
+    if (!order || !order.id || !order.name || !order.boxes || !Array.isArray(order.boxes)) {
+        console.warn("Invalid or incomplete top-level order data, skipping order.", order);
+        return [];
+    }
+
+    const companyName = String(order.name).trim();
+    const orderId = order.id;
+
+    for (const box of order.boxes) {
+        if (!box.dishes || !Array.isArray(box.dishes)) continue;
+
+        for (const dish of box.dishes) {
+            // Use 'label' as dish letter, falling back to 'name' or 'N/A'
+            const dishLetter = String(dish.label || dish.name || 'N/A').trim().toUpperCase();
+            
+            if (!dish.users || !Array.isArray(dish.users)) continue;
+
+            for (const user of dish.users) {
+                const username = String(user.username).trim();
+                
+                // Safety check: ensure we have the minimum info
+                if (username) {
+                    // Create a unique virtual VYT code since actual bowlCodes are empty
+                    const virtualVytUrl = `VIRTUAL-${orderId.substring(0, 8)}-${dishLetter}-${username.replace(/\s/g, '').substring(0, 6)}`;
+                    
+                    // Create one record for each ordered quantity (assuming orderedQuantity is 1 for simplicity)
+                    // If orderedQuantity > 1, this needs a loop, but we default to 1 assignment per user record.
+                    for (let i = 0; i < (user.orderedQuantity || 1); i++) {
+                        flattenedBowls.push({
+                            vytUrl: virtualVytUrl,
+                            dishLetter: dishLetter,
+                            company: companyName,
+                            customer: username,
+                            // Use order.readyTime as a placeholder for preparedDate if available
+                            preparedDate: order.readyTime, 
+                        });
+                    }
+                }
+            }
+        }
+    }
+    return flattenedBowls;
+}
+
+/**
  * Processes JSON customer data to convert Prepared Bowls to Active Bowls.
+ * NOTE: User selection is NO LONGER REQUIRED for this function.
  */
 function processJSONData(jsonString) {
-    if (!window.appData.user) {
-        showMessage("❌ ERROR: Please select a User before uploading data.", 'error');
-        return;
-    }
     
     if (!jsonString || jsonString.trim() === '' || jsonString.includes('Paste JSON data here')) {
         showMessage("❌ ERROR: JSON text area is empty. Please paste data.", 'error');
         return;
     }
 
-    let parsedData;
+    let rawData;
     try {
-        parsedData = JSON.parse(jsonString);
-        if (!Array.isArray(parsedData)) {
-            throw new Error("JSON must be a list of bowl objects.");
-        }
+        rawData = JSON.parse(jsonString);
     } catch (e) {
         showMessage(`❌ ERROR: JSON Parsing Error: ${e.message}`, 'error');
+        return;
+    }
+    
+    // The input is a single order object, but the rest of the function expects an array of bowl objects.
+    const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
+    
+    let allFlattenedBowls = [];
+
+    // Flatten all nested orders into a single list of assignable bowls
+    ordersToProcess.forEach(order => {
+        const flattened = flattenOrderData(order);
+        allFlattenedBowls = allFlattenedBowls.concat(flattened);
+    });
+
+    if (allFlattenedBowls.length === 0) {
+        showMessage("❌ ERROR: No assignable bowl records found in the pasted data.", 'error');
         return;
     }
 
     let updates = 0;
     let creations = 0;
     
+    // NOTE: The scanner user (window.appData.user) is only used here as an optional log entry.
+    const currentScannerUser = window.appData.user || 'System Patch';
     const timestamp = new Date().toISOString();
 
-    for (const item of parsedData) {
-        if (!item.vytUrl || !item.company || !item.customer) { 
-            console.warn("Skipping item due to missing VYT URL, Company, or Customer:", item);
+    for (const item of allFlattenedBowls) {
+        // Now, item contains: { vytUrl, dishLetter, company, customer, preparedDate }
+        
+        // Final sanity check on flattened data
+        if (!item.vytUrl || !item.company || !item.customer) {
+            console.error("Internal Error: Flattened item missing core fields.", item);
             continue;
         }
 
@@ -689,16 +751,19 @@ function processJSONData(jsonString) {
         
         const jsonAssignmentDate = formatDateStandard(item.preparedDate || item.date || timestamp);
 
+        // Logic 1: Update Existing Active Bowl (Temporal Overwrite)
         if (activeIndex !== -1) {
             const activeBowl = window.appData.activeBowls[activeIndex];
             activeBowl.company = item.company.trim();
             activeBowl.customer = item.customer.trim();
             activeBowl.preparedDate = jsonAssignmentDate; 
             activeBowl.updateTime = timestamp;
+            activeBowl.user = currentScannerUser; // Log the user who performed the patch
             updates++;
             continue;
         }
         
+        // Logic 2: Promote Prepared Bowl to Active Bowl (MATCHING VYT URL)
         if (preparedIndex !== -1) {
             const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
             
@@ -707,21 +772,23 @@ function processJSONData(jsonString) {
             preparedBowl.preparedDate = jsonAssignmentDate; 
             preparedBowl.updateTime = timestamp; 
             preparedBowl.state = 'ACTIVE_KNOWN';
+            preparedBowl.user = currentScannerUser; // Log the user who performed the patch
             
             window.appData.activeBowls.push(preparedBowl);
             creations++;
             continue;
         }
 
+        // Logic 3: Create New Active Bowl (If missed prep scan, or if it's new)
         if (preparedIndex === -1 && activeIndex === -1) {
             const newBowl = {
                 vytUrl: exactVytUrl, 
-                dishLetter: item.dishLetter || 'N/A', 
+                dishLetter: item.dishLetter, 
                 company: item.company.trim(),
                 customer: item.customer.trim(),
                 preparedDate: jsonAssignmentDate, 
                 preparedTime: timestamp,
-                user: window.appData.user, 
+                user: currentScannerUser, // Log the user who performed the patch
                 state: 'ACTIVE_KNOWN'
             };
             window.appData.activeBowls.push(newBowl);
