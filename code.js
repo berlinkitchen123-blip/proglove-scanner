@@ -200,7 +200,8 @@ function loadFromFirebase() {
             window.appData.lastDataReset = data.lastDataReset || null;
             window.appData.lastSync = data.lastSync || null;
             
-            checkDailyDataReset(); 
+            // We NO LONGER check daily data reset here, as requested by user
+            // checkDailyDataReset(); 
             updateDisplay(); 
             console.log("⬆️ Data synchronized from Firebase.");
 
@@ -650,7 +651,8 @@ function returnScan(vytUrl, timestamp) {
 }
 
 /**
- * Flattens the complex JSON delivery order into an array of simple bowl records.
+ * Flattens the complex JSON delivery order into an array of simple bowl records, 
+ * grouping users with the same dish into a single record.
  * @param {object} order The single, nested order object.
  * @returns {Array} An array of flattened bowl records.
  */
@@ -666,39 +668,59 @@ function flattenOrderData(order) {
     const companyName = String(order.name).trim();
     const orderId = order.id;
 
+    // Use a Map to group users by their Dish Label and Name combination
+    const dishUserMap = new Map();
+
     for (const box of order.boxes) {
         if (!box.dishes || !Array.isArray(box.dishes)) continue;
 
         for (const dish of box.dishes) {
-            // Use 'label' as dish letter, falling back to 'name' or 'N/A'
+            // Use 'label' as dish letter (e.g., 'K', 'O')
             const dishLetter = String(dish.label || dish.name || 'N/A').trim().toUpperCase();
             
             if (!dish.users || !Array.isArray(dish.users)) continue;
-
-            for (const user of dish.users) {
-                const username = String(user.username).trim();
-                
-                // Safety check: ensure we have the minimum info
-                if (username) {
-                    // Create a unique virtual VYT code since actual bowlCodes are empty
-                    // VIRTUAL-ORDERID_SHORT-DISH_LETTER-USERNAME_SHORT
-                    const virtualVytUrl = `VIRTUAL-${orderId.substring(0, 8)}-${dishLetter}-${username.replace(/\s/g, '').substring(0, 6)}`;
-                    
-                    // Create one record for each ordered quantity 
-                    for (let i = 0; i < (user.orderedQuantity || 1); i++) {
-                        flattenedBowls.push({
-                            vytUrl: virtualVytUrl,
-                            dishLetter: dishLetter,
-                            company: companyName,
-                            customer: username,
-                            // Use order.readyTime as a placeholder for preparedDate if available
-                            preparedDate: order.readyTime, 
-                        });
-                    }
-                }
+            
+            // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISH_LETTER)
+            const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${dishLetter}`;
+            
+            // Collect all usernames for this specific dish letter/type
+            const usernames = dish.users.map(user => String(user.username).trim());
+            
+            // This is the core logic: check if this dish/order combination already exists in the map
+            // If it exists, append the users. If not, create a new entry.
+            if (dishUserMap.has(virtualVytBase)) {
+                // Should not happen if data is clean, but concatenate just in case
+                dishUserMap.get(virtualVytBase).users = dishUserMap.get(virtualVytBase).users.concat(usernames);
+            } else {
+                // Create the base record
+                dishUserMap.set(virtualVytBase, {
+                    vytUrl: virtualVytBase,
+                    dishLetter: dishLetter,
+                    company: companyName,
+                    customer: usernames, // Store array of users temporarily
+                    preparedDate: order.readyTime,
+                    orderedQuantity: dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 1), 0)
+                });
             }
         }
     }
+    
+    // Convert the map entries into final bowl records
+    dishUserMap.forEach(record => {
+        // Concatenate all customer names into a single string for the 'customer' field
+        const customerString = record.customer.join(', ');
+
+        // Create one final bowl record for the unique VYT URL
+        flattenedBowls.push({
+            vytUrl: record.vytUrl,
+            dishLetter: record.dishLetter,
+            company: record.company,
+            customer: customerString, // Final string of all customers
+            preparedDate: record.preparedDate,
+            // You only need one entry per unique bowl code, regardless of quantity > 1
+        });
+    });
+
     return flattenedBowls;
 }
 
@@ -721,7 +743,7 @@ function processJSONData(jsonString) {
         return;
     }
     
-    // The input is a single order object, but the rest of the function expects an array of bowl objects.
+    // Normalize input to an array of order objects
     const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
     
     let allFlattenedBowls = [];
@@ -761,8 +783,11 @@ function processJSONData(jsonString) {
         // Logic 1: Update Existing Active Bowl (Temporal Overwrite)
         if (activeIndex !== -1) {
             const activeBowl = window.appData.activeBowls[activeIndex];
+            
+            // Overwrite Company/Customer with NEW details from the patch
             activeBowl.company = item.company.trim();
             activeBowl.customer = item.customer.trim();
+            
             activeBowl.preparedDate = jsonAssignmentDate; 
             activeBowl.updateTime = timestamp;
             updates++;
@@ -771,13 +796,14 @@ function processJSONData(jsonString) {
         
         // Logic 2: Promote Prepared Bowl to Active Bowl (MATCHING VYT URL)
         if (preparedIndex !== -1) {
+            // Remove from Prepared and move to Active
             const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
             
             preparedBowl.company = item.company.trim();
             preparedBowl.customer = item.customer.trim();
             preparedBowl.preparedDate = jsonAssignmentDate; 
             preparedBowl.updateTime = timestamp; 
-            preparedBowl.state = 'ACTIVE_KNOWN';
+            preparedBowl.state = 'ACTIVE_KNOWN'; // Status changed: Assigned and Out.
             
             window.appData.activeBowls.push(preparedBowl);
             creations++;
@@ -793,8 +819,8 @@ function processJSONData(jsonString) {
                 customer: item.customer.trim(),
                 preparedDate: jsonAssignmentDate, 
                 preparedTime: timestamp,
-                user: window.appData.user || 'SYSTEM', // Use SYSTEM if no user is selected
-                state: 'ACTIVE_KNOWN'
+                user: window.appData.user || 'SYSTEM', // Assign SYSTEM user if no operator selected
+                state: 'ACTIVE_KNOWN' // Status: Assigned and Out.
             };
             window.appData.activeBowls.push(newBowl);
             creations++;
@@ -923,6 +949,7 @@ function renderLivePrepReport(stats) {
 /**
  * Runs cleanup for old returned bowl records after 10 PM.
  */
+// NOTE: This function is NO LONGER called in loadFromFirebase, preserving history as requested.
 function checkDailyDataReset() {
     const now = new Date();
     const cutoffHour = 22; // 10 PM
@@ -1018,5 +1045,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start the Firebase initialization process directly (synchronously)
     initializeFirebase();
 
-    setInterval(checkDailyDataReset, 3600000); 
+    // The daily data reset interval is NO LONGER needed as cleanup is removed
+    // setInterval(checkDailyDataReset, 3600000); 
 });
