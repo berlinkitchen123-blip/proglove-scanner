@@ -17,7 +17,8 @@ window.appData = {
     lastDataReset: null, 
     lastSync: null,
     isDomReady: false, 
-    isInitialized: false, // Flag to confirm successful Firebase setup
+    // Flag to confirm successful Firebase setup AND initial data existence
+    isInitialized: false, 
 };
 
 const USERS = [
@@ -131,11 +132,10 @@ function initializeFirebase() {
         // Define the public data path.
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
-        // Set the initialization flag AFTER the reference is defined
-        window.appData.isInitialized = true;
-
-        // Start the permanent listener immediately.
-        loadFromFirebase(); 
+        // Asynchronously check if data exists and start listener.
+        // This solves the CRITICAL timing bug by waiting for the initial write (if needed) 
+        // BEFORE starting the perpetual listener and setting the initialized flag.
+        ensureDatabaseInitialized(window.appData.appDataRef); 
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
@@ -145,20 +145,56 @@ function initializeFirebase() {
 }
 
 /**
- * Sets up the perpetual Firebase listener.
+ * Checks for initial data existence and initializes listener. (Asynchronous Fix)
+ */
+async function ensureDatabaseInitialized(ref) {
+    try {
+        // Use .once to check data existence without starting a perpetual listener yet
+        const snapshot = await ref.once('value'); 
+        
+        if (!snapshot.exists() || snapshot.val() === null) {
+            console.log("🆕 Database is empty. Writing initial structure.");
+            
+            // Create minimal initial structure safely and asynchronously
+            const initialData = {
+                myScans: [],
+                activeBowls: [],
+                preparedBowls: [],
+                returnedBowls: [],
+                lastDataReset: new Date().toISOString(),
+                lastSync: new Date().toISOString(),
+            };
+            
+            // Wait for the initial write to complete successfully
+            await ref.set(initialData); 
+            console.log("⬇️ Initial data structure written successfully.");
+        } else {
+            console.log("⬆️ Database contains existing data.");
+        }
+        
+        // ONLY after the initial data structure is guaranteed to exist (read or written),
+        // we set the flag and start the continuous read listener.
+        window.appData.isInitialized = true;
+        loadFromFirebase();
+
+    } catch (error) {
+        console.error("CRITICAL ERROR: Failed during initial data check/write. Check rules.", error);
+        showMessage("❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.", 'error', 10000);
+    }
+}
+
+
+/**
+ * Sets up the perpetual Firebase listener (Continuous Read).
  */
 function loadFromFirebase() {
-    // CRITICAL FIX: The isInitialized flag must be true before setting listener
-    if (!window.appData.isInitialized) {
-        console.warn("loadFromFirebase called before initialization was complete.");
-        return; 
-    }
-
     // This listener runs perpetually (continuous read)
     window.appData.appDataRef.on('value', (snapshot) => {
         const data = snapshot.val();
         
-        if (data) {
+        // Note: data should NEVER be null here if ensureDatabaseInitialized worked, 
+        // but we check isInitialized to prevent running before setup is complete.
+        if (data && window.appData.isInitialized) {
             // Data received successfully. Update local state.
             window.appData.myScans = data.myScans || [];
             window.appData.activeBowls = data.activeBowls || [];
@@ -170,12 +206,13 @@ function loadFromFirebase() {
             checkDailyDataReset(); 
             updateDisplay(); 
             console.log("⬆️ Data synchronized from Firebase.");
-        } else {
-            // Data is null (first load on an empty database).
-            console.log("🆕 Initializing new data structure in Firebase.");
+
+            const lastSyncInfoEl = document.getElementById('lastSyncInfo');
+            if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
             
-            // CRITICAL FIX: We call syncToFirebase, which handles the timing issue internally using the isInitialized flag.
-            syncToFirebase();
+        } else if (!window.appData.isInitialized) {
+            // This is the clean exit now, as the listener is attached before the flag is true.
+            console.warn("Listener triggered before initialization was complete. Skipping update.");
         }
         
     }, (error) => {
@@ -185,18 +222,16 @@ function loadFromFirebase() {
 }
 
 /**
- * Pushes the current local state to Firebase.
+ * Pushes the current local state to Firebase (Continuous Write).
  */
 function syncToFirebase() {
-    // CRITICAL FIX: Check isInitialized flag FIRST. If false, schedule retry with large delay.
+    // We only sync data if the database has been successfully initialized (write confirmed).
     if (!window.appData.isInitialized) {
-        console.warn("Attempted to sync before full initialization. Scheduling reliable retry (500ms delay).");
-        setTimeout(syncToFirebase, 500); 
+        // This should not happen in the new flow, but we keep it defensive.
+        console.warn("Sync attempted before full initialization. Skipping write.");
         return; 
     }
     
-    // Once isInitialized is true, the reference path should be ready.
-
     window.appData.lastSync = new Date().toISOString();
 
     const dataToSave = {
@@ -209,22 +244,17 @@ function syncToFirebase() {
     };
 
     try {
-        // Since isInitialized is true, we proceed, but we are extremely cautious with the path.
-        const path = window.appData.appDataRef.path.toString(); 
-        firebase.database().ref(path).set(dataToSave)
+        // Use the defined reference to set the data.
+        window.appData.appDataRef.set(dataToSave)
             .then(() => {
                 console.log("⬇️ Data successfully written to Firebase.");
-                const lastSyncInfoEl = document.getElementById('lastSyncInfo');
-                if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
             })
             .catch(error => {
                 console.error("Firebase synchronization failed:", error);
                 showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
             });
     } catch(e) {
-         // FINAL ESCAPE HATCH: If it crashes here, something is fundamentally wrong with the Firebase SDK setup.
-         console.error("CRITICAL ERROR: Failed sync attempt. Reference object is missing internal properties.", e);
-         // Do NOT retry automatically, as it will crash the function stack again.
+         console.error("CRITICAL ERROR: Failed to execute database write.", e);
     }
 }
 
