@@ -87,7 +87,7 @@ function showMessage(message, type = 'info', duration = 3000) {
 // --- FIREBASE SETUP & SYNC ---
 async function initializeFirebase() {
     try {
-        // આ હાર્ડકોડેડ કોન્ફિગરેશનનો ઉપયોગ થશે કારણ કે GitHub Pages પર Environment Variables (__firebase_config) ઉપલબ્ધ નથી.
+        // Hardcoded configuration using the keys provided by the user.
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -98,7 +98,6 @@ async function initializeFirebase() {
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
 
-        // Check for Canvas environment variables first, otherwise use the hardcoded config
         const firebaseConfig = typeof __firebase_config !== 'undefined' 
             ? JSON.parse(__firebase_config) 
             : HARDCODED_FIREBASE_CONFIG;
@@ -106,13 +105,6 @@ async function initializeFirebase() {
         const appId = typeof __app_id !== 'undefined' 
             ? __app_id 
             : firebaseConfig.projectId; 
-
-
-        if (!firebaseConfig || firebaseConfig.apiKey === "YOUR_API_KEY_HERE") {
-             // આ મેસેજ દેખાશે નહીં કારણ કે હવે કીઝ ઉમેરાઈ ગઈ છે
-             showMessage("❌ ERROR: Firebase configuration is missing or placeholder values are used. Please edit code.js file.", 'error', 10000);
-             return;
-        }
 
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
@@ -123,7 +115,7 @@ async function initializeFirebase() {
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
         
-        // Public data path: /artifacts/{appId}/public/data/bowl_data
+        // Define the public data path
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
         loadFromFirebase();
@@ -131,12 +123,15 @@ async function initializeFirebase() {
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        showMessage("❌ ERROR: Firebase failed to initialize. Check configuration.", 'error');
+        showMessage("❌ ERROR: Firebase failed to initialize. Check configuration or Firebase project rules.", 'error');
     }
 }
 
 function loadFromFirebase() {
-    if (!window.appData.appDataRef) return;
+    if (!window.appData.appDataRef) {
+        console.warn("loadFromFirebase called before appDataRef was set.");
+        return; // Defensive check
+    }
 
     window.appData.appDataRef.on('value', (snapshot) => {
         const data = snapshot.val();
@@ -154,16 +149,20 @@ function loadFromFirebase() {
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
             console.log("🆕 Initializing new data structure in Firebase.");
+            // When data is empty, syncToFirebase is called to push initial structure.
             syncToFirebase();
         }
     }, (error) => {
         console.error("Firebase ON listener failed:", error);
-        showMessage("❌ ERROR: Live data feed error.", 'error');
+        showMessage("❌ ERROR: Live data feed failed. Check Firebase Security Rules.", 'error');
     });
 }
 
 function syncToFirebase() {
-    if (!window.appData.appDataRef) return;
+    if (!window.appData.appDataRef) {
+        console.error("Attempted to sync but appDataRef is undefined.");
+        return; // FIX: Prevent reading 'path' if the reference is not yet set
+    }
 
     window.appData.lastSync = new Date().toISOString();
 
@@ -176,7 +175,8 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
-    const path = window.appData.appDataRef.path.toString();
+    // The error was occurring here because appDataRef was sometimes undefined.
+    const path = window.appData.appDataRef.path.toString(); 
     firebase.database().ref(path).set(dataToSave)
         .then(() => {
             console.log("⬇️ Data successfully written to Firebase.");
@@ -694,7 +694,7 @@ function renderLivePrepReport(stats) {
     if (!container) return;
 
     if (stats.length === 0) {
-        container.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-400">No kitchen scans recorded during this cycle.</td></tr>`;
+        container.innerHTML = `<tr><td colspan="3" class="px-3 py-2 text-center text-gray-400">No kitchen scans recorded during this cycle.</td></tr>`;
         return;
     }
 
