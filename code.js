@@ -620,10 +620,8 @@ function processScan(vytUrl) {
         showMessage(result.message, 'error');
     }
     
+    // Note: Do NOT clear the input here. It is handled by the input listener to ensure proper timing.
     updateDisplay(); 
-    // Do NOT clear the input here if we are processing based on input change, 
-    // as clearing is handled by the input listener itself (to avoid race conditions).
-    // Re-focus is handled globally.
 }
 
 /**
@@ -1141,27 +1139,27 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const scanInput = document.getElementById('scanInput');
     if(scanInput) {
-        // 💥 FIX: Switched from keydown (requiring Enter) to debounced input (instant scan)
+        // 💥 FINAL SCANNER FIX: Robust Debounce Input Capture
         scanInput.addEventListener('input', (e) => {
             const scannedValue = e.target.value.trim();
-            if (scannedValue.length > 5) { // Check length to avoid processing single keystrokes
+            if (scannedValue.length > 5) { 
                 
-                // Clear any existing timer to wait for typing to stop
                 if (window.appData.scanTimer) {
                     clearTimeout(window.appData.scanTimer);
                 }
 
                 // Set a short delay (20ms) to ensure the entire VYT string has been written
                 window.appData.scanTimer = setTimeout(() => {
-                    if (scanInput.value.trim() === scannedValue) { // Final check to confirm value is stable
+                    if (scanInput.value.trim() === scannedValue && window.appData.scanning) {
                         processScan(scannedValue);
-                        scanInput.value = ''; // Clear after processing
+                        // CRITICAL: Clear input field AFTER successful processing
+                        scanInput.value = ''; 
                     }
-                }, 20); // 20ms is standard for fast scanner input
+                }, 20); 
             }
         });
         
-        // Retain the keydown listener for explicit Enter presses (good fallback/manual entry)
+        // Retain the keydown listener for explicit Enter presses (as a manual fallback)
         scanInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault(); 
@@ -1176,7 +1174,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 💥 Aggressive Focus Fix: Force focus back to scanner input whenever typing starts
     document.addEventListener('keydown', (e) => {
         const scanInput = document.getElementById('scanInput');
-        if (window.appData.scanning && scanInput && document.activeElement !== scanInput && e.key.length === 1) {
+        // Only run if scanning is active, the input isn't focused, and the key is a character (not Shift/Alt/Ctrl)
+        if (window.appData.scanning && scanInput && document.activeElement !== scanInput && e.key.length === 1 && /[\w\d]/.test(e.key)) {
             scanInput.focus();
         }
     });
