@@ -130,7 +130,7 @@ async function initializeFirebase() {
 function loadFromFirebase() {
     if (!window.appData.appDataRef) {
         console.warn("loadFromFirebase called before appDataRef was set.");
-        return; // Defensive check
+        return; 
     }
 
     window.appData.appDataRef.on('value', (snapshot) => {
@@ -159,9 +159,10 @@ function loadFromFirebase() {
 }
 
 function syncToFirebase() {
-    if (!window.appData.appDataRef) {
-        console.error("Attempted to sync but appDataRef is undefined.");
-        return; // FIX: Prevent reading 'path' if the reference is not yet set
+    // CRITICAL FIX: Ensures the reference is valid and complete before accessing its path.
+    if (!window.appData.appDataRef || !window.appData.appDataRef.path) {
+        console.error("Attempted to sync but appDataRef is incomplete or undefined. Skipping sync.");
+        return; 
     }
 
     window.appData.lastSync = new Date().toISOString();
@@ -175,7 +176,6 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
-    // The error was occurring here because appDataRef was sometimes undefined.
     const path = window.appData.appDataRef.path.toString(); 
     firebase.database().ref(path).set(dataToSave)
         .then(() => {
@@ -230,59 +230,65 @@ function updateDisplay() {
             modeDisplay.classList.remove('bg-gray-500', 'bg-red-600', 'bg-emerald-600');
             modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'bg-emerald-600' : 'bg-red-600');
         }
-        userSelectionCard.style.opacity = 1; 
-        userSelect.disabled = false;
+        if(userSelectionCard) userSelectionCard.style.opacity = 1; 
+        if(userSelect) userSelect.disabled = false;
 
-        kitchenBtn.classList.remove('ring-2', 'ring-emerald-400', 'bg-gray-600', 'bg-emerald-600');
-        returnBtn.classList.remove('ring-2', 'ring-red-400', 'bg-gray-600', 'bg-red-600');
+        if(kitchenBtn) kitchenBtn.classList.remove('ring-2', 'ring-emerald-400', 'bg-gray-600', 'bg-emerald-600');
+        if(returnBtn) returnBtn.classList.remove('ring-2', 'ring-red-400', 'bg-gray-600', 'bg-red-600');
 
         if (window.appData.mode === 'kitchen') {
-            kitchenBtn.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-600');
-            returnBtn.classList.add('bg-gray-600');
+            if(kitchenBtn) kitchenBtn.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-600');
+            if(returnBtn) returnBtn.classList.add('bg-gray-600');
         } else {
-            returnBtn.classList.add('ring-2', 'ring-red-400', 'bg-red-600');
-            kitchenBtn.classList.add('bg-gray-600');
+            if(returnBtn) returnBtn.classList.add('ring-2', 'ring-red-400', 'bg-red-600');
+            if(kitchenBtn) kitchenBtn.classList.add('bg-gray-600');
         }
 
     } else {
         if(modeDisplay) modeDisplay.textContent = 'Status: Please Select Mode';
-        userSelectionCard.style.opacity = 0.5; 
-        scanningCard.style.opacity = 0.5; 
-        userSelect.disabled = true;
-        kitchenBtn.classList.remove('ring-2', 'ring-emerald-400');
-        returnBtn.classList.remove('ring-2', 'ring-red-400');
+        if(userSelectionCard) userSelectionCard.style.opacity = 0.5; 
+        if(scanningCard) scanningCard.style.opacity = 0.5; 
+        if(userSelect) userSelect.disabled = true;
+        if(kitchenBtn) kitchenBtn.classList.remove('ring-2', 'ring-emerald-400');
+        if(returnBtn) returnBtn.classList.remove('ring-2', 'ring-red-400');
     }
 
     // 2. Dish Section Visibility (Only for Kitchen mode)
-    if (window.appData.mode === 'kitchen' && userSelectionCard) {
-        dishSection.classList.remove('hidden');
-    } else {
-        dishSection.classList.add('hidden');
+    if (dishSection) {
+        if (window.appData.mode === 'kitchen' && userSelectionCard) {
+            dishSection.classList.remove('hidden');
+        } else {
+            dishSection.classList.add('hidden');
+        }
     }
     
     // 3. Enable Scanning Controls (Step 3)
     const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
     
     if (isReadyToScan) {
-        scanningCard.style.opacity = 1;
-        dishLetterSelect.disabled = false;
+        if(scanningCard) scanningCard.style.opacity = 1;
+        if(dishLetterSelect) dishLetterSelect.disabled = false;
         if (scanInput) scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
     } else {
-        scanningCard.style.opacity = 0.5;
-        if (window.appData.mode === 'kitchen') dishLetterSelect.disabled = !window.appData.user;
+        if(scanningCard) scanningCard.style.opacity = 0.5;
+        if (window.appData.mode === 'kitchen' && dishLetterSelect) dishLetterSelect.disabled = !window.appData.user;
         
         window.appData.scanning = false;
     }
 
 
-    // --- Core Metrics Update ---
-    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
-    document.getElementById('preparedTodayCount').textContent = window.appData.preparedBowls.length;
+    // --- Core Metrics Update (Added Null Checks) ---
+    const activeCountEl = document.getElementById('activeCount');
+    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length;
+    
+    const preparedTodayCountEl = document.getElementById('preparedTodayCount');
+    if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
     
     const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
         bowl.returnDate === today
     ).length;
-    document.getElementById('exportReturnCount').textContent = returnedTodayCount;
+    const exportReturnCountEl = document.getElementById('exportReturnCount');
+    if (exportReturnCountEl) exportReturnCountEl.textContent = returnedTodayCount;
     
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp(); 
@@ -296,8 +302,11 @@ function updateDisplay() {
         ).length;
     }
 
-    document.getElementById('myScansCount').textContent = myScansCount;
-    document.getElementById('myDishLetterLabel').textContent = window.appData.dishLetter || '---';
+    const myScansCountEl = document.getElementById('myScansCount');
+    if (myScansCountEl) myScansCountEl.textContent = myScansCount;
+    
+    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
+    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
 
     // Update Scan Status/Input state
     const scanStatusEl = document.getElementById('scanStatus');
@@ -312,19 +321,25 @@ function updateDisplay() {
         
         if (window.appData.scanning && isReadyToScan) {
             scanInput.classList.add('scanning-active');
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
+            if(startBtn) startBtn.disabled = true;
+            if(stopBtn) stopBtn.disabled = false;
         } else {
-            startBtn.disabled = !isReadyToScan;
-            stopBtn.disabled = true;
+            if(startBtn) startBtn.disabled = !isReadyToScan;
+            if(stopBtn) stopBtn.disabled = true;
         }
     }
     
-    document.getElementById('selectedUser').textContent = window.appData.user || '---';
-    document.getElementById('selectedDishLetter').textContent = window.appData.dishLetter || '---';
+    const selectedUserEl = document.getElementById('selectedUser');
+    if(selectedUserEl) selectedUserEl.textContent = window.appData.user || '---';
     
-    document.getElementById('exportActiveCount').textContent = window.appData.activeBowls.length;
-    document.getElementById('exportPreparedCount').textContent = window.appData.preparedBowls.length;
+    const selectedDishLetterEl = document.getElementById('selectedDishLetter');
+    if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
+    
+    const exportActiveCountEl = document.getElementById('exportActiveCount');
+    if(exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
+    
+    const exportPreparedCountEl = document.getElementById('exportPreparedCount');
+    if(exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
     
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
@@ -362,7 +377,8 @@ function selectUser(userName) {
     
     if (!window.appData.mode) {
         showMessage("❌ ERROR: Please select an Operation Mode (Kitchen/Return) first.", 'error');
-        document.getElementById('userSelect').value = ''; 
+        const userSelect = document.getElementById('userSelect');
+        if(userSelect) userSelect.value = ''; 
         return;
     }
     
@@ -374,7 +390,8 @@ function selectUser(userName) {
     } else {
         window.appData.dishLetter = null;
         showMessage(`User selected: ${userName}. Please select a Dish Letter.`, 'info');
-        document.getElementById('dishLetterSelect').value = ''; 
+        const dishLetterSelect = document.getElementById('dishLetterSelect');
+        if(dishLetterSelect) dishLetterSelect.value = ''; 
     }
     updateDisplay();
 }
@@ -382,7 +399,8 @@ function selectUser(userName) {
 function selectDishLetter(value) {
     if (window.appData.mode !== 'kitchen' || !window.appData.user) {
          showMessage("❌ ERROR: User or Mode not properly set.", 'error');
-         document.getElementById('dishLetterSelect').value = ''; 
+         const dishLetterSelect = document.getElementById('dishLetterSelect');
+         if(dishLetterSelect) dishLetterSelect.value = ''; 
          return;
     }
     
@@ -804,7 +822,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getLivePrepReport = getLivePrepReport;
 
     // Start the Firebase initialization process with a minimal delay to ensure SDK readiness
-    // This is the FIX for the TypeError due to script loading timing.
     setTimeout(initializeFirebase, 0);
 
     setInterval(checkDailyDataReset, 3600000); 
