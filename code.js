@@ -1,47 +1,47 @@
 // --- GLOBAL STATE ---
 window.appData = {
-    mode: null,              
-    user: null,               
-    dishLetter: null,         
-    scanning: false,          
-    
+    mode: null,
+    user: null,
+    dishLetter: null,
+    scanning: false,
+
     // Core data structures (Synced with Firebase)
-    myScans: [],              
-    activeBowls: [],          
-    preparedBowls: [],        
-    returnedBowls: [],        
-    
+    myScans: [],
+    activeBowls: [],
+    preparedBowls: [],
+    returnedBowls: [],
+
     // Internal state
     db: null,
     // CRITICAL FIX: Breaking the data into separate references to avoid the 32MB limit
-    appDataRef: null,        
-    refActive: null,         
-    refPrepared: null,       
-    refReturned: null,       
-    refScans: null,          
-    
-    lastDataReset: null, 
+    appDataRef: null,
+    refActive: null,
+    refPrepared: null,
+    refReturned: null,
+    refScans: null,
+
+    lastDataReset: null,
     lastSync: null,
-    isDomReady: false, 
-    isInitialized: false, 
+    isDomReady: false,
+    isInitialized: false,
     scanTimer: null, // Timer used for debouncing input
     isProcessingScan: false, // FLAG: Prevents the app from accepting new scans during the sync operation
 };
 
 const USERS = [
-    {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
-    {name: "Jash", role: "Kitchen"}, {name: "Joel", role: "Kitchen"}, 
-    {name: "Mary", role: "Kitchen"}, {name: "Rushal", role: "Kitchen"}, 
-    {name: "Sreekanth", role: "Kitchen"}, 
-    {name: "Sultan", role: "Return"}, 
-    {name: "Riyaz", role: "Return"}, {name: "Alan", role: "Return"}, 
-    {name: "Adesh", role: "Return"}
+    { name: "Hamid", role: "Kitchen" }, { name: "Richa", role: "Kitchen" },
+    { name: "Jash", role: "Kitchen" }, { name: "Joel", role: "Kitchen" },
+    { name: "Mary", role: "Kitchen" }, { name: "Rushal", role: "Kitchen" },
+    { name: "Sreekanth", role: "Kitchen" },
+    { name: "Sultan", role: "Return" },
+    { name: "Riyaz", role: "Return" }, { name: "Alan", role: "Return" },
+    { name: "Adesh", role: "Return" }
 ];
 
 const DISH_LETTERS = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-    '1', '2', '3', '4' 
+    '1', '2', '3', '4'
 ];
 
 // --- UTILITY FUNCTIONS ---
@@ -63,11 +63,11 @@ function formatDateStandard(date) {
  */
 function getReportingDayTimestamp() {
     const now = new Date();
-    const cutoffHour = 22; 
+    const cutoffHour = 22;
     let startOfReportingDay = new Date(now);
     let endOfReportingDay = new Date(now);
     if (now.getHours() < cutoffHour) {
-        startOfReportingDay.setDate(now.getDate() - 1); 
+        startOfReportingDay.setDate(now.getDate() - 1);
     }
     startOfReportingDay.setHours(cutoffHour, 0, 0, 0);
     endOfReportingDay.setHours(cutoffHour, 0, 0, 0);
@@ -92,9 +92,9 @@ function showMessage(message, type = 'info', duration = 3000) {
 
     msgElement.className = `p-3 rounded-lg shadow-xl text-center text-sm mb-2 transition-all duration-300 border ${colorClass}`;
     msgElement.innerHTML = message;
-    
+
     messageContainer.prepend(msgElement);
-    
+
     setTimeout(() => {
         msgElement.style.opacity = '0';
         msgElement.style.maxHeight = '0';
@@ -103,12 +103,43 @@ function showMessage(message, type = 'info', duration = 3000) {
     }, duration);
 }
 
+/**
+ * Displays an error message inside the scanner input placeholder.
+ */
+function showScanError(message) {
+    const scanInput = document.getElementById('scanInput');
+    if (!scanInput) return; // Failsafe
+
+    // 1. Set the placeholder to the error message
+    scanInput.placeholder = message;
+
+    // 2. Add an error class for styling (red placeholder text)
+    scanInput.classList.add('scanning-error');
+
+    // 3. Set a timer to clear the error and restore the default placeholder
+    setTimeout(() => {
+        scanInput.classList.remove('scanning-error');
+
+        // Restore default placeholder based on state
+        const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
+
+        if (!window.appData.scanning) {
+            scanInput.placeholder = "Scanner stopped.";
+        } else if (isReadyToScan) {
+            scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
+        } else {
+            scanInput.placeholder = 'Complete steps 1 & 2 to enable scanning...';
+        }
+    }, 4000); // 4-second duration for errors
+}
+
+
 // --- FIREBASE SETUP & SYNC ---
 
 /**
  * Initializes Firebase using hardcoded keys (for GitHub deployment).
  */
-function initializeFirebase() { 
+function initializeFirebase() {
     try {
         // Your Firebase Configuration (Pre-inserted for GitHub functionality)
         const HARDCODED_FIREBASE_CONFIG = {
@@ -121,28 +152,28 @@ function initializeFirebase() {
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : HARDCODED_FIREBASE_CONFIG;
-        
-        const appId = firebaseConfig.projectId; 
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ?
+            JSON.parse(__firebase_config) :
+            HARDCODED_FIREBASE_CONFIG;
+
+        const appId = firebaseConfig.projectId;
 
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-             console.error("Firebase library not loaded.");
-             showMessage("❌ ERROR: Firebase library not loaded. Check index.html script tags.", 'error');
-             return;
+            console.error("Firebase library not loaded.");
+            showMessage("❌ ERROR: Firebase library not loaded. Check index.html script tags.", 'error');
+            return;
         }
 
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
-        
+
         // --- NEW: Define separate references to flatten the data structure ---
         const basePath = `artifacts/${appId}/public/data/`;
         window.appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
         window.appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
         window.appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
         window.appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
-        
+
         // Asynchronously check if data exists and start listener.
         ensureDatabaseInitialized(window.appData.refActive); // Use one ref to check for initialization
 
@@ -159,22 +190,22 @@ function initializeFirebase() {
 async function ensureDatabaseInitialized(ref) {
     try {
         // Use .once on the *Active Bowls* ref to check for initialization
-        const snapshot = await ref.once('value'); 
-        
+        const snapshot = await ref.once('value');
+
         if (!snapshot.exists() || snapshot.val() === null) {
             console.log("🆕 Database structure is empty. Writing initial structure.");
-            
+
             // Set empty arrays for all core paths to guarantee existence
-            await window.appData.refActive.set([]); 
-            await window.appData.refPrepared.set([]); 
+            await window.appData.refActive.set([]);
+            await window.appData.refPrepared.set([]);
             await window.appData.refReturned.set([]);
-            await window.appData.refScans.set([]); 
-            
+            await window.appData.refScans.set([]);
+
             console.log("⬇️ Initial data structure written successfully.");
         } else {
             console.log("⬆️ Database contains existing data.");
         }
-        
+
         // ONLY after the initial data structure is guaranteed to exist (read or written),
         // we set the flag and start the continuous read listeners.
         window.appData.isInitialized = true;
@@ -195,7 +226,7 @@ function loadFromFirebase() {
     window.appData.refActive.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.activeBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
 
@@ -203,7 +234,7 @@ function loadFromFirebase() {
     window.appData.refPrepared.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.preparedBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
 
@@ -211,7 +242,7 @@ function loadFromFirebase() {
     window.appData.refReturned.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.returnedBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
 
@@ -219,11 +250,11 @@ function loadFromFirebase() {
     window.appData.refScans.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.myScans = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
             console.log("⬆️ All data synchronized from Firebase.");
 
             const lastSyncInfoEl = document.getElementById('lastSyncInfo');
-            if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
+            if (lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
         }
     });
 }
@@ -234,9 +265,9 @@ function loadFromFirebase() {
 function syncToFirebase() {
     if (!window.appData.isInitialized) {
         console.warn("Sync attempted before full initialization. Skipping write.");
-        return; 
+        return;
     }
-    
+
     // Perform writes only on the arrays that changed.
     // Use Promises to ensure all updates are initiated correctly.
     const writes = [
@@ -274,10 +305,10 @@ function clearActiveInventory() {
 
     // 1. Clear the local array
     window.appData.activeBowls = [];
-    
+
     // 2. Sync to Firebase (this clears the data remotely)
-    syncToFirebase(); 
-    
+    syncToFirebase();
+
     showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
 }
 
@@ -327,32 +358,32 @@ function updateDisplay() {
     // 1. Update Mode Display and Button States
     if (window.appData.mode) {
         const modeText = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
-        if(modeDisplay) {
+        if (modeDisplay) {
             modeDisplay.textContent = modeText;
             modeDisplay.classList.remove('bg-gray-500', 'accent-red', 'accent-green');
             modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'accent-green' : 'accent-red');
         }
-        if(userSelectionCard) userSelectionCard.style.opacity = 1; 
-        if(userSelect) userSelect.disabled = false;
+        if (userSelectionCard) userSelectionCard.style.opacity = 1;
+        if (userSelect) userSelect.disabled = false;
 
-        if(kitchenBtn) kitchenBtn.classList.remove('accent-green', 'btn-neutral');
-        if(returnBtn) returnBtn.classList.remove('accent-red', 'btn-neutral');
+        if (kitchenBtn) kitchenBtn.classList.remove('accent-green', 'btn-neutral');
+        if (returnBtn) returnBtn.classList.remove('accent-red', 'btn-neutral');
 
         if (window.appData.mode === 'kitchen') {
-            if(kitchenBtn) kitchenBtn.classList.add('accent-green');
-            if(returnBtn) returnBtn.classList.add('btn-neutral');
+            if (kitchenBtn) kitchenBtn.classList.add('accent-green');
+            if (returnBtn) returnBtn.classList.add('btn-neutral');
         } else {
-            if(returnBtn) returnBtn.classList.add('accent-red');
-            if(kitchenBtn) kitchenBtn.classList.add('btn-neutral');
+            if (returnBtn) returnBtn.classList.add('accent-red');
+            if (kitchenBtn) kitchenBtn.classList.add('btn-neutral');
         }
 
     } else {
-        if(modeDisplay) modeDisplay.textContent = 'Status: Please Select Mode';
-        if(userSelectionCard) userSelectionCard.style.opacity = 0.5; 
-        if(scanningCard) scanningCard.style.opacity = 0.5; 
-        if(userSelect) userSelect.disabled = true;
-        if(kitchenBtn) kitchenBtn.classList.add('btn-neutral');
-        if(returnBtn) returnBtn.classList.add('btn-neutral');
+        if (modeDisplay) modeDisplay.textContent = 'Status: Please Select Mode';
+        if (userSelectionCard) userSelectionCard.style.opacity = 0.5;
+        if (scanningCard) scanningCard.style.opacity = 0.5;
+        if (userSelect) userSelect.disabled = true;
+        if (kitchenBtn) kitchenBtn.classList.add('btn-neutral');
+        if (returnBtn) returnBtn.classList.add('btn-neutral');
     }
 
     // 2. Dish Section Visibility (Only for Kitchen mode)
@@ -364,46 +395,48 @@ function updateDisplay() {
             dishSection.classList.add('hidden');
         }
     }
-    
+
     // 3. Enable Scanning Controls (Step 3)
     const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
-    
+
     if (isReadyToScan) {
-        if(scanningCard) scanningCard.style.opacity = 1;
-        if(dishLetterSelect) dishLetterSelect.disabled = false;
-        if (scanInput) scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
+        if (scanningCard) scanningCard.style.opacity = 1;
+        if (dishLetterSelect) dishLetterSelect.disabled = false;
+        if (scanInput && !scanInput.classList.contains('scanning-error')) {
+             scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
+        }
     } else {
-        if(scanningCard) scanningCard.style.opacity = 0.5;
+        if (scanningCard) scanningCard.style.opacity = 0.5;
         if (window.appData.mode === 'kitchen' && dishLetterSelect) dishLetterSelect.disabled = !window.appData.user;
-        
+
         window.appData.scanning = false;
     }
 
 
     // --- Core Metrics Update (Global Inventory) ---
     // These metrics are visible at all times and do not depend on the scanning state.
-    
-    const activeCountEl = document.getElementById('activeCount'); 
-    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length; 
-    
+
+    const activeCountEl = document.getElementById('activeCount');
+    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length;
+
     const preparedTodayCountEl = document.getElementById('preparedTodayCount');
     if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
-    
-    const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
+
+    const returnedTodayCount = window.appData.returnedBowls.filter(bowl =>
         bowl.returnDate === today
     ).length;
     const exportReturnCountEl = document.getElementById('exportReturnCount');
     if (exportReturnCountEl) exportReturnCountEl.textContent = window.appData.returnedBowls.length; // Show total history count
-    
-    
+
+
     // --- User Scan Count (Kitchen Team Productivity) ---
     // This metric IS dependent on the user and dish selection, but NOT scanning state.
     let myScansCount = 0;
-    const { start, end } = getReportingDayTimestamp(); 
+    const { start, end } = getReportingDayTimestamp();
 
     if (window.appData.user && window.appData.dishLetter) {
-        myScansCount = window.appData.myScans.filter(scan => 
-            scan.type === 'kitchen' && 
+        myScansCount = window.appData.myScans.filter(scan =>
+            scan.type === 'kitchen' &&
             scan.timestamp >= start && scan.timestamp < end &&
             scan.user === window.appData.user &&
             scan.dishLetter === window.appData.dishLetter
@@ -411,8 +444,8 @@ function updateDisplay() {
     }
 
     const myScansCountEl = document.getElementById('myScansCount');
-    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel'); 
-    
+    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
+
     if (myScansCountEl) myScansCountEl.textContent = myScansCount;
     if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
 
@@ -421,34 +454,34 @@ function updateDisplay() {
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
 
-    if(scanStatusEl) scanStatusEl.textContent = window.appData.scanning ? 'Active' : 'Stopped';
+    if (scanStatusEl) scanStatusEl.textContent = window.appData.scanning ? 'Active' : 'Stopped';
 
-    if(scanInput) {
+    if (scanInput) {
         scanInput.disabled = !window.appData.scanning;
         scanInput.classList.remove('scanning-active');
-        
+
         if (window.appData.scanning && isReadyToScan) {
             scanInput.classList.add('scanning-active');
-            if(startBtn) startBtn.disabled = true;
-            if(stopBtn) stopBtn.disabled = false;
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
         } else {
-            if(startBtn) startBtn.disabled = !isReadyToScan;
-            if(stopBtn) stopBtn.disabled = true;
+            if (startBtn) startBtn.disabled = !isReadyToScan;
+            if (stopBtn) stopBtn.disabled = true;
         }
     }
-    
+
     const selectedUserEl = document.getElementById('selectedUser');
-    if(selectedUserEl) selectedUserEl.textContent = window.appData.user || '---';
-    
+    if (selectedUserEl) selectedUserEl.textContent = window.appData.user || '---';
+
     const selectedDishLetterEl = document.getElementById('selectedDishLetter');
-    if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
-    
+    if (selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
+
     const exportActiveCountEl = document.getElementById('exportActiveCount');
-    if(exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
-    
+    if (exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
+
     const exportPreparedCountEl = document.getElementById('exportPreparedCount');
-    if(exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
-    
+    if (exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
+
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
 }
@@ -458,15 +491,15 @@ function updateDisplay() {
  */
 function setMode(mode) {
     if (mode !== 'kitchen' && mode !== 'return') return;
-    
+
     window.appData.user = null;
     window.appData.dishLetter = null;
-    
+
     window.appData.mode = mode;
-    stopScanning(); 
-    
+    stopScanning();
+
     populateUserDropdown(mode);
-    
+
     const userSelect = document.getElementById('userSelect');
     if (userSelect) userSelect.value = '';
     const dishLetterSelect = document.getElementById('dishLetterSelect');
@@ -486,24 +519,24 @@ function selectUser(userName) {
         updateDisplay();
         return;
     }
-    
+
     if (!window.appData.mode) {
         showMessage("❌ ERROR: Please select an Operation Mode (Kitchen/Return) first.", 'error');
         const userSelect = document.getElementById('userSelect');
-        if(userSelect) userSelect.value = ''; 
+        if (userSelect) userSelect.value = '';
         return;
     }
-    
+
     window.appData.user = userName;
-    
+
     if (window.appData.mode === 'return') {
-        window.appData.dishLetter = null; 
+        window.appData.dishLetter = null;
         showMessage(`User selected: ${userName}. Ready to scan in RETURN mode.`, 'success');
     } else {
         window.appData.dishLetter = null;
         showMessage(`User selected: ${userName}. Please select a Dish Letter.`, 'info');
         const dishLetterSelect = document.getElementById('dishLetterSelect');
-        if(dishLetterSelect) dishLetterSelect.value = ''; 
+        if (dishLetterSelect) dishLetterSelect.value = '';
     }
     updateDisplay();
 }
@@ -513,12 +546,12 @@ function selectUser(userName) {
  */
 function selectDishLetter(value) {
     if (window.appData.mode !== 'kitchen' || !window.appData.user) {
-         showMessage("❌ ERROR: User or Mode not properly set.", 'error');
-         const dishLetterSelect = document.getElementById('dishLetterSelect');
-         if(dishLetterSelect) dishLetterSelect.value = ''; 
-         return;
+        showMessage("❌ ERROR: User or Mode not properly set.", 'error');
+        const dishLetterSelect = document.getElementById('dishLetterSelect');
+        if (dishLetterSelect) dishLetterSelect.value = '';
+        return;
     }
-    
+
     const upperValue = value.trim().toUpperCase();
     if (DISH_LETTERS.includes(upperValue)) {
         window.appData.dishLetter = upperValue;
@@ -527,30 +560,6 @@ function selectDishLetter(value) {
     } else {
         showMessage("❌ ERROR: Invalid Dish Letter/Number selected.", 'error');
     }
-}
-
-/**
- * Function to manually clear all data in the active inventory (Active Bowls).
- */
-function clearActiveInventory() {
-    if (!window.appData.isInitialized) {
-        showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
-        return;
-    }
-
-    const currentCount = window.appData.activeBowls.length;
-    if (currentCount === 0) {
-        showMessage("ℹ️ Active Inventory is already empty.", 'info');
-        return;
-    }
-
-    // 1. Clear the local array
-    window.appData.activeBowls = [];
-    
-    // 2. Sync to Firebase (this clears the data remotely)
-    syncToFirebase(); 
-    
-    showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
 }
 
 
@@ -566,11 +575,11 @@ function startScanning() {
         showMessage("❌ ERROR: Cannot start scanning. Complete Steps 1 & 2 first.", 'error');
         return;
     }
-    
+
     window.appData.scanning = true;
     const scanInput = document.getElementById('scanInput');
     // Ensure focus is explicitly set and held for scanner
-    if(scanInput) scanInput.focus();
+    if (scanInput) scanInput.focus();
     showMessage("✅ Scanner Activated. Ready to scan.", 'success');
     updateDisplay();
 }
@@ -581,7 +590,7 @@ function startScanning() {
 function stopScanning() {
     window.appData.scanning = false;
     const scanInput = document.getElementById('scanInput');
-    if(scanInput) scanInput.blur();
+    if (scanInput) scanInput.blur();
     showMessage("🛑 Scanner Deactivated.", 'info');
     updateDisplay();
 }
@@ -591,76 +600,75 @@ function stopScanning() {
  */
 function processScan(vytUrl) {
     if (!window.appData.scanning || !window.appData.user) {
-        showMessage("❌ ERROR: Scanner not active or user not selected.", 'error');
+        showScanError("❌ ERROR: Scanner not active or user not selected.");
         return;
     }
-    
+
     // Prevent re-processing while current scan is being handled
     if (window.appData.isProcessingScan) {
         console.warn("Scan in progress. Ignoring current input.");
         return;
     }
-    
+
     window.appData.isProcessingScan = true; // Set flag to lock processing
 
     const timestamp = new Date().toISOString();
-    const exactVytUrl = vytUrl; 
+    const exactVytUrl = vytUrl;
 
-    // --- CRITICAL DUPLICATE CHECK (Kitchen Mode) ---
-    
+    // --- CRITICAL DUPLICATE CHECK (KITCHEN MODE) ---
     if (window.appData.mode === 'kitchen') {
         const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
         const isAlreadyActive = window.appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
-        
+
         if (isAlreadyPrepared) {
-            showMessage("⚠️ DUPLICATE SCAN: This bowl has already been prepared today.", 'error', 7000);
+            showScanError("⚠️ DUPLICATE: Already prepared today.");
             window.appData.isProcessingScan = false; // Release lock
             return; // Stop processing and logging immediately
         }
-        
+
         // **NEW LOGIC CHECK:** If active, we don't block. We proceed to kitchenScan for recycling.
         if (isAlreadyActive) {
             // Note: The logic in kitchenScan handles the recycling (delete old active, create new prepared).
         }
     }
-    
+
     // --- CRITICAL DUPLICATE CHECK (Return Mode) ---
     if (window.appData.mode === 'return') {
         const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
-        
+
         if (isAlreadyReturned) {
-            showMessage("⚠️ DUPLICATE SCAN: This bowl has already been returned today.", 'error', 7000);
+            showScanError("⚠️ DUPLICATE: Already returned today.");
             window.appData.isProcessingScan = false; // Release lock
             return; // Stop processing and logging immediately
         }
     }
     // ---------------------------------
-    
+
     const scanRecord = {
         vytUrl: exactVytUrl,
         timestamp: timestamp,
         type: window.appData.mode,
         user: window.appData.user,
-        dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A' 
+        dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A'
     };
     window.appData.myScans.push(scanRecord);
-    
+
     let result;
     if (window.appData.mode === 'kitchen') {
         result = kitchenScan(exactVytUrl, timestamp);
-    } else { 
+    } else {
         result = returnScan(exactVytUrl, timestamp);
     }
-    
+
     if (result.success) {
         syncToFirebase();
-        showMessage(result.message, 'success');
+        showMessage(result.message, 'success'); // Keep success messages at the top
     } else {
-        showMessage(result.message, 'error');
+        showScanError(result.message); // Use the new function for scan errors
     }
-    
+
     window.appData.isProcessingScan = false; // Release flag after sync starts
-    updateDisplay(); 
+    updateDisplay();
 }
 
 /**
@@ -668,10 +676,10 @@ function processScan(vytUrl) {
  */
 function kitchenScan(vytUrl, timestamp) {
     // Note: Duplicate check moved to processScan to run before anything is logged.
-    
+
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
-    
+
     let statusMessage = "started a new prep cycle.";
 
     // **💥 IMPLEMENTING RECYCLE LOGIC (RULE 1) 💥**
@@ -683,7 +691,7 @@ function kitchenScan(vytUrl, timestamp) {
         window.appData.returnedBowls.push(returnedBowl);
         statusMessage = "closed active cycle and started new prep (Recycled).";
     }
-    
+
     // Logic 2: If the bowl was in Prepared, clear old prepared record for new record
     if (preparedIndex !== -1) {
         window.appData.preparedBowls.splice(preparedIndex, 1);
@@ -692,21 +700,21 @@ function kitchenScan(vytUrl, timestamp) {
 
     // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
     const newPreparedBowl = {
-        vytUrl: vytUrl, 
+        vytUrl: vytUrl,
         dishLetter: window.appData.dishLetter,
         company: 'Unknown',
         customer: 'Unknown',
-        preparedDate: formatDateStandard(new Date(timestamp)), 
-        preparedTime: timestamp, 
+        preparedDate: formatDateStandard(new Date(timestamp)),
+        preparedTime: timestamp,
         user: window.appData.user,
         state: 'PREPARED_UNKNOWN'
     };
 
     window.appData.preparedBowls.push(newPreparedBowl);
-    
-    return { 
-        success: true, 
-        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle: ${statusMessage}` 
+
+    return {
+        success: true,
+        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle: ${statusMessage}`
     };
 }
 
@@ -716,7 +724,7 @@ function kitchenScan(vytUrl, timestamp) {
 function returnScan(vytUrl, timestamp) {
     // Note: Duplicate check moved to processScan to run before anything is logged.
 
-    const returnDate = formatDateDate(new Date(timestamp));
+    const returnDate = formatDateStandard(new Date(timestamp));
 
     // 1. Try to find the bowl in Prepared state and move to Returned
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
@@ -724,10 +732,10 @@ function returnScan(vytUrl, timestamp) {
         const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
         returnedBowl.returnDate = returnDate;
         window.appData.returnedBowls.push(returnedBowl);
-        
-        return { 
-            success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.` 
+
+        return {
+            success: true,
+            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.`
         };
     }
 
@@ -738,16 +746,16 @@ function returnScan(vytUrl, timestamp) {
         returnedBowl.returnDate = returnDate;
         window.appData.returnedBowls.push(returnedBowl);
 
-        return { 
-            success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed).` 
+        return {
+            success: true,
+            message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed).`
         };
     }
-    
+
     // 3. If the bowl is not found in either state
-    return { 
-        success: false, 
-        message: `❌ ERROR: ${vytUrl.slice(-10)} not found in Prepared or Active inventory.` 
+    return {
+        success: false,
+        message: `❌ NOT FOUND: ${vytUrl.slice(-10)} is not Active or Prepared.`
     };
 }
 
@@ -759,7 +767,7 @@ function returnScan(vytUrl, timestamp) {
  */
 function flattenOrderData(order) {
     const flattenedBowls = [];
-    
+
     // Safety checks for crucial top-level fields
     if (!order || !order.id || !order.name || !order.boxes || !Array.isArray(order.boxes)) {
         console.warn("Invalid or incomplete top-level order data, skipping order.", order);
@@ -776,31 +784,30 @@ function flattenOrderData(order) {
         if (!box.dishes || !Array.isArray(box.dishes)) continue;
 
         for (const dish of box.dishes) {
-            
+
             // 🛑 EXPLICITLY SKIP ADDONS 🛑
             const dishLabel = String(dish.label || 'N/A').trim().toUpperCase();
             if (dishLabel === 'ADDONS') {
-                continue; 
+                continue;
             }
-            
+
             // CRITICAL: Determine the VYT URL source. 
-            const codes = dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0
-                ? dish.bowlCodes
-                : [];
-            
+            const codes = dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0 ?
+                dish.bowlCodes : [];
+
             // Get standard dish fields
             const dishIdentifier = String(dish.label || dish.name || dish.id || 'N/A').trim().toUpperCase();
             // FIX: Ensure safeDishId is always a guaranteed unique string fallback
             const safeDishId = String(dish.id || dishIdentifier).substring(0, 10).toUpperCase();
-            
+
             if (!dish.users || !Array.isArray(dish.users)) continue;
-            
+
             // Map users to get an array of just usernames/IDs
             const usernames = dish.users.map(user => String(user.username || user.id).trim());
             const preparedDate = order.readyTime;
-            
+
             // 💥 FIX: Skip if there are no usernames associated with the dish. 💥
-            if (usernames.length === 0) continue; 
+            if (usernames.length === 0) continue;
 
             // --- 1. HANDLE VYT CODES (Preferred - One record per VYT Code) ---
             if (codes.length > 0) {
@@ -815,7 +822,7 @@ function flattenOrderData(order) {
                     } else {
                         // Create a new unique record for this specific VYT URL
                         dishVytMap.set(safeVytUrl, {
-                            vytUrl: safeVytUrl, 
+                            vytUrl: safeVytUrl,
                             dishLetter: dishLabel,
                             company: companyName,
                             customer: usernames, // Store array of users temporarily
@@ -823,13 +830,13 @@ function flattenOrderData(order) {
                         });
                     }
                 }
-            } 
+            }
             // --- 2. 🛑 IGNORE VIRTUAL VYT CODES (Per User Request) ---
             // If bowlCodes is empty, we skip the item to ensure the final patched count is 990.
             // All logic related to creating VIRTUAL IDs is removed here.
         }
     }
-    
+
     // Convert the map entries into final bowl records
     dishVytMap.forEach(record => {
         // Concatenate all customer names into a single string for the 'customer' field
@@ -837,10 +844,10 @@ function flattenOrderData(order) {
 
         // Push the final record (one record per unique VYT URL)
         flattenedBowls.push({
-            vytUrl: record.vytUrl, 
+            vytUrl: record.vytUrl,
             dishLetter: record.dishLetter,
             company: record.company,
-            customer: customerString, 
+            customer: customerString,
             preparedDate: record.preparedDate,
         });
     });
@@ -853,7 +860,7 @@ function flattenOrderData(order) {
  */
 function processJSONData(jsonString) {
     // NOTE: User selection is NO LONGER required for this management function.
-    
+
     if (!jsonString || jsonString.trim() === '' || jsonString.includes('Paste JSON data here')) {
         showMessage("❌ ERROR: JSON text area is empty. Please paste data.", 'error');
         return;
@@ -866,10 +873,10 @@ function processJSONData(jsonString) {
         showMessage(`❌ ERROR: JSON Parsing Error: ${e.message}`, 'error');
         return;
     }
-    
+
     // Normalize input to an array of order objects
     const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
-    
+
     let allFlattenedBowls = [];
     let totalItemsExpected = 0; // This metric now accurately reflects the total scannable items (VYT codes)
 
@@ -877,25 +884,25 @@ function processJSONData(jsonString) {
     ordersToProcess.forEach(order => {
         const flattened = flattenOrderData(order);
         allFlattenedBowls = allFlattenedBowls.concat(flattened);
-        
+
         // Accurate count of items expected (for debugging)
         order.boxes.forEach(box => {
             box.dishes.forEach(dish => {
                 const dishLabel = String(dish.label || 'N/A').trim().toUpperCase();
-                
+
                 // Only count non-addons
                 if (dishLabel !== 'ADDONS') {
                     // Count items based ONLY on bowlCodes (the source of the 990)
-                    totalItemsExpected += (dish.bowlCodes && dish.bowlCodes.length > 0) 
-                        ? dish.bowlCodes.length 
-                        : 0; // If codes are missing, we expect 0 items to be patched here.
+                    totalItemsExpected += (dish.bowlCodes && dish.bowlCodes.length > 0) ?
+                        dish.bowlCodes.length :
+                        0; // If codes are missing, we expect 0 items to be patched here.
                 }
             });
         });
     });
-    
+
     const totalItemsPatched = allFlattenedBowls.length;
-    
+
     // Log the count difference for debugging
     console.log(`JSON Patch Summary: Total items expected: ${totalItemsExpected}. Total unique bowls patched: ${totalItemsPatched}`);
 
@@ -907,50 +914,50 @@ function processJSONData(jsonString) {
 
     let updates = 0;
     let creations = 0;
-    
+
     const timestamp = new Date().toISOString();
 
     for (const item of allFlattenedBowls) {
         // Now, item contains: { vytUrl, dishLetter, company, customer, preparedDate }
-        
+
         // Final sanity check on flattened data
         if (!item.vytUrl || !item.company || !item.customer) {
             console.error("Internal Error: Flattened item missing core fields.", item);
             continue;
         }
 
-        const exactVytUrl = item.vytUrl; 
-        
+        const exactVytUrl = item.vytUrl;
+
         const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === exactVytUrl);
         const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === exactVytUrl);
-        
+
         const jsonAssignmentDate = formatDateStandard(item.preparedDate || item.date || timestamp);
 
         // Logic 1: Update Existing Active Bowl (Temporal Overwrite)
         if (activeIndex !== -1) {
             const activeBowl = window.appData.activeBowls[activeIndex];
-            
+
             // Overwrite Company/Customer with NEW details from the patch
             activeBowl.company = item.company.trim();
             activeBowl.customer = item.customer.trim();
-            
-            activeBowl.preparedDate = jsonAssignmentDate; 
+
+            activeBowl.preparedDate = jsonAssignmentDate;
             activeBowl.updateTime = timestamp;
             updates++;
             continue;
         }
-        
+
         // Logic 2: Promote Prepared Bowl to Active Bowl (MATCHING VYT URL)
         if (preparedIndex !== -1) {
             // Remove from Prepared and move to Active
             const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
-            
+
             preparedBowl.company = item.company.trim();
             preparedBowl.customer = item.customer.trim();
-            preparedBowl.preparedDate = jsonAssignmentDate; 
-            preparedBowl.updateTime = timestamp; 
+            preparedBowl.preparedDate = jsonAssignmentDate;
+            preparedBowl.updateTime = timestamp;
             preparedBowl.state = 'ACTIVE_KNOWN'; // Status changed: Assigned and Out.
-            
+
             window.appData.activeBowls.push(preparedBowl);
             creations++;
             continue;
@@ -959,11 +966,11 @@ function processJSONData(jsonString) {
         // Logic 3: Create New Active Bowl (If missed prep scan, or if it's new)
         if (preparedIndex === -1 && activeIndex === -1) {
             const newBowl = {
-                vytUrl: exactVytUrl, 
-                dishLetter: item.dishLetter, 
+                vytUrl: exactVytUrl,
+                dishLetter: item.dishLetter,
                 company: item.company.trim(),
                 customer: item.customer.trim(),
-                preparedDate: jsonAssignmentDate, 
+                preparedDate: jsonAssignmentDate,
                 preparedTime: timestamp,
                 user: window.appData.user || 'SYSTEM', // Assign SYSTEM user if no operator selected
                 state: 'ACTIVE_KNOWN' // Status: Assigned and Out.
@@ -977,7 +984,7 @@ function processJSONData(jsonString) {
         showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls. Total Scannable Bowls: ${totalItemsPatched}`, 'success', 5000);
         syncToFirebase();
         const jsonDataEl = document.getElementById('jsonData');
-        if(jsonDataEl) jsonDataEl.value = '';
+        if (jsonDataEl) jsonDataEl.value = '';
     } else {
         showMessage("ℹ️ No bowls updated or created from JSON data.", 'info');
     }
@@ -994,7 +1001,7 @@ function exportData(data, filename, source) {
 
     // Use keys from the first object as headers
     const headers = Object.keys(data[0]);
-    
+
     // Create the header row
     let csvContent = headers.join(',') + '\n';
 
@@ -1002,7 +1009,7 @@ function exportData(data, filename, source) {
     data.forEach(row => {
         const values = headers.map(header => {
             let value = row[header] === null || typeof row[header] === 'undefined' ? '' : String(row[header]);
-            
+
             // Escape values that contain commas or quotes (CRITICAL for CSV integrity)
             value = value.replace(/"/g, '""');
             // Ensure VYT URLs that contain non-standard characters are wrapped in quotes
@@ -1049,35 +1056,35 @@ function exportAllData() {
  */
 function getLivePrepReport() {
     const { start, end } = getReportingDayTimestamp();
-    
-    const todaysKitchenScans = window.appData.myScans.filter(scan => 
-        scan.type === 'kitchen' && 
-        scan.timestamp >= start && 
+
+    const todaysKitchenScans = window.appData.myScans.filter(scan =>
+        scan.type === 'kitchen' &&
+        scan.timestamp >= start &&
         scan.timestamp < end
     );
-    
+
     const groupedData = todaysKitchenScans.reduce((acc, scan) => {
         const letter = scan.dishLetter;
         if (!acc[letter]) {
             acc[letter] = {
                 dishLetter: letter,
-                users: new Map(), 
+                users: new Map(),
                 count: 0
             };
         }
-        
+
         const userCount = acc[letter].users.get(scan.user) || 0;
         acc[letter].users.set(scan.user, userCount + 1);
-        
+
         acc[letter].count++;
         return acc;
     }, {});
-    
+
     const statsArray = Object.values(groupedData).map(item => ({
         ...item,
-        users: Array.from(item.users, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)) 
+        users: Array.from(item.users, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
     }));
-    
+
     statsArray.sort((a, b) => {
         const indexA = DISH_LETTERS.indexOf(a.dishLetter);
         const indexB = DISH_LETTERS.indexOf(b.dishLetter);
@@ -1102,7 +1109,7 @@ function renderLivePrepReport(stats) {
     let html = '';
     stats.forEach(dish => {
         let firstRow = true;
-        
+
         dish.users.forEach(user => {
             html += `
                 <tr class="hover:bg-gray-700">
@@ -1129,11 +1136,11 @@ function checkDailyDataReset() {
     const lastResetDate = window.appData.lastDataReset ? formatDateStandard(new Date(window.appData.lastDataReset)) : null;
 
     if (now.getHours() >= cutoffHour && lastResetDate !== today) {
-        const bowlsToKeep = window.appData.returnedBowls.filter(bowl => 
+        const bowlsToKeep = window.appData.returnedBowls.filter(bowl =>
             bowl.returnDate === today
         );
         const removedCount = window.appData.returnedBowls.length - bowlsToKeep.length;
-        
+
         if (removedCount > 0) {
             window.appData.returnedBowls = bowlsToKeep;
             window.appData.lastDataReset = now.toISOString();
@@ -1153,7 +1160,7 @@ function resetTodaysPreparedBowls() {
     window.appData.preparedBowls = [];
 
     const initialScanCount = window.appData.myScans.length;
-    window.appData.myScans = window.appData.myScans.filter(scan => 
+    window.appData.myScans = window.appData.myScans.filter(scan =>
         !(scan.type === 'kitchen' && scan.timestamp >= start && scan.timestamp < end)
     );
     const removedScans = initialScanCount - window.appData.myScans.length;
@@ -1178,8 +1185,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.appData.isDomReady = true;
 
     const dishLetterSelect = document.getElementById('dishLetterSelect');
-    
-    if(dishLetterSelect) {
+
+    if (dishLetterSelect) {
         DISH_LETTERS.forEach(value => {
             const option = document.createElement('option');
             option.value = value;
@@ -1187,15 +1194,15 @@ document.addEventListener('DOMContentLoaded', () => {
             dishLetterSelect.appendChild(option);
         });
     }
-    
+
     const scanInput = document.getElementById('scanInput');
-    if(scanInput) {
-        // 💥 FINAL SCANNER FIX: Robust Debounce Input Capture
+    if (scanInput) {
+        // 💥 FINAL SCANNER FIX: Robust Debounce Input Capture for ProGlove
         scanInput.addEventListener('input', (e) => {
             const scannedValue = e.target.value.trim();
             // Length check is crucial for performance and avoiding single keypresses
-            if (scannedValue.length > 5) { 
-                
+            if (scannedValue.length > 5) {
+
                 if (window.appData.scanTimer) {
                     clearTimeout(window.appData.scanTimer);
                 }
@@ -1206,13 +1213,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
                         processScan(scannedValue);
                         // CRITICAL: Clear input field AFTER successful processing
-                        scanInput.value = ''; 
+                        scanInput.value = '';
                     }
                 }, 50); // Set to 50ms as per your request
             }
         });
+
     }
-    
+
     // 💥 Aggressive Focus Fix: Force focus back to scanner input whenever typing starts
     document.addEventListener('keydown', (e) => {
         const scanInput = document.getElementById('scanInput');
