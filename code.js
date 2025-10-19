@@ -1166,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 50); 
+                }, 50); // Increased to 50ms for reliable high-speed capture
             }
         });
         
