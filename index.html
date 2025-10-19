@@ -3,149 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProGlove Bowl Tracker</title>
-    <!-- Load Tailwind CSS (via CDN for simplicity, acknowledging the production warning) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>ProGlove Bowl Tracking System</title>
+    <!-- ⚠️ Tailwind CDN REMOVED to eliminate warning. CSS must be in styles.css -->
     
-    <!-- Load Firebase SDKs FIRST (CRITICAL: Load App and Database before code.js runs) -->
+    <!-- Link to external styles.css (which should contain your dark theme utilities) -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Firebase SDKs for Realtime Database -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-    <style>
-        /* Dark Theme Styles */
-        body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #c9d1d9; }
-        .card { background-color: #161b22; border: 1px solid #30363d; }
-        .scan-input { font-family: monospace; }
-        .scanning-active { box-shadow: 0 0 10px rgba(52, 168, 83, 0.9), 0 0 20px rgba(52, 168, 83, 0.5); }
-        .data-table th { background-color: #30363d; color: #f0f6fc; }
-        .data-table td { border-color: #30363d; }
-        .data-table tr:hover { background-color: #21262d; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="max-w-4xl mx-auto p-4 md:p-8">
-        <div class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-pink-400">🥣 ProGlove Bowl Tracker</h1>
-            <p class="text-sm text-gray-400">Real-time Inventory & Statistics System</p>
-        </div>
+<body class="bg-gray-900 text-white font-inter min-h-screen p-4 md:p-6">
 
-        <!-- System Message Container -->
-        <div id="messageContainer" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-sm z-50 p-2"></div>
+    <!-- Fixed container for messages -->
+    <div id="messageContainer" class="fixed top-0 left-0 right-0 z-50 p-4 max-w-sm mx-auto pointer-events-none"></div>
 
-        <!-- Mode & Status -->
-        <div class="card p-4 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold mb-3 text-gray-300">System Status</h2>
-            <div id="modeDisplay" class="text-center font-bold p-3 rounded-lg bg-gray-500 text-white transition-colors duration-300">
-                Status: System Initializing...
+    <div class="container mx-auto space-y-6 max-w-4xl">
+        
+        <!-- Header -->
+        <header class="bg-gray-800 shadow-2xl rounded-xl p-4 md:p-6 border-b-4 border-pink-700">
+            <h1 class="text-pink-400 font-extrabold text-3xl tracking-wide">🧤 PROGLOVE BOWL TRACKING</h1>
+            <p class="text-gray-400 mt-1">Real-time Prep & Return Synchronization</p>
+        </header>
+
+        <!-- Mode Selection (Step 1) -->
+        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4" id="modeSelectionCard">
+            <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">1. Select Operation Mode</h2>
+            <div class="flex flex-col md:flex-row gap-4">
+                <button id="kitchenBtn" onclick="setMode('kitchen')" class="flex-1 p-3 rounded-lg text-white font-bold bg-gray-600 transition duration-150 hover:bg-emerald-600">🍳 KITCHEN PREP</button>
+                <button id="returnBtn" onclick="setMode('return')" class="flex-1 p-3 rounded-lg text-white font-bold bg-gray-600 transition duration-150 hover:bg-red-600">🔄 RETURN SCAN</button>
             </div>
-            <p id="lastSyncInfo" class="text-xs text-right mt-2 text-gray-500">
-                💾 Last Sync: N/A
-            </p>
-        </div>
+            <div id="modeDisplay" class="text-center p-2 rounded bg-gray-500 text-sm font-semibold">Status: Please Select Mode</div>
+        </section>
 
-        <!-- STEP 1: SELECT MODE -->
-        <div class="card p-4 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Step 1: Select Operation Mode</h2>
-            <div class="flex space-x-4">
-                <button id="kitchenBtn" onclick="setMode('kitchen')" class="flex-1 p-3 rounded-lg font-bold text-white bg-gray-600 hover:bg-emerald-700 transition duration-150">
-                    🍳 KITCHEN PREP
-                </button>
-                <button id="returnBtn" onclick="setMode('return')" class="flex-1 p-3 rounded-lg font-bold text-white bg-gray-600 hover:bg-red-700 transition duration-150">
-                    🔄 RETURN SCAN
-                </button>
+        <!-- User & Dish Selection (Step 2) -->
+        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4 opacity-50 transition duration-300" id="userSelectionCard">
+            <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">2. Select User & Dish</h2>
+            
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <label for="userSelect" class="block text-gray-400 mb-1">User Name</label>
+                    <select id="userSelect" onchange="selectUser(this.value)" class="w-full bg-gray-700 text-gray-200 p-2 rounded border border-gray-600" disabled>
+                        <option value="" disabled selected>-- Select User --</option>
+                    </select>
+                </div>
+
+                <div class="flex-1 hidden" id="dishSection">
+                    <label for="dishLetterSelect" class="block text-gray-400 mb-1">Dish Letter (A-Z / 1-4)</label>
+                    <select id="dishLetterSelect" onchange="selectDishLetter(this.value)" class="w-full bg-gray-700 text-gray-200 p-2 rounded border border-gray-600" disabled>
+                        <option value="" disabled selected>-- Select Dish --</option>
+                    </select>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- STEP 2 & 3: USER & DISH SELECTION -->
-        <div id="userSelectionCard" class="card p-4 rounded-xl shadow-lg mb-6 transition-opacity duration-300 opacity-50">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Step 2: Select User</h2>
-            <select id="userSelect" onchange="selectUser(this.value)" class="w-full p-3 rounded-lg bg-[#30363d] text-white border border-gray-600 focus:ring-pink-500 focus:border-pink-500" disabled>
-                <option value="" disabled selected>-- Select User --</option>
-            </select>
-
-            <div id="dishSection" class="mt-4 hidden">
-                <h2 class="text-xl font-semibold mb-3 text-pink-400">Step 3: Select Dish Letter</h2>
-                <select id="dishLetterSelect" onchange="selectDishLetter(this.value)" class="w-full p-3 rounded-lg bg-[#30363d] text-white border border-gray-600 focus:ring-pink-500 focus:border-pink-500" disabled>
-                    <option value="" disabled selected>-- Select Dish Letter --</option>
-                </select>
+        <!-- Scanning Controls (Step 3) -->
+        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4 opacity-50 transition duration-300" id="scanningCard">
+            <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">3. Scanner Input</h2>
+            
+            <div class="flex gap-4">
+                <button id="startBtn" onclick="startScanning()" class="flex-1 p-3 rounded-lg text-white font-bold bg-emerald-600 hover:bg-emerald-700 transition duration-150" disabled>▶ START SCANNER</button>
+                <button id="stopBtn" onclick="stopScanning()" class="flex-1 p-3 rounded-lg text-white font-bold bg-red-600 hover:bg-red-700 transition duration-150" disabled>⏹ STOP SCANNER</button>
             </div>
-        </div>
-
-        <!-- STEP 4: SCANNING CONTROLS -->
-        <div id="scanningCard" class="card p-4 rounded-xl shadow-lg mb-6 transition-opacity duration-300 opacity-50">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Step 4: Scanning Controls</h2>
-            <div class="flex space-x-4 mb-3">
-                <button id="startBtn" onclick="startScanning()" class="flex-1 p-3 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition duration-150" disabled>
-                    ▶ ACTIVATE SCANNER
-                </button>
-                <button id="stopBtn" onclick="stopScanning()" class="flex-1 p-3 rounded-lg font-bold text-white bg-red-600 hover:bg-red-500 transition duration-150" disabled>
-                    ⏹ DEACTIVATE
-                </button>
+            
+            <div class="relative">
+                <input type="text" id="scanInput" placeholder="Select User and Press START..." class="w-full text-lg text-pink-400 bg-gray-900 border-4 border-gray-600 focus:border-pink-600 rounded-lg p-3 text-center transition duration-200" disabled autocomplete="off">
             </div>
 
-            <div class="relative mb-4">
-                <input type="text" id="scanInput" placeholder="Scanner Input (Code appears here)..." class="scan-input w-full p-4 text-center text-xl font-mono rounded-lg bg-[#30363d] text-yellow-300 border-2 border-gray-600 focus:border-pink-500 focus:ring-pink-500 transition-all duration-300" disabled>
-                <span id="scanStatus" class="absolute top-2 right-2 text-xs font-semibold px-2 py-1 rounded-full bg-gray-500 text-white">Stopped</span>
+            <!-- Metrics Panel -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-gray-700">
+                <div class="text-center">
+                    <p class="text-xs text-gray-400">User Scans (<span id="myDishLetterLabel">---</span>)</p>
+                    <p id="myScansCount" class="text-emerald-400 font-extrabold text-2xl">0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-gray-400">Prepared Today</p>
+                    <p id="preparedTodayCount" class="text-pink-400 font-extrabold text-2xl">0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-gray-400">Active (Out)</p>
+                    <p id="activeCount" class="text-red-400 font-extrabold text-2xl">0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-gray-400">Returned Today</p>
+                    <p id="exportReturnCount" class="text-indigo-400 font-extrabold text-2xl">0</p>
+                </div>
             </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center text-sm font-semibold">
-                <div class="p-2 rounded-lg bg-gray-700">User: <span id="selectedUser" class="text-pink-400">---</span></div>
-                <div class="p-2 rounded-lg bg-gray-700">Dish: <span id="selectedDishLetter" class="text-pink-400">---</span></div>
-                <div class="p-2 rounded-lg bg-gray-700">My Scans: <span id="myScansCount" class="text-emerald-400 font-bold">0</span></div>
-                <div class="p-2 rounded-lg bg-gray-700">Prepared: <span id="preparedTodayCount" class="text-yellow-400 font-bold">0</span></div>
-            </div>
-        </div>
-
-        <!-- LIVE PREP REPORT -->
-        <div class="card p-4 rounded-xl shadow-lg mb-6">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Live Prep Report (10PM Cycle)</h2>
-            <div class="overflow-x-auto rounded-lg border border-gray-600">
-                <table class="data-table w-full text-left">
+        </section>
+        
+        <!-- Live Statistics Table -->
+        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
+            <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2 mb-3">Live Prep Report (10 PM Cycle)</h2>
+            <div class="overflow-x-auto bg-gray-900 rounded-lg">
+                <table class="min-w-full text-sm">
                     <thead>
-                        <tr>
-                            <th class="px-3 py-2 text-center w-1/5">Dish</th>
-                            <th class="px-3 py-2 w-3/5">User / Count</th>
-                            <th class="px-3 py-2 text-center w-1/5">Total</th>
+                        <tr class="text-pink-400 bg-gray-700">
+                            <th class="px-3 py-2 text-left font-semibold">Dish</th>
+                            <th class="px-3 py-2 text-left font-semibold">Count</th>
+                            <th class="px-3 py-2 text-left font-semibold">Users</th>
                         </tr>
                     </thead>
-                    <tbody id="livePrepReportBody" class="text-sm">
-                        <tr><td colspan="3" class="px-3 py-2 text-center text-gray-400">Loading data...</td></tr>
+                    <tbody id="livePrepReportBody">
+                        <tr><td colspan="3" class="px-3 py-2 text-center text-gray-400">No kitchen scans recorded during this cycle.</td></tr>
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
 
-        <!-- DATA MANAGEMENT & EXPORT -->
-        <div class="card p-4 rounded-xl shadow-lg mb-6 border-pink-500 border-2">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Data Management</h2>
+        <!-- Data Management -->
+        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4">
+            <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">Data Management & Export</h2>
+            
+            <p id="lastSyncInfo" class="text-xs text-gray-500">Awaiting sync...</p>
 
-            <div class="grid grid-cols-2 gap-3 text-sm text-center mb-4">
-                <div class="p-2 rounded-lg bg-gray-700">Active: <span id="exportActiveCount" class="text-pink-400 font-bold">0</span></div>
-                <div class="p-2 rounded-lg bg-gray-700">Prepared: <span id="exportPreparedCount" class="text-yellow-400 font-bold">0</span></div>
-                <div class="p-2 rounded-lg bg-gray-700 col-span-2">Returns Today: <span id="exportReturnCount" class="text-red-400 font-bold">0</span></div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="exportActiveBowls()" class="p-3 rounded-lg text-white font-bold bg-blue-600 hover:bg-blue-700 transition duration-150 text-sm">📥 Export Active Bowls</button>
+                <button onclick="exportReturnData()" class="p-3 rounded-lg text-white font-bold bg-purple-600 hover:bg-purple-700 transition duration-150 text-sm">📥 Export Returns</button>
+                <button onclick="exportAllData()" class="col-span-2 p-3 rounded-lg text-white font-bold bg-indigo-600 hover:bg-indigo-700 transition duration-150 text-sm">📊 Export ALL Data</button>
             </div>
 
-            <div class="space-y-3">
-                <button onclick="exportAllData()" class="w-full p-3 rounded-lg font-bold text-white bg-blue-600 hover:bg-blue-500 transition duration-150">
-                    💾 EXPORT ALL DATA (JSON)
-                </button>
-                <button onclick="resetTodaysPreparedBowls()" class="w-full p-3 rounded-lg font-bold text-white bg-orange-600 hover:bg-orange-500 transition duration-150">
-                    🗑️ RESET PREPARED INVENTORY & SCANS
-                </button>
+            <div class="border-t border-gray-700 pt-4 space-y-3">
+                <h3 class="text-gray-300 font-semibold">JSON Import (Customer Data Patch)</h3>
+                <textarea id="jsonData" placeholder='Paste JSON data here (e.g., [{"vytUrl": "URL_HERE", "company": "Company", "customer": "Name", "dishLetter": "A"}]). NOTE: vytUrl is mandatory for activation.' class="w-full h-32 bg-gray-900 text-gray-200 p-3 rounded border border-gray-700 text-sm"></textarea>
+                <div class="flex gap-3">
+                    <button onclick="processJSONData(document.getElementById('jsonData').value)" class="flex-1 p-3 rounded-lg text-white font-bold bg-yellow-600 hover:bg-yellow-700 transition duration-150 text-sm">🔄 Patch Customer Data</button>
+                    <button onclick="resetTodaysPreparedBowls()" class="flex-1 p-3 rounded-lg text-white font-bold bg-red-800 hover:bg-red-900 transition duration-150 text-sm">🗑️ Reset Prepared/Scans</button>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- JSON INPUT FOR CUSTOMER DATA -->
-        <div class="card p-4 rounded-xl shadow-lg">
-            <h2 class="text-xl font-semibold mb-3 text-pink-400">Import Customer Data (JSON)</h2>
-            <textarea id="jsonData" placeholder='Paste JSON array here to convert Prepared bowls to Active bowls. Format: [{ "vytUrl": "...", "company": "...", "customer": "..." }]' rows="5" class="w-full p-3 rounded-lg bg-[#30363d] text-sm text-gray-300 border border-gray-600 resize-none focus:ring-pink-500 focus:border-pink-500"></textarea>
-            <button onclick="processJSONData(document.getElementById('jsonData').value)" class="w-full mt-3 p-3 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-500 transition duration-150">
-                🔄 APPLY CUSTOMER DATA & ACTIVATE BOWLS
-            </button>
-        </div>
     </div>
-    
-    <!-- LINK TO LOGIC FILE (MUST BE LAST SCRIPT IN BODY) -->
-    <script src="code.js"></script>
+
+    <!-- Script links -->
+    <script src="code.js"></script> 
 </body>
 </html>
