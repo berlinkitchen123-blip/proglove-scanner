@@ -86,7 +86,7 @@ function showMessage(message, type = 'info', duration = 3000) {
 }
 
 // --- FIREBASE SETUP & SYNC ---
-async function initializeFirebase() {
+function initializeFirebase() { // Removed 'async' keyword
     try {
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
@@ -830,9 +830,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
     window.getLivePrepReport = getLivePrepReport;
 
-    // Start the Firebase initialization process with a minimal delay to ensure SDK readiness
-    // This addresses the script timing/loading issues.
-    setTimeout(initializeFirebase, 0);
+    // Start the Firebase initialization process directly (synchronously)
+    initializeFirebase();
 
     setInterval(checkDailyDataReset, 3600000); 
 });
