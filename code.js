@@ -24,7 +24,7 @@ window.appData = {
     lastSync: null,
     isDomReady: false, 
     isInitialized: false, 
-    scanTimer: null, // NEW: Added timer for debouncing scanner input
+    scanTimer: null, // Timer used for debouncing input in the final fix
 };
 
 const USERS = [
@@ -255,6 +255,31 @@ function syncToFirebase() {
             showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
         });
 }
+
+/**
+ * Function to manually clear all data in the active inventory (Active Bowls).
+ */
+function clearActiveInventory() {
+    if (!window.appData.isInitialized) {
+        showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
+        return;
+    }
+
+    const currentCount = window.appData.activeBowls.length;
+    if (currentCount === 0) {
+        showMessage("ℹ️ Active Inventory is already empty.", 'info');
+        return;
+    }
+
+    // 1. Clear the local array
+    window.appData.activeBowls = [];
+    
+    // 2. Sync to Firebase (this clears the data remotely)
+    syncToFirebase(); 
+    
+    showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
+}
+
 
 // --- UI AND MODE MANAGEMENT ---
 
@@ -543,6 +568,7 @@ function startScanning() {
     
     window.appData.scanning = true;
     const scanInput = document.getElementById('scanInput');
+    // Ensure focus is explicitly set and held for scanner
     if(scanInput) scanInput.focus();
     showMessage("✅ Scanner Activated. Ready to scan.", 'success');
     updateDisplay();
@@ -595,8 +621,9 @@ function processScan(vytUrl) {
     }
     
     updateDisplay(); 
-    const scanInput = document.getElementById('scanInput');
-    if(scanInput) scanInput.value = '';
+    // Do NOT clear the input here if we are processing based on input change, 
+    // as clearing is handled by the input listener itself (to avoid race conditions).
+    // Re-focus is handled globally.
 }
 
 /**
@@ -1115,7 +1142,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanInput = document.getElementById('scanInput');
     if(scanInput) {
         // 💥 FIX: Switched from keydown (requiring Enter) to debounced input (instant scan)
-        let scanTimer = null;
         scanInput.addEventListener('input', (e) => {
             const scannedValue = e.target.value.trim();
             if (scannedValue.length > 5) { // Check length to avoid processing single keystrokes
@@ -1146,6 +1172,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    // 💥 Aggressive Focus Fix: Force focus back to scanner input whenever typing starts
+    document.addEventListener('keydown', (e) => {
+        const scanInput = document.getElementById('scanInput');
+        if (window.appData.scanning && scanInput && document.activeElement !== scanInput && e.key.length === 1) {
+            scanInput.focus();
+        }
+    });
 
     // Expose functions globally for HTML access
     window.setMode = setMode;
