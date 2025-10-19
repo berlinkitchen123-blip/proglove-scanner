@@ -380,7 +380,7 @@ function updateDisplay() {
     if (myScansCountEl) myScansCountEl.textContent = myScansCount;
     
     const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
-    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
+    if (myDishLetterLabelEl) myDishLetterLabelI.textContent = window.appData.dishLetter || '---';
 
     // Update Scan Status/Input state
     const scanStatusEl = document.getElementById('scanStatus');
