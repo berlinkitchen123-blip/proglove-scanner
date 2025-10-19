@@ -687,10 +687,12 @@ function flattenOrderData(order) {
             const usernames = dish.users.map(user => String(user.username).trim());
             
             // This is the core logic: check if this dish/order combination already exists in the map
-            // If it exists, append the users. If not, create a new entry.
-            if (dishUserMap.has(virtualVytBase)) {
-                // Should not happen if data is clean, but concatenate just in case
-                dishUserMap.get(virtualVytBase).users = dishUserMap.get(virtualVytBase).users.concat(usernames);
+            // Use spread operator or simple assignment to ensure it's always an array before concatenating
+            const existingRecord = dishUserMap.get(virtualVytBase);
+
+            if (existingRecord) {
+                // Fix: Ensure we are concatenating to an array
+                existingRecord.customer = existingRecord.customer.concat(usernames);
             } else {
                 // Create the base record
                 dishUserMap.set(virtualVytBase, {
@@ -717,7 +719,7 @@ function flattenOrderData(order) {
             company: record.company,
             customer: customerString, // Final string of all customers
             preparedDate: record.preparedDate,
-            // You only need one entry per unique bowl code, regardless of quantity > 1
+            // You only need one entry per unique bowl code
         });
     });
 
