@@ -16,6 +16,7 @@ window.appData = {
     appDataRef: null,
     lastDataReset: null, 
     lastSync: null,
+    isDomReady: false, // NEW FLAG to ensure UI safety
 };
 
 const USERS = [
@@ -87,7 +88,6 @@ function showMessage(message, type = 'info', duration = 3000) {
 // --- FIREBASE SETUP & SYNC ---
 async function initializeFirebase() {
     try {
-        // Hardcoded configuration using the keys provided by the user.
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -115,7 +115,7 @@ async function initializeFirebase() {
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
         
-        // Define the public data path
+        // Define the public data path. This ensures the reference is properly set up.
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
         loadFromFirebase();
@@ -133,6 +133,7 @@ function loadFromFirebase() {
         return; 
     }
 
+    // New data structure is initialized if the snapshot value is null
     window.appData.appDataRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -145,7 +146,7 @@ function loadFromFirebase() {
             
             checkDailyDataReset(); 
             
-            updateDisplay();
+            updateDisplay(); // Only call updateDisplay after data is synchronized
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
             console.log("🆕 Initializing new data structure in Firebase.");
@@ -160,6 +161,7 @@ function loadFromFirebase() {
 
 function syncToFirebase() {
     // CRITICAL FIX: Ensures the reference is valid and complete before accessing its path.
+    // If the path is undefined (due to asynchronous Firebase internal setup), we skip the sync.
     if (!window.appData.appDataRef || !window.appData.appDataRef.path) {
         console.error("Attempted to sync but appDataRef is incomplete or undefined. Skipping sync.");
         return; 
@@ -210,6 +212,9 @@ function populateUserDropdown(mode) {
 }
 
 function updateDisplay() {
+    // CRITICAL FIX: Do not proceed if DOM is not fully ready (prevents TypeError on line 279)
+    if (!window.appData.isDomReady) return;
+
     const today = formatDateStandard(new Date());
 
     const modeDisplay = document.getElementById('modeDisplay');
@@ -225,6 +230,7 @@ function updateDisplay() {
     // 1. Update Mode Display and Button States
     if (window.appData.mode) {
         const modeText = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
+        // Line 279 fix: Check for modeDisplay existence before setting textContent
         if(modeDisplay) {
             modeDisplay.textContent = modeText;
             modeDisplay.classList.remove('bg-gray-500', 'bg-red-600', 'bg-emerald-600');
@@ -784,6 +790,9 @@ function resetTodaysPreparedBowls() {
 // --- INITIALIZATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Mark DOM as ready immediately
+    window.appData.isDomReady = true;
+
     const dishLetterSelect = document.getElementById('dishLetterSelect');
     
     if(dishLetterSelect) {
@@ -822,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getLivePrepReport = getLivePrepReport;
 
     // Start the Firebase initialization process with a minimal delay to ensure SDK readiness
+    // This addresses the script timing/loading issues.
     setTimeout(initializeFirebase, 0);
 
     setInterval(checkDailyDataReset, 3600000); 
