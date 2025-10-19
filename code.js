@@ -606,6 +606,18 @@ function processScan(vytUrl) {
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
+    // --- CRITICAL DUPLICATE CHECK ---
+    // Check if this bowl is already logged today (in prepared or active state)
+    const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
+    const isAlreadyActive = window.appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
+    
+    if (window.appData.mode === 'kitchen' && (isAlreadyPrepared || isAlreadyActive)) {
+        showMessage("⚠️ DUPLICATE SCAN: This bowl has already been prepared today.", 'error', 7000);
+        window.appData.isProcessingScan = false; // Release lock
+        return; // Stop processing and logging immediately
+    }
+    // ---------------------------------
+    
     const scanRecord = {
         vytUrl: exactVytUrl,
         timestamp: timestamp,
@@ -637,6 +649,8 @@ function processScan(vytUrl) {
  * Handles bowl prep (Kitchen Scan).
  */
 function kitchenScan(vytUrl, timestamp) {
+    // Note: Duplicate check moved to processScan to run before anything is logged.
+    
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     
@@ -1158,7 +1172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearTimeout(window.appData.scanTimer);
                 }
 
-                // Set a short delay (50ms) to ensure the entire VYT string has been written
+                // Set a short delay (5ms) to ensure the entire VYT string has been written
                 window.appData.scanTimer = setTimeout(() => {
                     // Check if input value is stable and scanning is active
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
@@ -1166,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 50); // Increased to 50ms for reliable high-speed capture
+                }, 5); // Reduced to 5ms for aggressive, high-speed capture
             }
         });
         
