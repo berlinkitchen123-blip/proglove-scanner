@@ -6,7 +6,7 @@ window.appData = {
     // Current UI/Scanner state
     mode: 'kitchen',          // 'kitchen' or 'return'
     user: null,               // Currently selected user
-    dishLetter: 'A',          // Currently selected dish letter (A-Z)
+    dishLetter: 'A',          // Currently selected dish letter (A-Z, 1-4)
     scanning: false,          // True if the scanner is active
     
     // Core data structures (Synced with Firebase)
@@ -32,6 +32,13 @@ const USERS = [
     {name: "Adesh", role: "Return"}
 ];
 
+// EXTENDED LIST OF ALL VALID DISH LETTERS/NUMBERS (A-Z, then 1-4)
+const DISH_LETTERS = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    '1', '2', '3', '4' 
+];
+
 // --- UTILITY FUNCTIONS ---
 
 /**
@@ -51,16 +58,12 @@ function formatDateStandard(date) {
 
 /**
  * Ensures an input date string is in the required YYYY-MM-DD format.
- * If the input date is null or invalid, it returns today's standard date.
- * @param {string} dateString - Date string from JSON or other source.
- * @returns {string} - Date in 'YYYY-MM-DD' format.
  */
 function sanitizeDateString(dateString) {
     if (!dateString) {
         return formatDateStandard(new Date());
     }
     
-    // Try to parse using new Date(). If it fails, it returns Invalid Date.
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
         console.warn(`Invalid date string received: ${dateString}. Defaulting to today.`);
@@ -97,7 +100,7 @@ function showMessage(message, type = 'info', duration = 3000) {
 }
 
 // --- FIREBASE SETUP & SYNC (SOLE SOURCE OF TRUTH) ---
-// Imports are assumed to be handled by the HTML file using type="module"
+// Note: Assumes Firebase SDKs are loaded in the HTML
 
 /**
  * Initializes Firebase, sets up the Realtime Database reference.
@@ -113,7 +116,7 @@ async function initializeFirebase() {
             return;
         }
 
-        // Check if firebase is defined (loaded via HTML script tags)
+        // We assume Firebase is globally available via script tags
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
              showMessage("❌ Firebase library not loaded. Check HTML scripts.", 'error');
@@ -138,16 +141,13 @@ async function initializeFirebase() {
 
 /**
  * Fetches data from Firebase using the ON listener for real-time consistency.
- * This is the ONLY place appData is loaded from the cloud.
  */
 function loadFromFirebase() {
     if (!window.appData.appDataRef) return;
 
-    // Use .on('value') to keep the app synchronized automatically
     window.appData.appDataRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-            // Overwrite all local appData arrays with the live Firebase data
             window.appData.myScans = data.myScans || [];
             window.appData.activeBowls = data.activeBowls || [];
             window.appData.preparedBowls = data.preparedBowls || [];
@@ -155,14 +155,12 @@ function loadFromFirebase() {
             window.appData.lastCleanup = data.lastCleanup || null;
             window.appData.lastSync = data.lastSync || null;
             
-            // Re-run cleanup check immediately after loading data to ensure consistency
             checkDailyCleanup();
             
             updateDisplay();
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
             console.log("🆕 Initializing new data structure in Firebase.");
-            // If no data exists, sync the initial empty state
             syncToFirebase();
         }
     }, (error) => {
@@ -188,7 +186,6 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
-    // Use the determined path from initializeFirebase
     const path = window.appData.appDataRef.path.toString();
     firebase.database().ref(path).set(dataToSave)
         .then(() => {
@@ -236,7 +233,7 @@ function updateDisplay() {
             formatDateStandard(new Date(scan.timestamp)) === today &&
             // 3. Must match current user
             scan.user === window.appData.user &&
-            // 4. MUST MATCH THE SELECTED DISH LETTER
+            // 4. MUST MATCH THE SELECTED DISH LETTER/NUMBER
             scan.dishLetter === window.appData.dishLetter
         ).length;
     }
@@ -251,6 +248,10 @@ function updateDisplay() {
     // Update User/Dish Selectors
     document.getElementById('selectedUser').textContent = window.appData.user || 'Select User';
     document.getElementById('selectedDishLetter').textContent = window.appData.dishLetter || 'A';
+    
+    // --- OVERNIGHT STATISTICS (NEW) ---
+    const dailyStats = getDailyStatistics();
+    renderOvernightStatistics(dailyStats);
 }
 
 function setMode(mode) {
@@ -271,11 +272,19 @@ function selectUser(userName) {
     updateDisplay();
 }
 
-function selectDishLetter(letter) {
+function selectDishLetter(value) {
     if (window.appData.user) {
-        window.appData.dishLetter = letter.toUpperCase();
-        showMessage(`Dish Letter selected: ${letter.toUpperCase()}`, 'info');
-        updateDisplay();
+        const upperValue = value.trim().toUpperCase();
+        if (DISH_LETTERS.includes(upperValue)) {
+            window.appData.dishLetter = upperValue;
+            showMessage(`Dish Letter selected: ${upperValue}`, 'info');
+            // Update the selected option text
+            const selectedDishDisplay = document.getElementById('selectedDishLetter');
+            if(selectedDishDisplay) selectedDishDisplay.textContent = upperValue;
+            updateDisplay();
+        } else {
+            showMessage("❌ Invalid Dish Letter/Number selected.", 'error');
+        }
     } else {
         showMessage("❌ Please select a User first.", 'error');
     }
@@ -287,7 +296,7 @@ function startScanning() {
         return;
     }
     if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
-        showMessage("❌ Cannot start scanning. Please select a Dish Letter (A-Z).", 'error');
+        showMessage("❌ Cannot start scanning. Please select a Dish Letter (A-Z or 1-4).", 'error');
         return;
     }
     window.appData.scanning = true;
@@ -320,7 +329,7 @@ function processScan(vytCode) {
         timestamp: timestamp,
         type: window.appData.mode,
         user: window.appData.user,
-        dishLetter: window.appData.dishLetter // Only relevant for kitchen mode, but recorded anyway
+        dishLetter: window.appData.dishLetter
     };
     window.appData.myScans.push(scanRecord);
     
@@ -345,7 +354,6 @@ function processScan(vytCode) {
 
 /**
  * Handles a scan at the Kitchen Prep Station.
- * A kitchen scan's purpose is to start a new prepared cycle, making the bowl available for JSON assignment.
  */
 function kitchenScan(vytCode, timestamp) {
     // 1. Find and remove the bowl from any previous state (Prepared or Active)
@@ -387,7 +395,6 @@ function kitchenScan(vytCode, timestamp) {
 
 /**
  * Handles a scan at the Return Station.
- * Closes the Active/Prepared cycle and logs the return.
  */
 function returnScan(vytCode, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
@@ -430,7 +437,6 @@ function returnScan(vytCode, timestamp) {
 
 /**
  * Processes JSON data to convert Prepared Bowls to Active Bowls, or update existing Active Bowls.
- * Enforces YYYY-MM-DD date format using sanitizeDateString.
  */
 function processJSONData(jsonString) {
     if (!window.appData.user) {
@@ -466,7 +472,7 @@ function processJSONData(jsonString) {
         const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytCode === exactVytCode);
         const activeIndex = window.appData.activeBowls.findIndex(b => b.vytCode === exactVytCode);
         
-        // Sanitize the date from the JSON, or use today's date if missing
+        // Sanitize the date from the JSON (prefers 'preparedDate' or 'date', otherwise uses today)
         const jsonAssignmentDate = sanitizeDateString(item.preparedDate || item.date);
 
         // --- Logic: 1. Update Existing Active Bowl (Temporal Overwrite) ---
@@ -557,6 +563,86 @@ function exportAllData() {
     exportData(fullData, `full_bowl_data_${formatDateStandard(new Date())}.json`);
 }
 
+// --- STATISTICS (NEW) ---
+
+/**
+ * Calculates daily statistics for prepared dishes (Kitchen Scans), sorted by Dish Letter then User.
+ * @returns {Array<Object>} Sorted list of {dishLetter, users: Array<string>, count: number}
+ */
+function getDailyStatistics() {
+    const today = formatDateStandard(new Date());
+    
+    // 1. Filter today's kitchen scans
+    const todaysKitchenScans = window.appData.myScans.filter(scan => 
+        scan.type === 'kitchen' && 
+        formatDateStandard(new Date(scan.timestamp)) === today
+    );
+    
+    // 2. Group by Dish Letter/Number and collect user data
+    const groupedData = todaysKitchenScans.reduce((acc, scan) => {
+        const letter = scan.dishLetter;
+        if (!acc[letter]) {
+            acc[letter] = {
+                dishLetter: letter,
+                users: new Set(), // Use Set to ensure unique users
+                count: 0
+            };
+        }
+        acc[letter].users.add(scan.user);
+        acc[letter].count++;
+        return acc;
+    }, {});
+    
+    // 3. Convert to array, sort users, and prepare for final sort
+    const statsArray = Object.values(groupedData).map(item => ({
+        ...item,
+        // Convert Set to Array and sort users alphabetically
+        users: Array.from(item.users).sort() 
+    }));
+    
+    // 4. Sort the final array based on the predefined DISH_LETTERS order (A-Z, then 1-4)
+    statsArray.sort((a, b) => {
+        const indexA = DISH_LETTERS.indexOf(a.dishLetter);
+        const indexB = DISH_LETTERS.indexOf(b.dishLetter);
+        return indexA - indexB;
+    });
+
+    return statsArray;
+}
+
+/**
+ * Renders the daily statistics table into the UI (assuming element ID 'overnightStatsBody').
+ * @param {Array<Object>} stats - The sorted statistics array.
+ */
+function renderOvernightStatistics(stats) {
+    const container = document.getElementById('overnightStatsBody');
+    if (!container) return;
+
+    if (stats.length === 0) {
+        container.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">No kitchen preparation scans recorded today.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    stats.forEach(dish => {
+        let firstRow = true;
+        
+        // Loop through each user for this dish, creating a separate row for each
+        dish.users.forEach(user => {
+            html += `
+                <tr class="text-sm border-t border-gray-100 hover:bg-indigo-50 transition duration-150">
+                    ${firstRow ? `<td rowspan="${dish.users.length}" class="font-bold text-center align-top p-2 border-r border-gray-200 text-indigo-700">${dish.dishLetter}</td>` : ''}
+                    <td class="p-2 text-left">${user}</td>
+                    ${firstRow ? `<td rowspan="${dish.users.length}" class="text-center font-semibold align-top p-2 text-indigo-900 bg-indigo-50">${dish.count}</td>` : ''}
+                </tr>
+            `;
+            firstRow = false;
+        });
+    });
+
+    container.innerHTML = html;
+}
+
 // --- CLEANUP AND MAINTENANCE ---
 
 /**
@@ -568,7 +654,6 @@ function checkDailyCleanup() {
     const cleanupTimeHour = 19; // 7 PM
     const lastCleanupDate = window.appData.lastCleanup ? formatDateStandard(new Date(window.appData.lastCleanup)) : null;
 
-    // Check if it's past cleanup time AND cleanup hasn't run today
     if (now.getHours() >= cleanupTimeHour && lastCleanupDate !== today) {
         // Run cleanup
         const bowlsToKeep = window.appData.returnedBowls.filter(bowl => 
@@ -630,19 +715,19 @@ document.addEventListener('DOMContentLoaded', () => {
     userSelect.addEventListener('change', (e) => selectUser(e.target.value));
 
     const dishLetterSelect = document.getElementById('dishLetterSelect');
-    for (let i = 0; i < 26; i++) {
-        const letter = String.fromCharCode(65 + i);
+    // Use the extended list of dish letters and numbers
+    DISH_LETTERS.forEach(value => {
         const option = document.createElement('option');
-        option.value = letter;
-        option.textContent = letter;
+        option.value = value;
+        option.textContent = value;
         dishLetterSelect.appendChild(option);
-    }
+    });
 
     dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
     
     // Set initial values for selectors
     selectUser(USERS[0].name);
-    selectDishLetter('A');
+    selectDishLetter(DISH_LETTERS[0]); // Sets the initial value to 'A'
 
     // Setup scanning input listener
     const scanInput = document.getElementById('scanInput');
