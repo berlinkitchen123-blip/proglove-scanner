@@ -17,7 +17,6 @@ window.appData = {
     lastDataReset: null, 
     lastSync: null,
     isDomReady: false, 
-    // Flag to confirm successful Firebase setup AND initial data existence
     isInitialized: false, 
 };
 
@@ -354,16 +353,24 @@ function updateDisplay() {
     }
 
 
-    // --- Core Metrics Update (Kitchen Team Focus) ---
-    // Removed activeCountEl and exportReturnCountEl updates.
-
+    // --- Core Metrics Update (Global Inventory) ---
+    // These metrics are visible at all times and do not depend on the scanning state.
+    
+    const activeCountEl = document.getElementById('activeCount'); 
+    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length; 
+    
     const preparedTodayCountEl = document.getElementById('preparedTodayCount');
     if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
     
-    // Note: returnedTodayCount and activeBowls.length calculations are kept 
-    // for other functions (like daily reset and missing bowls report) 
-    // even though their specific UI elements were removed from the main panel.
-
+    const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
+        bowl.returnDate === today
+    ).length;
+    const exportReturnCountEl = document.getElementById('exportReturnCount');
+    if (exportReturnCountEl) exportReturnCountEl.textContent = returnedTodayCount;
+    
+    
+    // --- User Scan Count (Kitchen Team Productivity) ---
+    // This metric IS dependent on the user and dish selection, but NOT scanning state.
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp(); 
 
@@ -377,10 +384,9 @@ function updateDisplay() {
     }
 
     const myScansCountEl = document.getElementById('myScansCount');
-    if (myScansCountEl) myScansCountEl.textContent = myScansCount;
+    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel'); 
     
-    // 💥 FIX APPLIED HERE: myDishLetterLabelEl
-    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
+    if (myScansCountEl) myScansCountEl.textContent = myScansCount;
     if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
 
     // Update Scan Status/Input state
@@ -410,7 +416,11 @@ function updateDisplay() {
     const selectedDishLetterEl = document.getElementById('selectedDishLetter');
     if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
     
-    // NOTE: Removed exportActiveCountEl and exportPreparedCountEl updates.
+    const exportActiveCountEl = document.getElementById('exportActiveCount');
+    if(exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
+    
+    const exportPreparedCountEl = document.getElementById('exportPreparedCount');
+    if(exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
     
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
@@ -671,10 +681,10 @@ function flattenOrderData(order) {
                 // Safety check: ensure we have the minimum info
                 if (username) {
                     // Create a unique virtual VYT code since actual bowlCodes are empty
+                    // VIRTUAL-ORDERID_SHORT-DISH_LETTER-USERNAME_SHORT
                     const virtualVytUrl = `VIRTUAL-${orderId.substring(0, 8)}-${dishLetter}-${username.replace(/\s/g, '').substring(0, 6)}`;
                     
-                    // Create one record for each ordered quantity (assuming orderedQuantity is 1 for simplicity)
-                    // If orderedQuantity > 1, this needs a loop, but we default to 1 assignment per user record.
+                    // Create one record for each ordered quantity 
                     for (let i = 0; i < (user.orderedQuantity || 1); i++) {
                         flattenedBowls.push({
                             vytUrl: virtualVytUrl,
@@ -694,9 +704,9 @@ function flattenOrderData(order) {
 
 /**
  * Processes JSON customer data to convert Prepared Bowls to Active Bowls.
- * NOTE: User selection is NO LONGER REQUIRED for this function.
  */
 function processJSONData(jsonString) {
+    // NOTE: User selection is NO LONGER required for this management function.
     
     if (!jsonString || jsonString.trim() === '' || jsonString.includes('Paste JSON data here')) {
         showMessage("❌ ERROR: JSON text area is empty. Please paste data.", 'error');
@@ -730,8 +740,6 @@ function processJSONData(jsonString) {
     let updates = 0;
     let creations = 0;
     
-    // NOTE: The scanner user (window.appData.user) is only used here as an optional log entry.
-    const currentScannerUser = window.appData.user || 'System Patch';
     const timestamp = new Date().toISOString();
 
     for (const item of allFlattenedBowls) {
@@ -757,7 +765,6 @@ function processJSONData(jsonString) {
             activeBowl.customer = item.customer.trim();
             activeBowl.preparedDate = jsonAssignmentDate; 
             activeBowl.updateTime = timestamp;
-            activeBowl.user = currentScannerUser; // Log the user who performed the patch
             updates++;
             continue;
         }
@@ -771,7 +778,6 @@ function processJSONData(jsonString) {
             preparedBowl.preparedDate = jsonAssignmentDate; 
             preparedBowl.updateTime = timestamp; 
             preparedBowl.state = 'ACTIVE_KNOWN';
-            preparedBowl.user = currentScannerUser; // Log the user who performed the patch
             
             window.appData.activeBowls.push(preparedBowl);
             creations++;
@@ -787,7 +793,7 @@ function processJSONData(jsonString) {
                 customer: item.customer.trim(),
                 preparedDate: jsonAssignmentDate, 
                 preparedTime: timestamp,
-                user: currentScannerUser, // Log the user who performed the patch
+                user: window.appData.user || 'SYSTEM', // Use SYSTEM if no user is selected
                 state: 'ACTIVE_KNOWN'
             };
             window.appData.activeBowls.push(newBowl);
@@ -798,7 +804,8 @@ function processJSONData(jsonString) {
     if (updates > 0 || creations > 0) {
         showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls.`, 'success', 5000);
         syncToFirebase();
-        document.getElementById('jsonData').value = '';
+        const jsonDataEl = document.getElementById('jsonData');
+        if(jsonDataEl) jsonDataEl.value = '';
     } else {
         showMessage("ℹ️ No bowls updated or created from JSON data.", 'info');
     }
