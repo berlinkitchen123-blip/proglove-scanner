@@ -104,9 +104,13 @@ function showMessage(message, type = 'info', duration = 3000) {
     msgElement.className += ' ' + backgroundClass;
     msgElement.innerHTML = message;
     
-    messageContainer.prepend(msgElement);
+    // Prepend the new message to the container
+    if (messageContainer) {
+        messageContainer.prepend(msgElement);
+    }
     
     setTimeout(() => {
+        // Fade out and remove the message
         msgElement.style.opacity = '0';
         msgElement.style.maxHeight = '0';
         msgElement.style.padding = '0';
@@ -130,6 +134,7 @@ async function initializeFirebase() {
             return;
         }
 
+        // Check for required global firebase object (assuming the SDK is loaded in the HTML)
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
              showMessage("❌ Firebase library not loaded. Check HTML scripts.", 'error');
@@ -137,6 +142,7 @@ async function initializeFirebase() {
         }
 
         const app = firebase.initializeApp(firebaseConfig);
+        // Using Realtime Database reference as per original code structure
         window.appData.db = firebase.database();
         
         // Public data path: /artifacts/{appId}/public/data/bowl_data
@@ -153,6 +159,7 @@ async function initializeFirebase() {
 
 /**
  * Fetches data from Firebase using the ON listener for real-time consistency.
+ * This function also triggers the initial display update for the Live Prep Report.
  */
 function loadFromFirebase() {
     if (!window.appData.appDataRef) return;
@@ -169,7 +176,7 @@ function loadFromFirebase() {
             
             checkDailyDataReset(); 
             
-            updateDisplay();
+            updateDisplay(); // Triggers the Live Prep Report refresh
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
             console.log("🆕 Initializing new data structure in Firebase.");
@@ -199,7 +206,8 @@ function syncToFirebase() {
     };
 
     const path = window.appData.appDataRef.path.toString();
-    firebase.database().ref(path).set(dataToSave)
+    // Using firebase.database().ref(path).set() for data write
+    firebase.database().ref(path).set(dataToSave) 
         .then(() => {
             console.log("⬇️ Data successfully written to Firebase.");
         })
@@ -234,7 +242,7 @@ function updateDisplay() {
     ).length;
     document.getElementById('returnedTodayCount').textContent = returnedTodayCount;
 
-    // 4. MY SCANS COUNT (Dish Letter Specific Count)
+    // 4. MY SCANS COUNT (Dish Letter Specific Count - dependent on selected user/dish)
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp(); 
 
@@ -264,7 +272,8 @@ function updateDisplay() {
     document.getElementById('selectedUser').textContent = window.appData.user || 'Select User';
     document.getElementById('selectedDishLetter').textContent = window.appData.dishLetter || 'A';
     
-    // --- LIVE PREP REPORT (REAL-TIME UPDATE) ---
+    // --- LIVE PREP REPORT (REAL-TIME UPDATE - ALWAYS ON) ---
+    // This is run every time data changes, regardless of user/mode selection.
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
 }
@@ -300,6 +309,8 @@ function selectDishLetter(value) {
             showMessage("❌ Invalid Dish Letter/Number selected.", 'error');
         }
     } else {
+        // Allow dish selection to be informational even if user is not fully selected,
+        // but alert that user selection is needed for scanning.
         showMessage("❌ Please select a User first.", 'error');
     }
 }
@@ -314,7 +325,8 @@ function startScanning() {
         return;
     }
     window.appData.scanning = true;
-    document.getElementById('scanInput').focus();
+    // Set focus so the ProGlove input is immediately received
+    document.getElementById('scanInput').focus(); 
     showMessage("✅ Scanner Activated. Ready to scan.", 'success');
     updateDisplay();
 }
@@ -333,6 +345,7 @@ function stopScanning() {
  * @param {string} vytUrl - The VYT identifier, which is a full URL.
  */
 function processScan(vytUrl) {
+    // 1. Basic check
     if (!window.appData.scanning || !window.appData.user) {
         showMessage("❌ Scanner not active or user not selected.", 'error');
         return;
@@ -341,18 +354,16 @@ function processScan(vytUrl) {
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
-    // Raw scan history is recorded regardless of outcome for user stats
-    if (window.appData.mode === 'kitchen') {
-        const scanRecord = {
-            vytUrl: exactVytUrl,
-            timestamp: timestamp,
-            type: window.appData.mode,
-            user: window.appData.user,
-            dishLetter: window.appData.dishLetter
-        };
-        window.appData.myScans.push(scanRecord);
-    }
-
+    // 2. Record raw scan history (for user stats)
+    const scanRecord = {
+        vytUrl: exactVytUrl,
+        timestamp: timestamp,
+        type: window.appData.mode,
+        user: window.appData.user,
+        // Only include dishLetter if in kitchen mode (avoids cluttering return scans)
+        dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A'
+    };
+    window.appData.myScans.push(scanRecord);
     
     let result;
     if (window.appData.mode === 'kitchen') {
@@ -361,46 +372,45 @@ function processScan(vytUrl) {
         result = returnScan(exactVytUrl, timestamp);
     }
     
+    // 3. Provide immediate feedback
     if (result.success) {
         syncToFirebase();
         showMessage(result.message, 'success');
     } else {
-        // We don't sync on failure, but we still show the error message.
         showMessage(result.message, 'error');
     }
     
-    // updateDisplay() is called here to ensure the Live Prep Report updates immediately.
+    // 4. Update the display and clear the input for the next scan
     updateDisplay(); 
     document.getElementById('scanInput').value = '';
 }
 
-
-// --- CORRECTED LOGIC START ---
 /**
- * Handles a scan at the Kitchen Prep Station with duplication checks.
+ * Handles a scan at the Kitchen Prep Station.
  */
 function kitchenScan(vytUrl, timestamp) {
-    // Check for duplication first. A bowl cannot be prepared if it's already in the 'prepared' state.
-    const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === vytUrl);
-    if (isAlreadyPrepared) {
-        return { 
-            success: false, 
-            message: `❌ Error: ${vytUrl.slice(-10)} has already been prepared.` 
-        };
-    }
-
-    // A bowl might be 'active' (out with a customer). The business rule is to close
-    // that cycle and start a new one. This part of the logic is maintained.
+    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
+    
+    let statusMessage = "started a new prep cycle.";
+
+    // 1. If the bowl is ACTIVE, close its cycle and move it to returned history.
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
         window.appData.returnedBowls.push(returnedBowl);
+        statusMessage = "closed active cycle and started new prep.";
+    }
+    
+    // 2. If the bowl was in Prepared, clear it out for a fresh record.
+    if (preparedIndex !== -1) {
+        window.appData.preparedBowls.splice(preparedIndex, 1);
+        statusMessage = "closed old prepared record and started new prep.";
     }
 
-    // Create the NEW Prepared Bowl record. This only happens if it wasn't a duplicate.
+    // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
     const newPreparedBowl = {
-        vytUrl: vytUrl,
+        vytUrl: vytUrl, // Stored as a URL
         dishLetter: window.appData.dishLetter,
         company: 'Unknown',
         customer: 'Unknown',
@@ -409,30 +419,22 @@ function kitchenScan(vytUrl, timestamp) {
         user: window.appData.user,
         state: 'PREPARED_UNKNOWN'
     };
+
     window.appData.preparedBowls.push(newPreparedBowl);
     
     return { 
         success: true, 
-        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}.` 
+        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle ${statusMessage}` 
     };
 }
 
 /**
- * Handles a scan at the Return Station with duplication checks.
+ * Handles a scan at the Return Station.
  */
 function returnScan(vytUrl, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
 
-    // 1. Check for duplication: Is the bowl already returned?
-    const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === vytUrl && b.returnDate === returnDate);
-    if (isAlreadyReturned) {
-        return {
-            success: false,
-            message: `❌ Error: ${vytUrl.slice(-10)} has already been returned today.`
-        };
-    }
-
-    // 2. Find the bowl in 'Prepared' state and move it to 'Returned'.
+    // 1. Try to find the bowl in Prepared state and move to Returned
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     if (preparedIndex !== -1) {
         const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
@@ -441,11 +443,11 @@ function returnScan(vytUrl, timestamp) {
         
         return { 
             success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (from Prepared list).` 
+            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.` 
         };
     }
 
-    // 3. Find the bowl in 'Active' state and move it to 'Returned'.
+    // 2. Try to find the bowl in Active state and move to Returned (CLOSES THE ACTIVE CYCLE)
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
@@ -458,13 +460,12 @@ function returnScan(vytUrl, timestamp) {
         };
     }
     
-    // 4. If the bowl is not found in either list.
+    // 3. If the bowl is not found in either state
     return { 
         success: false, 
         message: `❌ Error: ${vytUrl.slice(-10)} not found in Prepared or Active inventory.` 
     };
 }
-// --- CORRECTED LOGIC END ---
 
 
 // --- DATA IMPORT/EXPORT ---
@@ -653,7 +654,7 @@ function getLivePrepReport() {
 }
 
 /**
- * Renders the live statistics table into the UI (Renamed from renderOvernightStatistics).
+ * Renders the live statistics table into the UI (Live Prep Report).
  */
 function renderLivePrepReport(stats) {
     const container = document.getElementById('livePrepReportBody');
@@ -765,15 +766,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
     
-    selectUser(USERS[0].name);
+    // Set initial values (This assumes the HTML has default selections)
+    selectUser(USERS[0].name); 
     selectDishLetter(DISH_LETTERS[0]); 
 
-    // Setup scanning input listener
+    // Setup scanning input listener: Catches the 'Enter' keypress simulated by the ProGlove scanner.
     const scanInput = document.getElementById('scanInput');
     scanInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && scanInput.value.trim()) {
-            e.preventDefault();
-            processScan(scanInput.value);
+        // The ProGlove scanner sends the full code followed by 'Enter' (key === 'Enter')
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Stop the browser from submitting forms or scrolling
+            
+            const scannedValue = scanInput.value.trim();
+
+            if (scannedValue) {
+                // Trigger the main processing function immediately
+                processScan(scannedValue);
+            }
+            // Note: processScan clears the input field at the end, resetting it for the next scan.
         }
     });
 
