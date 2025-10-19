@@ -14,11 +14,11 @@ window.appData = {
     // Internal state
     db: null,
     // CRITICAL FIX: Breaking the data into separate references to avoid the 32MB limit
-    appDataRef: null,        // General reference for metadata
-    refActive: null,         // Reference for Active Bowls
-    refPrepared: null,       // Reference for Prepared Bowls
-    refReturned: null,       // Reference for Returned Bowls (History)
-    refScans: null,          // Reference for Scan Log (History)
+    appDataRef: null,        
+    refActive: null,         
+    refPrepared: null,       
+    refReturned: null,       
+    refScans: null,          
     
     lastDataReset: null, 
     lastSync: null,
@@ -687,31 +687,33 @@ function flattenOrderData(order) {
                 : [];
             
             // Get standard dish fields
-            // Fallback to dish ID if label/name is missing.
             const dishIdentifier = String(dishLabel || dish.name || dish.id || 'N/A').trim().toUpperCase();
-            const safeDishId = dishIdentifier.length > 10 ? dishIdentifier.substring(0, 8) : dishIdentifier; // Truncate long IDs
+            const safeDishId = dishIdentifier.length > 10 ? dishIdentifier.substring(0, 8) : dishIdentifier; 
             
             if (!dish.users || !Array.isArray(dish.users)) continue;
             
             // Map users to get an array of just usernames/IDs
             const usernames = dish.users.map(user => String(user.username || user.id).trim());
             const preparedDate = order.readyTime;
+            
+            // 💥 FIX: Skip if there are no usernames associated with the dish. 💥
+            if (usernames.length === 0) continue; 
 
             // --- 1. HANDLE VYT CODES (Preferred - One record per VYT Code) ---
             if (codes.length > 0) {
                 for (const vytUrl of codes) {
-                    const safeVytUrl = vytUrl.trim(); // Preserve original URL case/format for export!
+                    const safeVytUrl = vytUrl.trim(); // Preserve original URL format for scanning/export
 
                     const existingRecord = dishVytMap.get(safeVytUrl);
 
                     if (existingRecord) {
-                        // If this explicit VYT code is repeated, merge the customer list
-                        // FIX: Use (existingRecord.customer || []) to guarantee it's an array before concat
-                        existingRecord.customer = (existingRecord.customer || []).concat(usernames);
+                        // FIX: Ensure customer is an array before concat; merge customer list
+                        // This uses Array.from() to safely handle merging if 'customer' was initialized as a string
+                        existingRecord.customer = Array.from(existingRecord.customer).concat(usernames);
                     } else {
                         // Create a new unique record for this specific VYT URL
                         dishVytMap.set(safeVytUrl, {
-                            vytUrl: safeVytUrl, // Keep original URL case/format
+                            vytUrl: safeVytUrl, 
                             dishLetter: dishLabel,
                             company: companyName,
                             customer: usernames, // Store array of users temporarily
@@ -721,19 +723,22 @@ function flattenOrderData(order) {
                 }
             } 
             // --- 2. HANDLE VIRTUAL VYT CODES (Fallback for Missing Codes) ---
+            // This path should only be taken if bowlCodes is genuinely missing (e.g., historical data structure difference)
+            // This is the source of the missing records if the physical VYT codes were missing in the manifest.
             else {
                 // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISH_IDENTIFIER)
+                // This creates ONE single bowl entry for all users of this dish, IF no VYT codes are provided.
                 const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${safeDishId}`;
                 const existingRecord = dishVytMap.get(virtualVytBase);
 
                 if (existingRecord) {
-                    existingRecord.customer = (existingRecord.customer || []).concat(usernames);
+                    existingRecord.customer = Array.from(existingRecord.customer).concat(usernames);
                 } else {
                     dishVytMap.set(virtualVytBase, {
-                        vytUrl: virtualVytBase, // Use virtual code as the VYT URL
+                        vytUrl: virtualVytBase, 
                         dishLetter: dishLabel,
                         company: companyName,
-                        customer: usernames, // Store array of users temporarily
+                        customer: usernames, 
                         preparedDate: preparedDate,
                     });
                 }
@@ -748,10 +753,10 @@ function flattenOrderData(order) {
 
         // Push the final record (one record per unique VYT URL)
         flattenedBowls.push({
-            vytUrl: record.vytUrl, // Use the full, preserved VYT URL
+            vytUrl: record.vytUrl, 
             dishLetter: record.dishLetter,
             company: record.company,
-            customer: customerString, // Final string of all customers
+            customer: customerString, 
             preparedDate: record.preparedDate,
         });
     });
@@ -807,7 +812,7 @@ function processJSONData(jsonString) {
     
     const totalItemsPatched = allFlattenedBowls.length;
     
-    // FIX: Using the totalItemsExpected from the robust counting logic for logging
+    // Log the count difference for debugging
     console.log(`JSON Patch Summary: Total items expected: ${totalItemsExpected}. Total unique bowls patched: ${totalItemsPatched}`);
 
 
