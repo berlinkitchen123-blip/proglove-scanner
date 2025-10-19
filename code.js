@@ -17,6 +17,7 @@ window.appData = {
     lastDataReset: null, 
     lastSync: null,
     isDomReady: false, // NEW FLAG to ensure UI safety
+    dataInitialized: false, // NEW FLAG to control initial data sync
 };
 
 const USERS = [
@@ -119,6 +120,7 @@ function initializeFirebase() { // Removed 'async' keyword
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
         // --- FINAL FIX: Apply delay ONLY to the listener call to prevent race condition ---
+        // A slight delay guarantees the internal firebase ref object is fully built before listening.
         setTimeout(loadFromFirebase, 50); 
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
@@ -150,9 +152,12 @@ function loadFromFirebase() {
             updateDisplay(); // Only call updateDisplay after data is synchronized
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
-            console.log("🆕 Initializing new data structure in Firebase.");
-            // When data is empty, syncToFirebase is called to push initial structure.
-            syncToFirebase();
+            // CRITICAL FIX: Only run initial sync ONCE when data is genuinely empty.
+            if (!window.appData.dataInitialized) {
+                console.log("🆕 Initializing new data structure in Firebase.");
+                window.appData.dataInitialized = true; // Set flag to prevent future attempts
+                syncToFirebase();
+            }
         }
     }, (error) => {
         console.error("Firebase ON listener failed:", error);
@@ -162,7 +167,6 @@ function loadFromFirebase() {
 
 function syncToFirebase() {
     // CRITICAL FIX: Ensures the reference is valid and complete before accessing its path.
-    // If the path is undefined (due to asynchronous Firebase internal setup), we skip the sync.
     if (!window.appData.appDataRef || !window.appData.appDataRef.path) {
         console.error("Attempted to sync but appDataRef is incomplete or undefined. Skipping sync.");
         return; 
