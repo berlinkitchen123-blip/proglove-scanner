@@ -690,8 +690,9 @@ function flattenOrderData(order) {
             const existingRecord = dishUserMap.get(virtualVytBase);
 
             if (existingRecord) {
-                // Fix: Concatenate to the existing customer array
-                existingRecord.customer = existingRecord.customer.concat(usernames);
+                // FIX: Ensure customer is an array before using concat
+                // This resolves the TypeError: Cannot read properties of undefined (reading 'concat')
+                existingRecord.customer = (existingRecord.customer || []).concat(usernames);
             } else {
                 // Create the base record
                 dishUserMap.set(virtualVytBase, {
