@@ -16,8 +16,7 @@ window.appData = {
     appDataRef: null,
     lastDataReset: null, 
     lastSync: null,
-    isDomReady: false, // NEW FLAG to ensure UI safety
-    dataInitialized: false, // NEW FLAG to control initial data sync
+    isDomReady: false, 
 };
 
 const USERS = [
@@ -37,6 +36,9 @@ const DISH_LETTERS = [
 ];
 
 // --- UTILITY FUNCTIONS ---
+/**
+ * Converts an ISO timestamp or Date object to the standard YYYY-MM-DD format.
+ */
 function formatDateStandard(date) {
     const d = new Date(date);
     let month = '' + (d.getMonth() + 1);
@@ -47,6 +49,9 @@ function formatDateStandard(date) {
     return [year, month, day].join('-');
 }
 
+/**
+ * CALCULATES THE 24-HOUR REPORTING WINDOW (10 PM Yesterday to 10 PM Today).
+ */
 function getReportingDayTimestamp() {
     const now = new Date();
     const cutoffHour = 22; 
@@ -63,6 +68,9 @@ function getReportingDayTimestamp() {
     return { start: startOfReportingDay.toISOString(), end: endOfReportingDay.toISOString() };
 }
 
+/**
+ * Displays user feedback messages with colors.
+ */
 function showMessage(message, type = 'info', duration = 3000) {
     const messageContainer = document.getElementById('messageContainer');
     if (!messageContainer) return;
@@ -87,8 +95,13 @@ function showMessage(message, type = 'info', duration = 3000) {
 }
 
 // --- FIREBASE SETUP & SYNC ---
-function initializeFirebase() { // Removed 'async' keyword
+
+/**
+ * Initializes Firebase using hardcoded keys (for GitHub deployment).
+ */
+function initializeFirebase() { 
     try {
+        // Your Firebase Configuration (Pre-inserted for GitHub functionality)
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -103,9 +116,7 @@ function initializeFirebase() { // Removed 'async' keyword
             ? JSON.parse(__firebase_config) 
             : HARDCODED_FIREBASE_CONFIG;
         
-        const appId = typeof __app_id !== 'undefined' 
-            ? __app_id 
-            : firebaseConfig.projectId; 
+        const appId = firebaseConfig.projectId; 
 
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
@@ -116,12 +127,11 @@ function initializeFirebase() { // Removed 'async' keyword
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
         
-        // Define the public data path. This ensures the reference is properly set up.
+        // Define the public data path.
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
-        // --- FINAL FIX: Apply delay ONLY to the listener call to prevent race condition ---
-        // A slight delay guarantees the internal firebase ref object is fully built before listening.
-        setTimeout(loadFromFirebase, 50); 
+        // Start the permanent listener immediately.
+        loadFromFirebase(); 
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
@@ -130,16 +140,21 @@ function initializeFirebase() { // Removed 'async' keyword
     }
 }
 
+/**
+ * Sets up the perpetual Firebase listener.
+ */
 function loadFromFirebase() {
     if (!window.appData.appDataRef) {
         console.warn("loadFromFirebase called before appDataRef was set.");
         return; 
     }
 
-    // New data structure is initialized if the snapshot value is null
+    // This listener runs perpetually (continuous read)
     window.appData.appDataRef.on('value', (snapshot) => {
         const data = snapshot.val();
+        
         if (data) {
+            // Data received successfully. Update local state.
             window.appData.myScans = data.myScans || [];
             window.appData.activeBowls = data.activeBowls || [];
             window.appData.preparedBowls = data.preparedBowls || [];
@@ -148,27 +163,32 @@ function loadFromFirebase() {
             window.appData.lastSync = data.lastSync || null;
             
             checkDailyDataReset(); 
-            
-            updateDisplay(); // Only call updateDisplay after data is synchronized
+            updateDisplay(); 
             console.log("⬆️ Data synchronized from Firebase.");
         } else {
-            // CRITICAL FIX: Only run initial sync ONCE when data is genuinely empty.
-            if (!window.appData.dataInitialized) {
-                console.log("🆕 Initializing new data structure in Firebase.");
-                window.appData.dataInitialized = true; // Set flag to prevent future attempts
-                syncToFirebase();
-            }
+            // Data is null (first load on an empty database).
+            console.log("🆕 Initializing new data structure in Firebase.");
+            
+            // Call syncToFirebase, which handles the timing issue internally.
+            syncToFirebase();
         }
+        
     }, (error) => {
         console.error("Firebase ON listener failed:", error);
         showMessage("❌ ERROR: Live data feed failed. Check Firebase Security Rules.", 'error');
     });
 }
 
+/**
+ * Pushes the current local state to Firebase. Contains the critical retry logic.
+ */
 function syncToFirebase() {
-    // CRITICAL FIX: Ensures the reference is valid and complete before accessing its path.
-    if (!window.appData.appDataRef || !window.appData.appDataRef.path) {
-        console.error("Attempted to sync but appDataRef is incomplete or undefined. Skipping sync.");
+    // CRITICAL FIX: Added logic to handle timing bug when .path is not yet ready.
+    if (!window.appData.appDataRef || typeof window.appData.appDataRef.path === 'undefined') {
+        console.warn("Attempted to sync but appDataRef is incomplete or undefined. Scheduling retry (100ms delay).");
+        
+        // Retry after a short delay for internal Firebase setup to complete.
+        setTimeout(syncToFirebase, 100); 
         return; 
     }
 
@@ -198,6 +218,9 @@ function syncToFirebase() {
 
 // --- UI AND MODE MANAGEMENT ---
 
+/**
+ * Filters the user dropdown based on the selected mode.
+ */
 function populateUserDropdown(mode) {
     const userSelect = document.getElementById('userSelect');
     if (!userSelect) return;
@@ -216,8 +239,11 @@ function populateUserDropdown(mode) {
     });
 }
 
+/**
+ * Updates all displayed metrics and UI states.
+ */
 function updateDisplay() {
-    // CRITICAL FIX: Do not proceed if DOM is not fully ready (prevents TypeError on line 279)
+    // CRITICAL FIX: Do not proceed if DOM is not fully ready 
     if (!window.appData.isDomReady) return;
 
     const today = formatDateStandard(new Date());
@@ -235,7 +261,6 @@ function updateDisplay() {
     // 1. Update Mode Display and Button States
     if (window.appData.mode) {
         const modeText = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
-        // Line 279 fix: Check for modeDisplay existence before setting textContent
         if(modeDisplay) {
             modeDisplay.textContent = modeText;
             modeDisplay.classList.remove('bg-gray-500', 'bg-red-600', 'bg-emerald-600');
@@ -356,8 +381,9 @@ function updateDisplay() {
     renderLivePrepReport(livePrepData);
 }
 
-// --- Selection Handlers ---
-
+/**
+ * Handles mode selection (Kitchen or Return).
+ */
 function setMode(mode) {
     if (mode !== 'kitchen' && mode !== 'return') return;
     
@@ -378,6 +404,9 @@ function setMode(mode) {
     updateDisplay();
 }
 
+/**
+ * Handles user selection.
+ */
 function selectUser(userName) {
     const user = USERS.find(u => u.name === userName);
     if (!user) {
@@ -407,6 +436,9 @@ function selectUser(userName) {
     updateDisplay();
 }
 
+/**
+ * Handles dish letter selection (Kitchen mode only).
+ */
 function selectDishLetter(value) {
     if (window.appData.mode !== 'kitchen' || !window.appData.user) {
          showMessage("❌ ERROR: User or Mode not properly set.", 'error');
@@ -427,6 +459,9 @@ function selectDishLetter(value) {
 
 // --- Core Scanning, Export, Report, and Maintenance Logic ---
 
+/**
+ * Activates the scanner input.
+ */
 function startScanning() {
     const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
 
@@ -442,6 +477,9 @@ function startScanning() {
     updateDisplay();
 }
 
+/**
+ * Deactivates the scanner input.
+ */
 function stopScanning() {
     window.appData.scanning = false;
     const scanInput = document.getElementById('scanInput');
@@ -450,6 +488,9 @@ function stopScanning() {
     updateDisplay();
 }
 
+/**
+ * Main handler for VYT scan input.
+ */
 function processScan(vytUrl) {
     if (!window.appData.scanning || !window.appData.user) {
         showMessage("❌ ERROR: Scanner not active or user not selected.", 'error');
@@ -487,6 +528,9 @@ function processScan(vytUrl) {
     if(scanInput) scanInput.value = '';
 }
 
+/**
+ * Handles bowl prep (Kitchen Scan).
+ */
 function kitchenScan(vytUrl, timestamp) {
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
@@ -524,6 +568,9 @@ function kitchenScan(vytUrl, timestamp) {
     };
 }
 
+/**
+ * Handles bowl return (Return Scan).
+ */
 function returnScan(vytUrl, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
 
@@ -557,6 +604,9 @@ function returnScan(vytUrl, timestamp) {
     };
 }
 
+/**
+ * Processes JSON customer data to convert Prepared Bowls to Active Bowls.
+ */
 function processJSONData(jsonString) {
     if (!window.appData.user) {
         showMessage("❌ ERROR: Please select a User before uploading data.", 'error');
@@ -646,6 +696,9 @@ function processJSONData(jsonString) {
     }
 }
 
+/**
+ * Exports data structures as JSON files.
+ */
 function exportData(data, filename) {
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
@@ -678,6 +731,9 @@ function exportAllData() {
     exportData(fullData, `full_bowl_data_${formatDateStandard(new Date())}.json`);
 }
 
+/**
+ * Calculates LIVE statistics for prepared dishes (Kitchen Scans), sorted by Dish Letter then User.
+ */
 function getLivePrepReport() {
     const { start, end } = getReportingDayTimestamp();
     
@@ -718,6 +774,9 @@ function getLivePrepReport() {
     return statsArray;
 }
 
+/**
+ * Renders the live statistics table.
+ */
 function renderLivePrepReport(stats) {
     const container = document.getElementById('livePrepReportBody');
     if (!container) return;
@@ -746,6 +805,9 @@ function renderLivePrepReport(stats) {
     container.innerHTML = html;
 }
 
+/**
+ * Runs cleanup for old returned bowl records after 10 PM.
+ */
 function checkDailyDataReset() {
     const now = new Date();
     const cutoffHour = 22; // 10 PM
@@ -767,6 +829,9 @@ function checkDailyDataReset() {
     }
 }
 
+/**
+ * Manually resets prepared bowls and scan history for the current reporting cycle.
+ */
 function resetTodaysPreparedBowls() {
     const { start, end } = getReportingDayTimestamp();
 
