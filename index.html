@@ -136,7 +136,7 @@
         }
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr)); /* Changed to 2 columns */
+            grid-template-columns: repeat(4, minmax(0, 1fr)); /* RESTORED 4 columns */
             gap: 1rem; 
             padding-top: 0.5rem;
             border-top: 1px solid var(--color-border);
@@ -402,7 +402,16 @@
                     <p class="metric-label">Prepared Today</p>
                     <p id="preparedTodayCount" class="metric-value text-accent-pink">0</p>
                 </div>
-                <!-- Active Count and Returned Count removed as requested -->
+                <!-- 💥 REINSTATED ACTIVE COUNT 💥 -->
+                <div class="metric-item card-subtle">
+                    <p class="metric-label">Active (Out)</p>
+                    <p id="activeCount" class="metric-value text-accent-red">0</p>
+                </div>
+                <!-- 💥 REINSTATED RETURNED COUNT 💥 -->
+                <div class="metric-item card-subtle">
+                    <p class="metric-label">Returned Today</p>
+                    <p id="exportReturnCount" class="metric-value text-accent-indigo">0</p>
+                </div>
             </div>
         </section>
         
