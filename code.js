@@ -24,8 +24,8 @@ window.appData = {
     lastSync: null,
     isDomReady: false, 
     isInitialized: false, 
-    scanTimer: null, // Timer used for debouncing input in the final fix
-    isProcessingScan: false, // NEW FLAG to prevent double-processing
+    scanTimer: null, // Timer used for debouncing input
+    isProcessingScan: false, // FLAG: Prevents the app from accepting new scans during the sync operation
 };
 
 const USERS = [
@@ -1151,6 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 💥 FINAL SCANNER FIX: Robust Debounce Input Capture
         scanInput.addEventListener('input', (e) => {
             const scannedValue = e.target.value.trim();
+            // Length check is crucial for performance and avoiding single keypresses
             if (scannedValue.length > 5) { 
                 
                 if (window.appData.scanTimer) {
@@ -1159,12 +1160,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Set a short delay (50ms) to ensure the entire VYT string has been written
                 window.appData.scanTimer = setTimeout(() => {
+                    // Check if input value is stable and scanning is active
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
                         processScan(scannedValue);
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 50); // Increased to 50ms for reliable high-speed capture
+                }, 50); 
             }
         });
         
