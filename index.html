@@ -1,3 +1,4 @@
+[Image of the final simplified UI]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -134,9 +135,10 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.75rem;
         }
+        /* Metrics grid now 2 columns on desktop */
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem; 
             padding-top: 0.5rem;
             border-top: 1px solid var(--color-border);
@@ -278,6 +280,16 @@
             text-align: left;
             font-weight: 600;
         }
+        .table-data-cell {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            color: var(--color-text-light);
+        }
+        .table-empty-cell {
+            padding: 0.5rem 0.75rem;
+            text-align: center;
+            color: var(--color-text-secondary);
+        }
         .data-table tbody tr:hover {
             background-color: var(--color-bg-light-card);
         }
@@ -364,7 +376,7 @@
                     </select>
                 </div>
 
-                <!-- 💥 Dish Selection Section - Added 'hidden' class back for initial state 💥 -->
+                <!-- Dish Selection Section is conditionally hidden by code.js -->
                 <div class="flex-1 hidden" id="dishSection"> 
                     <label for="dishLetterSelect" class="input-label">Dish Letter (A-Z / 1-4)</label>
                     <select id="dishLetterSelect" onchange="selectDishLetter(this.value)" class="app-select" disabled>
@@ -387,7 +399,7 @@
                 <input type="text" id="scanInput" placeholder="Select User and Press START..." class="scanner-input input-glow" disabled autocomplete="off">
             </div>
 
-            <!-- Metrics Panel -->
+            <!-- Metrics Panel: Only Kitchen/User Metrics Remain -->
             <div class="metrics-grid">
                 <div class="metric-item card-subtle">
                     <p class="metric-label">User Scans (<span id="myDishLetterLabel">---</span>)</p>
@@ -396,14 +408,6 @@
                 <div class="metric-item card-subtle">
                     <p class="metric-label">Prepared Today</p>
                     <p id="preparedTodayCount" class="metric-value text-accent-pink">0</p>
-                </div>
-                <div class="metric-item card-subtle">
-                    <p class="metric-label">Active (Out)</p>
-                    <p id="activeCount" class="metric-value text-accent-red">0</p>
-                </div>
-                <div class="metric-item card-subtle">
-                    <p class="metric-label">Returned Today</p>
-                    <p id="exportReturnCount" class="metric-value text-accent-indigo">0</p>
                 </div>
             </div>
         </section>
@@ -426,7 +430,27 @@
                 </table>
             </div>
         </section>
-
+        
+        <!-- MISSING BOWLS FOR CHARGING (Management Section) -->
+        <section class="app-card missing-bowls-card">
+            <h2 class="section-title text-accent-red">🚨 Missing Bowls (Charge Report)</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr class="table-header-row">
+                            <th class="table-header-cell">Dish</th>
+                            <th class="table-header-cell">Company</th>
+                            <th class="table-header-cell">Customer</th>
+                            <th class="table-header-cell">VYT ID (Last 12)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="missingBowlsBody">
+                        <tr><td colspan="4" class="table-empty-cell text-accent-green">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
         <!-- Data Management -->
         <section class="app-card data-management-section">
             <h2 class="section-title">Data Management & Export</h2>
