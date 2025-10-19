@@ -25,6 +25,7 @@ window.appData = {
     isDomReady: false, 
     isInitialized: false, 
     scanTimer: null, // Timer used for debouncing input in the final fix
+    isProcessingScan: false, // NEW FLAG to prevent double-processing
 };
 
 const USERS = [
@@ -594,6 +595,14 @@ function processScan(vytUrl) {
         return;
     }
     
+    // Prevent re-processing while current scan is being handled
+    if (window.appData.isProcessingScan) {
+        console.warn("Scan in progress. Ignoring current input.");
+        return;
+    }
+    
+    window.appData.isProcessingScan = true; // Set flag to lock processing
+
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
@@ -620,7 +629,7 @@ function processScan(vytUrl) {
         showMessage(result.message, 'error');
     }
     
-    // Note: Do NOT clear the input here. It is handled by the input listener to ensure proper timing.
+    window.appData.isProcessingScan = false; // Release flag after sync starts
     updateDisplay(); 
 }
 
@@ -1148,14 +1157,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearTimeout(window.appData.scanTimer);
                 }
 
-                // Set a short delay (20ms) to ensure the entire VYT string has been written
+                // Set a short delay (50ms) to ensure the entire VYT string has been written
                 window.appData.scanTimer = setTimeout(() => {
-                    if (scanInput.value.trim() === scannedValue && window.appData.scanning) {
+                    if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
                         processScan(scannedValue);
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 20); 
+                }, 50); // Increased to 50ms for reliable high-speed capture
             }
         });
         
