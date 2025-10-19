@@ -687,11 +687,10 @@ function flattenOrderData(order) {
             const usernames = dish.users.map(user => String(user.username).trim());
             
             // This is the core logic: check if this dish/order combination already exists in the map
-            // Use spread operator or simple assignment to ensure it's always an array before concatenating
             const existingRecord = dishUserMap.get(virtualVytBase);
 
             if (existingRecord) {
-                // Fix: Ensure we are concatenating to an array
+                // Fix: Concatenate to the existing customer array
                 existingRecord.customer = existingRecord.customer.concat(usernames);
             } else {
                 // Create the base record
