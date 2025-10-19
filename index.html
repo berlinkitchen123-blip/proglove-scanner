@@ -16,12 +16,12 @@
     <style>
         /* --- Color Variables --- */
         :root {
-            --color-bg-dark: #111827;       /* Deep Black/Gray */
-            --color-bg-card: #273041;       /* Dark Blue/Gray Card Background */
+            --color-bg-dark: #111827;      /* Deep Black/Gray */
+            --color-bg-card: #273041;      /* Dark Blue/Gray Card Background */
             --color-bg-light-card: #37475a; /* Lighter Blue/Gray for subtle background elements */
-            --color-text-light: #f3f4f6;    /* Off-White */
+            --color-text-light: #f3f4f6;   /* Off-White */
             --color-text-secondary: #a0aec0;/* Soft Gray */
-            --color-border: #4a5568;        /* Medium Gray Border */
+            --color-border: #4a5568;       /* Medium Gray Border */
             
             /* Vibrant Accent Colors */
             --color-accent-pink: #ff6e96;   /* Bright Coral Pink (Data/Header) */
@@ -29,8 +29,8 @@
             --color-accent-red: #ff5252;    /* Bright Red (Error/Metrics) */
             --color-accent-indigo: #7986cb; /* Soft Indigo (Returns) */
             
-            --color-success: #00e0b3;       /* Action Success */
-            --color-error: #ff5252;         /* Action Error */
+            --color-success: #00e0b3;      /* Action Success */
+            --color-error: #ff5252;        /* Action Error */
         }
 
         /* --- Global & Base Styles --- */
@@ -178,6 +178,12 @@
             border-color: var(--color-accent-pink);
             outline: none;
             box-shadow: 0 0 10px rgba(255, 110, 150, 0.5); 
+        }
+        
+        /* Style for scanner error messages */
+        .scanning-error::placeholder {
+            color: var(--color-error);
+            opacity: 1; /* Ensure it's fully visible */
         }
 
         .app-textarea {
@@ -459,6 +465,7 @@
     </div>
 
     <!-- Script links -->
-    <script src="code.js"></script> 
+    <script src="code.js"></script>
 </body>
 </html>
+
