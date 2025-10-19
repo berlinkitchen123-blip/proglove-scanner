@@ -126,6 +126,9 @@
             flex-wrap: wrap;
         }
         .flex-1 { flex: 1 1 0%; }
+        /* CRITICAL CSS FIX: Use !important to guarantee it hides immediately */
+        .hidden { display: none !important; } 
+
         .grid-col-2-group {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -361,8 +364,8 @@
                     </select>
                 </div>
 
-                <!-- 💥 Dish Selection Section - Removed 'hidden' class 💥 -->
-                <div class="flex-1" id="dishSection"> 
+                <!-- 💥 Dish Selection Section - Added 'hidden' class back for initial state 💥 -->
+                <div class="flex-1 hidden" id="dishSection"> 
                     <label for="dishLetterSelect" class="input-label">Dish Letter (A-Z / 1-4)</label>
                     <select id="dishLetterSelect" onchange="selectDishLetter(this.value)" class="app-select" disabled>
                         <option value="" disabled selected>-- Select Dish --</option>
