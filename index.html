@@ -20,26 +20,26 @@
     <!-- Fixed container for messages -->
     <div id="messageContainer" class="message-container"></div>
 
-    <div class="container mx-auto space-y-6 max-w-4xl">
+    <div class="container app-spacing">
         
         <!-- Header -->
         <header class="app-header">
             <h1 class="header-title">🧤 PROGLOVE BOWL TRACKING</h1>
-            <p class="text-gray-400 mt-1">Real-time Prep & Return Synchronization</p>
+            <p class="header-subtitle">Real-time Prep & Return Synchronization</p>
         </header>
 
         <!-- Mode Selection (Step 1) -->
         <section class="app-card" id="modeSelectionCard">
             <h2 class="section-title">1. Select Operation Mode</h2>
             <div class="flex-row-group">
-                <button id="kitchenBtn" onclick="setMode('kitchen')" class="mode-button bg-gray-600 transition duration-150 hover:bg-emerald-600">🍳 KITCHEN PREP</button>
-                <button id="returnBtn" onclick="setMode('return')" class="mode-button bg-gray-600 transition duration-150 hover:bg-red-600">🔄 RETURN SCAN</button>
+                <button id="kitchenBtn" onclick="setMode('kitchen')" class="mode-button btn-neutral hover-green">🍳 KITCHEN PREP</button>
+                <button id="returnBtn" onclick="setMode('return')" class="mode-button btn-neutral hover-red">🔄 RETURN SCAN</button>
             </div>
-            <div id="modeDisplay" class="status-box bg-gray-500 mt-4">Status: Please Select Mode</div>
+            <div id="modeDisplay" class="status-box status-neutral mt-4">Status: Please Select Mode</div>
         </section>
 
         <!-- User & Dish Selection (Step 2) -->
-        <section class="app-card opacity-50 transition duration-300" id="userSelectionCard">
+        <section class="app-card opacity-half transition-slow" id="userSelectionCard">
             <h2 class="section-title">2. Select User & Dish</h2>
             
             <div class="flex-row-group">
@@ -60,12 +60,12 @@
         </section>
 
         <!-- Scanning Controls (Step 3) -->
-        <section class="app-card opacity-50 transition duration-300" id="scanningCard">
+        <section class="app-card opacity-half transition-slow" id="scanningCard">
             <h2 class="section-title">3. Scanner Input</h2>
             
             <div class="flex-row-group">
-                <button id="startBtn" onclick="startScanning()" class="mode-button accent-green hover:bg-emerald-700 transition duration-150" disabled>▶ START SCANNER</button>
-                <button id="stopBtn" onclick="stopScanning()" class="mode-button accent-red hover:bg-red-700 transition duration-150" disabled>⏹ STOP SCANNER</button>
+                <button id="startBtn" onclick="startScanning()" class="mode-button btn-primary accent-green" disabled>▶ START SCANNER</button>
+                <button id="stopBtn" onclick="stopScanning()" class="mode-button btn-secondary accent-red" disabled>⏹ STOP SCANNER</button>
             </div>
             
             <div class="relative mt-4">
@@ -74,21 +74,21 @@
 
             <!-- Metrics Panel -->
             <div class="metrics-grid">
-                <div class="text-center">
-                    <p class="text-xs text-gray-400">User Scans (<span id="myDishLetterLabel">---</span>)</p>
-                    <p id="myScansCount" class="accent-text-green metric-value">0</p>
+                <div class="metric-item">
+                    <p class="metric-label">User Scans (<span id="myDishLetterLabel">---</span>)</p>
+                    <p id="myScansCount" class="metric-value text-accent-green">0</p>
                 </div>
-                <div class="text-center">
-                    <p class="text-xs text-gray-400">Prepared Today</p>
-                    <p id="preparedTodayCount" class="accent-text-pink metric-value">0</p>
+                <div class="metric-item">
+                    <p class="metric-label">Prepared Today</p>
+                    <p id="preparedTodayCount" class="metric-value text-accent-pink">0</p>
                 </div>
-                <div class="text-center">
-                    <p class="text-xs text-gray-400">Active (Out)</p>
-                    <p id="activeCount" class="text-red-400 metric-value">0</p>
+                <div class="metric-item">
+                    <p class="metric-label">Active (Out)</p>
+                    <p id="activeCount" class="metric-value text-accent-red">0</p>
                 </div>
-                <div class="text-center">
-                    <p class="text-xs text-gray-400">Returned Today</p>
-                    <p id="exportReturnCount" class="text-indigo-400 metric-value">0</p>
+                <div class="metric-item">
+                    <p class="metric-label">Returned Today</p>
+                    <p id="exportReturnCount" class="metric-value text-accent-indigo">0</p>
                 </div>
             </div>
         </section>
@@ -96,17 +96,17 @@
         <!-- Live Statistics Table -->
         <section class="app-card">
             <h2 class="section-title">Live Prep Report (10 PM Cycle)</h2>
-            <div class="overflow-x-auto bg-gray-900 rounded-lg">
+            <div class="table-container">
                 <table class="data-table">
                     <thead>
-                        <tr class="accent-text-pink bg-gray-700">
-                            <th class="px-3 py-2 text-left font-semibold">Dish</th>
-                            <th class="px-3 py-2 text-left font-semibold">User</th>
-                            <th class="px-3 py-2 text-left font-semibold">Count</th>
+                        <tr class="table-header-row">
+                            <th class="table-header-cell">Dish</th>
+                            <th class="table-header-cell">User</th>
+                            <th class="table-header-cell">Count</th>
                         </tr>
                     </thead>
                     <tbody id="livePrepReportBody">
-                        <tr><td colspan="3" class="px-3 py-2 text-center text-gray-400">No kitchen scans recorded during this cycle.</td></tr>
+                        <tr><td colspan="3" class="table-empty-cell">No kitchen scans recorded during this cycle.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -116,20 +116,20 @@
         <section class="app-card data-management-section">
             <h2 class="section-title">Data Management & Export</h2>
             
-            <p id="lastSyncInfo" class="text-xs text-gray-500">Awaiting sync...</p>
+            <p id="lastSyncInfo" class="sync-status-text">Awaiting sync...</p>
 
             <div class="grid-col-2-group">
-                <button onclick="exportActiveBowls()" class="mode-button bg-blue-600 hover:bg-blue-700 text-sm">📥 Export Active Bowls</button>
-                <button onclick="exportReturnData()" class="mode-button bg-purple-600 hover:bg-purple-700 text-sm">📥 Export Returns</button>
-                <button onclick="exportAllData()" class="col-span-2 mode-button bg-indigo-600 hover:bg-indigo-700 text-sm">📊 Export ALL Data</button>
+                <button onclick="exportActiveBowls()" class="mode-button bg-blue-600 text-sm">📥 Export Active Bowls</button>
+                <button onclick="exportReturnData()" class="mode-button bg-purple-600 text-sm">📥 Export Returns</button>
+                <button onclick="exportAllData()" class="col-span-2 mode-button bg-indigo-600 text-sm">📊 Export ALL Data</button>
             </div>
 
             <div class="border-t border-gray-700 pt-4 space-y-3">
-                <h3 class="text-gray-300 font-semibold">JSON Import (Customer Data Patch)</h3>
+                <h3 class="input-label text-gray-300 font-semibold">JSON Import (Customer Data Patch)</h3>
                 <textarea id="jsonData" placeholder='Paste JSON data here (e.g., [{"vytUrl": "URL_HERE", "company": "Company", "customer": "Name", "dishLetter": "A"}]). NOTE: vytUrl is mandatory for activation.' class="app-textarea"></textarea>
                 <div class="flex-row-group">
-                    <button onclick="processJSONData(document.getElementById('jsonData').value)" class="mode-button bg-yellow-600 hover:bg-yellow-700 text-sm">🔄 Patch Customer Data</button>
-                    <button onclick="resetTodaysPreparedBowls()" class="mode-button bg-red-800 hover:bg-red-900 text-sm">🗑️ Reset Prepared/Scans</button>
+                    <button onclick="processJSONData(document.getElementById('jsonData').value)" class="mode-button bg-yellow-600 text-sm">🔄 Patch Customer Data</button>
+                    <button onclick="resetTodaysPreparedBowls()" class="mode-button bg-red-800 text-sm">🗑️ Reset Prepared/Scans</button>
                 </div>
             </div>
         </section>
