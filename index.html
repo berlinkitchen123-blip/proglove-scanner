@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!--
+    *** CRITICAL FIX: UTF-8 ENCODING ***
+    This meta tag ensures all special characters (like currency symbols, non-Latin text, or complex characters)
+    are correctly displayed in the browser, fixing the common character error.
+-->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProGlove Scanner - Complete System</title>
@@ -99,13 +104,27 @@ background: #333;
 <p>Real-time Tracking • Data Export • Daily Reset</p>
 </div>
 
+<!-- Message Container (For showMessage in code.js) -->
+<div id="messageContainer" class="fixed top-0 right-0 p-4 z-50 flex flex-col items-end">
+    <!-- Messages will be prepended here by showMessage() function in code.js -->
+</div>
+
 <div class="card">
 <h3>📊 SYSTEM STATUS</h3>
-<div class="system-status" id="systemStatus">
-✅ Local Storage Mode
+
+<!-- ADDED: Connection Status (Updated instantly by code.js) -->
+<div class="system-status" id="connectionStatus" style="background: #444; border-left: 4px solid #f57c00; color: white;">
+    Loading Connection Status...
 </div>
-<div class="backup-status" id="backupStatus">
-💾 Data saved locally
+
+<!-- EXISTING: Mode Status (Uses modeDisplay ID from code.js logic) -->
+<div class="system-status mt-2" id="modeDisplay">
+    Kitchen Prep Mode
+</div>
+
+<!-- EXISTING: Scanner Status -->
+<div class="backup-status" id="scanStatus">
+    Scanner OFF
 </div>
 </div>
 
@@ -119,16 +138,24 @@ background: #333;
 
 <div class="card">
 <h3>👤 SELECT USER</h3>
-<select class="dropdown" id="userDropdown" onchange="selectUser()">
+<!-- DROPDOWN POPULATED BY JS -->
+<select class="dropdown" id="userSelect">
 <option value="">-- Select User --</option>
 </select>
+<div class="local-data mt-2">
+    Selected User: <strong id="selectedUser"></strong>
+</div>
 </div>
 
-<div class="card hidden" id="dishSection">
+<div class="card" id="dishSection">
 <h3>📝 SELECT DISH LETTER</h3>
-<select class="dropdown" id="dishDropdown" onchange="selectDishLetter()">
+<!-- DROPDOWN POPULATED BY JS -->
+<select class="dropdown" id="dishLetterSelect">
 <option value="">-- Select Dish Letter --</option>
 </select>
+<div class="local-data mt-2">
+    Selected Dish: <strong id="selectedDishLetter"></strong>
+</div>
 </div>
 
 <!-- SCANNING SECTION -->
@@ -139,10 +166,11 @@ background: #333;
 <button class="scan-btn stop-btn" id="stopBtn" onclick="stopScanning()" disabled>⏹ STOP SCANNING</button>
 </div>
 
-<input type="text" class="proglove-input" id="progloveInput" placeholder="Click START SCANNING to begin..." disabled>
+<!-- SCAN INPUT - ProGlove sends data here -->
+<input type="text" class="proglove-input" id="scanInput" placeholder="Click 'START SCANNING' to begin..." disabled>
 
 <div class="response-time">
-Response time: <span id="responseTimeValue">0</span>ms
+<span id="responseTimeValue" class="hidden">0</span>
 </div>
 
 <div class="stats-grid">
@@ -151,39 +179,38 @@ Response time: <span id="responseTimeValue">0</span>ms
 <div class="stat-value active-stat" id="activeCount">0</div>
 </div>
 <div class="stat-item">
-<div class="stat-label" id="prepLabel">Prepared Today</div>
-<div class="stat-value prep-stat" id="prepCount">0</div>
+<div class="stat-label" id="preparedTodayLabel">Prepared Today</div>
+<div class="stat-value prep-stat" id="preparedTodayCount">0</div>
 </div>
 <div class="stat-item">
-<div class="stat-label">My Scans Today</div>
+<div class="stat-label">My Scans (<span id="myDishLetterLabel">A</span>)</div>
 <div class="stat-value kitchen-stat" id="myScansCount">0</div>
 </div>
 </div>
 
-<div class="feedback info" id="feedback">
-✅ System ready - Select mode and user to start
+<!-- Feedback Message Container (code.js handles this via showMessage) -->
+<div id="feedback" class="hidden">
+    <!-- Feedback will be displayed here if messageContainer is not used -->
 </div>
 </div>
 
-<!-- OVERNIGHT STATISTICS TABLE -->
+<!-- LIVE PREP REPORT TABLE -->
 <div class="card">
-<h3>📈 OVERNIGHT SCANNING STATISTICS (10PM-10AM)</h3>
+<h3>📈 LIVE PREP REPORT</h3>
 <div class="local-data">
-<strong>Cycle:</strong> <span id="cycleInfo">Today 10PM - Tomorrow 10AM</span>
+<strong>Reporting Window:</strong> <span id="reportingWindowInfo">10 PM (Yesterday) - 10 PM (Today)</span>
 </div>
-<div id="overnightStats">
+<div id="livePrepReport">
 <table class="data-table">
 <thead>
 <tr>
 <th>Dish</th>
 <th>User</th>
-<th>Bowls</th>
-<th>Start Time</th>
-<th>End Time</th>
+<th>Total</th>
 </tr>
 </thead>
-<tbody id="overnightStatsBody">
-<tr><td colspan="5" style="text-align: center;">No overnight scans yet</td></tr>
+<tbody id="livePrepReportBody">
+<tr><td colspan="3" style="text-align: center;">No kitchen preparation scans recorded during the current reporting window.</td></tr>
 </tbody>
 </table>
 </div>
@@ -204,36 +231,39 @@ Response time: <span id="responseTimeValue">0</span>ms
 </button>
 </div>
 <div class="local-data" id="exportInfo">
-<strong>Data Status:</strong> Active: 0 bowls • Prepared: 0 today • Returns: 0 today
+<div class="data-row">
+    <span class="data-label">Active Bowls:</span> <span id="activeExportCount">0</span>
+</div>
+<div class="data-row">
+    <span class="data-label">Prepared Bowls:</span> <span id="preparedExportCount">0</span>
+</div>
+<div class="data-row">
+    <span class="data-label">Returned Today:</span> <span id="returnedTodayExportCount">0</span>
+</div>
 </div>
 </div>
 
 <!-- JSON DATA PASTE SECTION -->
-        <!-- JSON DATA PASTE SECTION -->
 <div class="card">
     <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
     <div class="json-upload">
-        <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
-        <div class="card">
-            <h3>📁 PASTE CUSTOMER DATA (JSON)</h3>
-            <div class="json-upload">
-                <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (EXACT FORMAT):
+        <textarea class="json-textarea" id="jsonData" placeholder='Paste JSON data here (Example):
 [
  {
-   "vyt_code": "VYT12345",
-   "company": "Company Name", 
+   "vytUrl": "https://vyt.co/VYT12345",
+   "company": "Company Name",
    "customer": "Customer Name",
    "dish": "A"
  }
 ]
 
-Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
+Make sure VYT URLs match exactly with scanned bowl codes!'></textarea>
         <div class="sync-controls">
-            <button class="sync-btn upload-btn" onclick="processJSONData()">🔄 PATCH CUSTOMER DATA</button>
+            <button class="sync-btn upload-btn" onclick="processJSONData(document.getElementById('jsonData').value)">🔄 PATCH CUSTOMER DATA</button>
             <button class="sync-btn backup-btn" onclick="document.getElementById('jsonData').value=''">🗑️ CLEAR</button>
         </div>
         
-        <!-- ADD THE RESET BUTTON HERE -->
+        <!-- RESET BUTTON -->
         <div class="sync-controls" style="margin-top: 10px;">
             <button onclick="resetTodaysPreparedBowls(); updateDisplay();" class="sync-btn" style="background: #f57c00; color: white;">
                 🔄 RESET TODAY'S PREPARED BOWLS
@@ -249,7 +279,8 @@ Make sure VYT codes match exactly with scanned bowl codes!'></textarea>
     </div>
 </div>
 
-<!-- Main Application Logic -->
+<!-- Main Application Logic (Code is kept in external JS file: code.js) -->
 <script src="code.js"></script>
 </body>
 </html>
+
