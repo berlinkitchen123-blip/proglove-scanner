@@ -361,7 +361,8 @@
                     </select>
                 </div>
 
-                <div class="flex-1 hidden" id="dishSection">
+                <!-- 💥 Dish Selection Section - Removed 'hidden' class 💥 -->
+                <div class="flex-1" id="dishSection"> 
                     <label for="dishLetterSelect" class="input-label">Dish Letter (A-Z / 1-4)</label>
                     <select id="dishLetterSelect" onchange="selectDishLetter(this.value)" class="app-select" disabled>
                         <option value="" disabled selected>-- Select Dish --</option>
@@ -396,7 +397,7 @@
                 <div class="metric-item card-subtle">
                     <p class="metric-label">Active (Out)</p>
                     <p id="activeCount" class="metric-value text-accent-red">0</p>
-                </p>
+                </div>
                 <div class="metric-item card-subtle">
                     <p class="metric-label">Returned Today</p>
                     <p id="exportReturnCount" class="metric-value text-accent-indigo">0</p>
