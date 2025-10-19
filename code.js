@@ -379,8 +379,9 @@ function updateDisplay() {
     const myScansCountEl = document.getElementById('myScansCount');
     if (myScansCountEl) myScansCountEl.textContent = myScansCount;
     
+    // 💥 FIX APPLIED HERE: myDishLetterLabelEl
     const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
-    if (myDishLetterLabelEl) myDishLetterLabelI.textContent = window.appData.dishLetter || '---';
+    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
 
     // Update Scan Status/Input state
     const scanStatusEl = document.getElementById('scanStatus');
@@ -413,8 +414,6 @@ function updateDisplay() {
     
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
-    
-    // NOTE: Removed call to renderMissingBowlsReport();
 }
 
 /**
