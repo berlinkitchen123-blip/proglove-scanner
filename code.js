@@ -618,9 +618,9 @@ function processScan(vytUrl) {
             return; // Stop processing and logging immediately
         }
         
-        // **NEW LOGIC CHECK:** If active, we don't block. We recycle the bowl by deleting it from active and creating new prepared.
+        // **NEW LOGIC CHECK:** If active, we don't block. We proceed to kitchenScan for recycling.
         if (isAlreadyActive) {
-            // Do NOT return error here, proceed to kitchenScan for recycling
+            // Note: The logic in kitchenScan handles the recycling (delete old active, create new prepared).
         }
     }
     
@@ -667,13 +667,15 @@ function processScan(vytUrl) {
  * Handles bowl prep (Kitchen Scan).
  */
 function kitchenScan(vytUrl, timestamp) {
+    // Note: Duplicate check moved to processScan to run before anything is logged.
+    
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     
     let statusMessage = "started a new prep cycle.";
 
     // **💥 IMPLEMENTING RECYCLE LOGIC (RULE 1) 💥**
-    // IF the bowl is in Active (Out with customer) OR already in Prepared (Needs correction)
+    // IF the bowl is in Active (Out with customer)
     if (activeIndex !== -1) {
         // DELETE from Active (This is the crucial 'Recycle' step you requested)
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
@@ -682,8 +684,8 @@ function kitchenScan(vytUrl, timestamp) {
         statusMessage = "closed active cycle and started new prep (Recycled).";
     }
     
+    // Logic 2: If the bowl was in Prepared, clear old prepared record for new record
     if (preparedIndex !== -1) {
-        // Clear old prepared record for new record
         window.appData.preparedBowls.splice(preparedIndex, 1);
         statusMessage = "cleared old prepared record for new prep.";
     }
@@ -714,7 +716,7 @@ function kitchenScan(vytUrl, timestamp) {
 function returnScan(vytUrl, timestamp) {
     // Note: Duplicate check moved to processScan to run before anything is logged.
 
-    const returnDate = formatDateStandard(new Date(timestamp));
+    const returnDate = formatDateDate(new Date(timestamp));
 
     // 1. Try to find the bowl in Prepared state and move to Returned
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
