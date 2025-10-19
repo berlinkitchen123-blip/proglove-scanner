@@ -1,5 +1,6 @@
 // ProGlove Scanner - Complete Bowl Tracking System
-// This file is configured for Firebase Realtime Database connection using Canvas environment variables.
+// This file contains all the JavaScript logic for the bowl tracking application.
+// VYT codes are treated as full URLs. Logic updated for immediate statistics refresh.
 
 // --- GLOBAL STATE ---
 window.appData = {
@@ -20,10 +21,9 @@ window.appData = {
     appDataRef: null,
     lastDataReset: null, 
     lastSync: null,
-    isFirebaseConnected: false, // Tracks connection status
 };
 
-// CORRECTED USER LIST
+// CORRECTED USER LIST (વપરાશકર્તાઓની સૂચિ)
 const USERS = [
     {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
     {name: "Jash", role: "Kitchen"}, {name: "Joes", role: "Kitchen"}, 
@@ -33,14 +33,14 @@ const USERS = [
     {name: "Adesh", role: "Return"}
 ];
 
-// EXTENDED LIST OF ALL VALID DISH LETTERS/NUMBERS (A-Z, then 1-4)
+// EXTENDED LIST OF ALL VALID DISH LETTERS/NUMBERS (બધા માન્ય ડિશ લેટર/નંબરો)
 const DISH_LETTERS = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
     '1', '2', '3', '4' 
 ];
 
-// --- UTILITY FUNCTIONS ---
+// --- UTILITY FUNCTIONS (ઉપયોગી કાર્યો) ---
 
 /**
  * Converts an ISO timestamp or Date object to the standard YYYY-MM-DD format.
@@ -62,14 +62,14 @@ function formatDateStandard(date) {
  */
 function getReportingDayTimestamp() {
     const now = new Date();
-    const cutoffHour = 22; // 10 PM
+    const cutoffHour = 22; // રાત્રે 10 વાગ્યે
 
     let startOfReportingDay = new Date(now);
     let endOfReportingDay = new Date(now);
 
     // If current time is BEFORE 10 PM (22:00) today, the reporting day started yesterday at 10 PM.
     if (now.getHours() < cutoffHour) {
-        startOfReportingDay.setDate(now.getDate() - 1); // Start is yesterday
+        startOfReportingDay.setDate(now.getDate() - 1); // શરૂઆત ગઈકાલે
     }
     
     // Set the start time to 10:00 PM (22:00:00.000)
@@ -92,8 +92,8 @@ function getReportingDayTimestamp() {
 
 function showMessage(message, type = 'info', duration = 3000) {
     const messageContainer = document.getElementById('messageContainer');
-    if (!messageContainer) return; // Exit if container isn't ready
-    
+    if (!messageContainer) return;
+
     const msgElement = document.createElement('div');
     msgElement.className = `p-3 rounded-lg shadow-xl text-center text-sm mb-2 transition-all duration-300`;
     
@@ -120,50 +120,39 @@ function showMessage(message, type = 'info', duration = 3000) {
 // --- FIREBASE SETUP & SYNC (SOLE SOURCE OF TRUTH) ---
 
 /**
- * Initializes Firebase using environment variables (__firebase_config, __app_id).
+ * Initializes Firebase, sets up the Realtime Database reference.
  */
 async function initializeFirebase() {
     try {
-        // Use global environment variables for secure setup
+        // Firebase config is loaded from the environment variables
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         if (!firebaseConfig) {
             console.error("Firebase config is missing.");
-            window.appData.isFirebaseConnected = false; // <-- SET FALSE
-            showMessage("❌ Firebase configuration is missing. Running local-only mode.", 'error');
-            updateDisplay(); // Update UI status immediately
+            showMessage("❌ Firebase configuration is missing. (Firebase સેટિંગ્સ ખૂટે છે)", 'error');
             return;
         }
 
+        // We assume the firebase library is loaded via script tags in the main HTML file.
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
              console.error("Firebase library not loaded.");
-             window.appData.isFirebaseConnected = false; // <-- SET FALSE
-             showMessage("❌ Firebase SDK not loaded. Check HTML scripts.", 'error');
-             updateDisplay(); // Update UI status immediately
+             showMessage("❌ Firebase library not loaded. Check HTML scripts. (Firebase લાઇબ્રેરી લોડ નથી)", 'error');
              return;
         }
 
-        // Initialize the app and database connection
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
         
-        // Define the public data path in Realtime Database: /artifacts/{appId}/public/data/bowl_data
+        // Public data path: /artifacts/{appId}/public/data/bowl_data
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
-        
-        window.appData.isFirebaseConnected = true; // <-- SET TRUE ON SUCCESS
-        
-        // FIX: Update UI status immediately after successful connection, before data load
-        updateDisplay(); 
         
         loadFromFirebase();
 
-        showMessage("✅ Application initialized and connecting to Cloud.", 'success');
+        showMessage("✅ Application initialized. Waiting for user selection. (એપ્લિકેશન શરૂ થઈ)", 'success');
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        window.appData.isFirebaseConnected = false; // <-- SET FALSE ON ERROR
-        showMessage("❌ Firebase failed to initialize. Check configuration. Running Local Mode.", 'error');
-        updateDisplay(); // Update UI status immediately
+        showMessage("❌ Firebase failed to initialize. Check configuration. (શરૂઆતમાં નિષ્ફળ)", 'error');
     }
 }
 
@@ -193,7 +182,7 @@ function loadFromFirebase() {
         }
     }, (error) => {
         console.error("Firebase ON listener failed:", error);
-        showMessage("❌ Live data feed error.", 'error');
+        showMessage("❌ Live data feed error. (લાઇવ ડેટા ફીડમાં ભૂલ)", 'error');
     });
 }
 
@@ -214,6 +203,7 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
+    // Use .set() on the main reference path for a single update
     const path = window.appData.appDataRef.path.toString();
     firebase.database().ref(path).set(dataToSave)
         .then(() => {
@@ -221,37 +211,17 @@ function syncToFirebase() {
         })
         .catch(error => {
             console.error("Firebase synchronization failed:", error);
-            showMessage("❌ Data sync failed. Check connection.", 'error');
+            showMessage("❌ Data sync failed. Check connection. (ડેટા સિંક નિષ્ફળ)", 'error');
         });
 }
 
-// --- UI AND MODE MANAGEMENT ---
+// --- UI AND MODE MANAGEMENT (યુઆઈ અને મોડ મેનેજમેન્ટ) ---
 
 function updateDisplay() {
     const today = formatDateStandard(new Date());
 
-    // --- CONNECTION STATUS DISPLAY (NEW LOGIC) ---
-    const connectionStatusDiv = document.getElementById('connectionStatus');
-    if (connectionStatusDiv) {
-        if (window.appData.isFirebaseConnected) {
-            connectionStatusDiv.textContent = '✅ CONNECTED: Firebase Realtime';
-            connectionStatusDiv.style.background = '#34a853'; // Green
-            connectionStatusDiv.style.borderColor = '#34a853';
-            connectionStatusDiv.style.color = 'white';
-        } else {
-            connectionStatusDiv.textContent = '❌ LOCAL MODE: Data Not Synced';
-            connectionStatusDiv.style.background = '#ea4335'; // Red
-            connectionStatusDiv.style.borderColor = '#ea4335';
-            connectionStatusDiv.style.color = 'white';
-        }
-        // Apply base classes and overwrite colors
-        connectionStatusDiv.className = 'system-status'; 
-        connectionStatusDiv.classList.add('mt-2');
-    }
-    // ------------------------------------------
-
     // Update Mode Display
-    const modeText = window.appData.mode === 'kitchen' ? 'Kitchen Prep Mode' : 'Return Scan Mode';
+    const modeText = window.appData.mode === 'kitchen' ? 'Kitchen Prep Mode (રસોડું)' : 'Return Scan Mode (વળતર)';
     const modeDisplay = document.getElementById('modeDisplay');
     if(modeDisplay) {
         modeDisplay.textContent = modeText;
@@ -259,21 +229,20 @@ function updateDisplay() {
             `text-xl font-bold p-2 rounded-lg text-center ${window.appData.mode === 'kitchen' ? 'bg-indigo-600 text-white' : 'bg-red-600 text-white'}`;
     }
     
-    // --- MAIN METRICS (Accurate Inventory/History Count) ---
+    // --- MAIN METRICS ---
+    const activeCountEl = document.getElementById('activeCount');
+    if(activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length;
 
-    // 1. ACTIVE BOWL COUNT (Assigned to Customer)
-    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
-
-    // 2. PREPARED TODAY COUNT (Unassigned, Unknown Customer)
-    document.getElementById('preparedTodayCount').textContent = window.appData.preparedBowls.length;
+    const preparedTodayCountEl = document.getElementById('preparedTodayCount');
+    if(preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
     
-    // 3. RETURNED TODAY COUNT
+    const returnedTodayCountEl = document.getElementById('returnedTodayCount');
     const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
         bowl.returnDate === today
     ).length;
-    document.getElementById('returnedTodayCount').textContent = returnedTodayCount;
+    if(returnedTodayCountEl) returnedTodayCountEl.textContent = returnedTodayCount;
 
-    // 4. MY SCANS COUNT (Dish Letter Specific Count - dependent on selected user/dish)
+    // 4. MY SCANS COUNT (Dish Letter Specific Count)
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp(); 
 
@@ -290,21 +259,29 @@ function updateDisplay() {
         ).length;
     }
 
-    document.getElementById('myScansCount').textContent = myScansCount;
-    document.getElementById('myDishLetterLabel').textContent = window.appData.dishLetter || 'A';
+    const myScansCountEl = document.getElementById('myScansCount');
+    if(myScansCountEl) myScansCountEl.textContent = myScansCount;
+
+    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
+    if(myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || 'A';
 
 
     // Update Scan Status
-    document.getElementById('scanStatus').textContent = window.appData.scanning ? 'Scanner ON' : 'Scanner OFF';
-    document.getElementById('scanStatus').className = 
-        `text-xs font-semibold px-2 py-1 rounded-full ${window.appData.scanning ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'}`;
+    const scanStatusEl = document.getElementById('scanStatus');
+    if(scanStatusEl) {
+        scanStatusEl.textContent = window.appData.scanning ? 'Scanner ON' : 'Scanner OFF';
+        scanStatusEl.className = 
+            `text-xs font-semibold px-2 py-1 rounded-full ${window.appData.scanning ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'}`;
+    }
     
     // Update User/Dish Selectors
-    document.getElementById('selectedUser').textContent = window.appData.user || 'Select User';
-    document.getElementById('selectedDishLetter').textContent = window.appData.dishLetter || 'A';
+    const selectedUserEl = document.getElementById('selectedUser');
+    if(selectedUserEl) selectedUserEl.textContent = window.appData.user || 'Select User';
+
+    const selectedDishLetterEl = document.getElementById('selectedDishLetter');
+    if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || 'A';
     
-    // --- LIVE PREP REPORT (REAL-TIME UPDATE - ALWAYS ON) ---
-    // This runs every time data changes from the database, satisfying the "without selecting user" requirement.
+    // --- LIVE PREP REPORT ---
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
 }
@@ -312,7 +289,7 @@ function updateDisplay() {
 function setMode(mode) {
     if (mode !== 'kitchen' && mode !== 'return') return;
     window.appData.mode = mode;
-    showMessage(`Mode switched to: ${mode.toUpperCase()}`, 'info');
+    showMessage(`Mode switched to: ${mode.toUpperCase()} (મોડ બદલાયો)`, 'info');
     updateDisplay();
 }
 
@@ -323,7 +300,7 @@ function selectUser(userName) {
     
     // Automatically set mode based on user role
     setMode(user.role.toLowerCase() === 'kitchen' ? 'kitchen' : 'return');
-    showMessage(`User selected: ${userName}`, 'info');
+    showMessage(`User selected: ${userName} (વપરાશકર્તા પસંદ કર્યા)`, 'info');
     updateDisplay();
 }
 
@@ -337,27 +314,26 @@ function selectDishLetter(value) {
             if(selectedDishDisplay) selectedDishDisplay.textContent = upperValue;
             updateDisplay();
         } else {
-            showMessage("❌ Invalid Dish Letter/Number selected.", 'error');
+            showMessage("❌ Invalid Dish Letter/Number selected. (અમાન્ય ડિશ લેટર)", 'error');
         }
     } else {
-        showMessage("❌ Please select a User first.", 'error');
+        showMessage("❌ Please select a User first. (પહેલા વપરાશકર્તા પસંદ કરો)", 'error');
     }
 }
 
 function startScanning() {
     if (!window.appData.user) {
-        showMessage("❌ Cannot start scanning. Please select a User.", 'error');
+        showMessage("❌ Cannot start scanning. Please select a User. (વપરાશકર્તા પસંદ કરો)", 'error');
         return;
     }
     if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
-        showMessage("❌ Cannot start scanning. Please select a Dish Letter (A-Z or 1-4).", 'error');
+        showMessage("❌ Cannot start scanning. Please select a Dish Letter (A-Z or 1-4). (ડિશ લેટર પસંદ કરો)", 'error');
         return;
     }
     window.appData.scanning = true;
-    // Set focus so the ProGlove input is immediately received
     const scanInput = document.getElementById('scanInput');
-    if(scanInput) scanInput.focus(); 
-    showMessage("✅ Scanner Activated. Ready to scan.", 'success');
+    if(scanInput) scanInput.focus();
+    showMessage("✅ Scanner Activated. Ready to scan. (સ્કેનર સક્રિય)", 'success');
     updateDisplay();
 }
 
@@ -365,34 +341,32 @@ function stopScanning() {
     window.appData.scanning = false;
     const scanInput = document.getElementById('scanInput');
     if(scanInput) scanInput.blur();
-    showMessage("🛑 Scanner Deactivated.", 'info');
+    showMessage("🛑 Scanner Deactivated. (સ્કેનર નિષ્ક્રિય)", 'info');
     updateDisplay();
 }
 
-// --- CORE SCANNING LOGIC ---
+// --- CORE SCANNING LOGIC (કોર સ્કેનિંગ લોજિક) ---
 
 /**
  * Main handler for any scan input.
  * @param {string} vytUrl - The VYT identifier, which is a full URL.
  */
 function processScan(vytUrl) {
-    // 1. Basic check
     if (!window.appData.scanning || !window.appData.user) {
-        showMessage("❌ Scanner not active or user not selected.", 'error');
+        showMessage("❌ Scanner not active or user not selected. (સ્કેનર સક્રિય નથી)", 'error');
         return;
     }
     
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
-    // 2. Record raw scan history (for user stats)
+    // 1. Record raw scan history (for user stats)
     const scanRecord = {
         vytUrl: exactVytUrl,
         timestamp: timestamp,
         type: window.appData.mode,
         user: window.appData.user,
-        // Only include dishLetter if in kitchen mode
-        dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A'
+        dishLetter: window.appData.dishLetter
     };
     window.appData.myScans.push(scanRecord);
     
@@ -403,21 +377,14 @@ function processScan(vytUrl) {
         result = returnScan(exactVytUrl, timestamp);
     }
     
-    // 3. Provide immediate feedback
     if (result.success) {
-        // We sync only if Firebase is connected
-        if (window.appData.isFirebaseConnected) {
-             syncToFirebase();
-        } else {
-            showMessage("⚠️ Running Local Mode. Data not synced to cloud.", 'warning');
-        }
-       
+        syncToFirebase();
         showMessage(result.message, 'success');
     } else {
         showMessage(result.message, 'error');
     }
     
-    // 4. Update the display and clear the input for the next scan
+    // Update UI immediately
     updateDisplay(); 
     const scanInput = document.getElementById('scanInput');
     if(scanInput) scanInput.value = '';
@@ -430,20 +397,20 @@ function kitchenScan(vytUrl, timestamp) {
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     
-    let statusMessage = "started a new prep cycle.";
+    let statusMessage = "started a new prep cycle. (નવું ચક્ર શરૂ કર્યું)";
 
     // 1. If the bowl is ACTIVE, close its cycle and move it to returned history.
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
         window.appData.returnedBowls.push(returnedBowl);
-        statusMessage = "closed active cycle and started new prep.";
+        statusMessage = "closed active cycle and started new prep. (જૂનું ચક્ર બંધ કરીને નવું શરૂ કર્યું)";
     }
     
     // 2. If the bowl was in Prepared, clear it out for a fresh record.
     if (preparedIndex !== -1) {
         window.appData.preparedBowls.splice(preparedIndex, 1);
-        statusMessage = "closed old prepared record and started new prep.";
+        statusMessage = "closed old prepared record and started new prep. (જૂનો રેકોર્ડ બંધ કરીને નવું શરૂ કર્યું)";
     }
 
     // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
@@ -481,7 +448,7 @@ function returnScan(vytUrl, timestamp) {
         
         return { 
             success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.` 
+            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep. (વળતર, હવે તૈયાર છે)` 
         };
     }
 
@@ -494,39 +461,37 @@ function returnScan(vytUrl, timestamp) {
 
         return { 
             success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed).` 
+            message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed). (વળતર, ચક્ર બંધ)` 
         };
     }
     
     // 3. If the bowl is not found in either state
     return { 
         success: false, 
-        message: `❌ Error: ${vytUrl.slice(-10)} not found in Prepared or Active inventory.` 
+        message: `❌ Error: ${vytUrl.slice(-10)} not found in Prepared or Active inventory. (ઇન્વેન્ટરીમાં મળ્યું નથી)` 
     };
 }
 
 
-// --- DATA IMPORT/EXPORT ---
+// --- DATA IMPORT/EXPORT (ડેટા આયાત/નિકાસ) ---
 
 /**
  * Processes JSON data to convert Prepared Bowls to Active Bowls, or update existing Active Bowls.
  */
 function processJSONData(jsonString) {
     if (!window.appData.user) {
-        showMessage("❌ Please select a User before uploading data.", 'error');
+        showMessage("❌ Please select a User before uploading data. (ડેટા અપલોડ કરતા પહેલા વપરાશકર્તા પસંદ કરો)", 'error');
         return;
     }
 
     let parsedData;
     try {
-        // Ensure jsonString is passed from the HTML element
-        const dataToParse = jsonString || document.getElementById('jsonData').value;
-        parsedData = JSON.parse(dataToParse);
+        parsedData = JSON.parse(jsonString);
         if (!Array.isArray(parsedData)) {
             throw new Error("JSON must be a list of bowl objects.");
         }
     } catch (e) {
-        showMessage(`❌ JSON Parsing Error: ${e.message}`, 'error');
+        showMessage(`❌ JSON Parsing Error: ${e.message} (JSON ભૂલ)`, 'error');
         return;
     }
 
@@ -597,12 +562,10 @@ function processJSONData(jsonString) {
     }
 
     if (updates > 0 || creations > 0) {
-        showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls.`, 'success', 5000);
-        if (window.appData.isFirebaseConnected) {
-            syncToFirebase();
-        }
+        showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls. (JSON આયાત પૂર્ણ)`, 'success', 5000);
+        syncToFirebase();
     } else {
-        showMessage("ℹ️ No bowls updated or created from JSON data.", 'info');
+        showMessage("ℹ️ No bowls updated or created from JSON data. (કોઈ અપડેટ નથી)", 'info');
     }
 }
 
@@ -610,7 +573,6 @@ function processJSONData(jsonString) {
  * Exports data structures as JSON files.
  */
 function exportData(data, filename) {
-    // IMPORTANT: Customer details are only visible in exports, not on the UI.
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -621,7 +583,7 @@ function exportData(data, filename) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showMessage(`💾 Exported data to ${filename}`, 'info');
+    showMessage(`💾 Exported data to ${filename} (ડેટા નિકાસ થયો)`, 'info');
 }
 
 function exportActiveBowls() {
@@ -642,11 +604,10 @@ function exportAllData() {
     exportData(fullData, `full_bowl_data_${formatDateStandard(new Date())}.json`);
 }
 
-// --- LIVE PREP REPORT (10 PM to 10 PM) ---
+// --- LIVE PREP REPORT (લાઈવ તૈયારી રિપોર્ટ) ---
 
 /**
  * Calculates LIVE statistics for prepared dishes (Kitchen Scans), sorted by Dish Letter then User.
- * This is the function that runs on every update.
  */
 function getLivePrepReport() {
     const { start, end } = getReportingDayTimestamp();
@@ -696,14 +657,14 @@ function getLivePrepReport() {
 }
 
 /**
- * Renders the live statistics table into the UI (Live Prep Report).
+ * Renders the live statistics table into the UI.
  */
 function renderLivePrepReport(stats) {
     const container = document.getElementById('livePrepReportBody');
     if (!container) return;
 
     if (stats.length === 0) {
-        container.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">No kitchen preparation scans recorded during the current reporting window.</td></tr>`;
+        container.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">No kitchen preparation scans recorded during the current reporting window. (વર્તમાન સમયમાં કોઈ સ્કેન નથી)</td></tr>`;
         return;
     }
 
@@ -727,7 +688,7 @@ function renderLivePrepReport(stats) {
     container.innerHTML = html;
 }
 
-// --- DATA MAINTENANCE (10 PM DAILY RESET) ---
+// --- DATA MAINTENANCE (ડેટા જાળવણી) ---
 
 /**
  * Checks if the daily data reset for old returnedBowls should run (at 10:00 PM).
@@ -748,9 +709,7 @@ function checkDailyDataReset() {
         if (removedCount > 0) {
             window.appData.returnedBowls = bowlsToKeep;
             window.appData.lastDataReset = now.toISOString();
-            if (window.appData.isFirebaseConnected) {
-                syncToFirebase();
-            }
+            syncToFirebase();
             console.log(`🧹 Daily Data Reset (10 PM): Removed ${removedCount} returned bowl records from previous days.`);
         }
     }
@@ -778,59 +737,53 @@ function resetTodaysPreparedBowls() {
     if (initialPreparedCount > 0 || removedScans > 0) {
         window.appData.lastSync = new Date().toISOString();
 
-        if (window.appData.isFirebaseConnected) {
-            syncToFirebase();
-        }
+        syncToFirebase();
         updateDisplay();
-        showMessage(`✅ Removed ALL ${initialPreparedCount} prepared bowls and ${removedScans} kitchen scans`, 'success');
+        showMessage(`✅ Removed ALL ${initialPreparedCount} prepared bowls and ${removedScans} kitchen scans (બધું દૂર કર્યું)`, 'success');
     } else {
-        showMessage('ℹ️ No prepared bowls or scans found to remove', 'info');
+        showMessage('ℹ️ No prepared bowls or scans found to remove (દૂર કરવા માટે કશું નથી)', 'info');
     }
 }
 
-// --- INITIALIZATION ---
+// --- INITIALIZATION (શરૂઆત) ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Populate User and Dish Letter Selectors (assuming you have HTML elements for this)
+    // Populate User and Dish Letter Selectors (વપરાશકર્તા અને ડિશ લેટર સિલેક્ટર ભરો)
     const userSelect = document.getElementById('userSelect');
-    USERS.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user.name;
-        option.textContent = `${user.name} (${user.role})`;
-        if(userSelect) userSelect.appendChild(option);
-    });
+    if(userSelect) {
+        USERS.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.name;
+            option.textContent = `${user.name} (${user.role})`;
+            userSelect.appendChild(option);
+        });
 
-    if(userSelect) userSelect.addEventListener('change', (e) => selectUser(e.target.value));
+        userSelect.addEventListener('change', (e) => selectUser(e.target.value));
+    }
 
     const dishLetterSelect = document.getElementById('dishLetterSelect');
-    DISH_LETTERS.forEach(value => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
-        if(dishLetterSelect) dishLetterSelect.appendChild(option);
-    });
+    if(dishLetterSelect) {
+        DISH_LETTERS.forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            dishLetterSelect.appendChild(option);
+        });
 
-    if(dishLetterSelect) dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
-    
-    // Set initial values (These selections will trigger the initial UI mode)
-    selectUser(USERS[0].name); 
-    selectDishLetter(DISH_LETTERS[0]); 
+        dishLetterSelect.addEventListener('change', (e) => selectDishLetter(e.target.value));
+    }
 
-    // Setup scanning input listener: Catches the 'Enter' keypress simulated by the ProGlove scanner.
+    // Set initial user and dish (પ્રારંભિક વપરાશકર્તા અને ડિશ સેટ કરો)
+    if(USERS.length > 0) selectUser(USERS[0].name);
+    if(DISH_LETTERS.length > 0) selectDishLetter(DISH_LETTERS[0]); 
+
+    // Setup scanning input listener (સ્કેનિંગ ઇનપુટ લિસનર સેટ કરો)
     const scanInput = document.getElementById('scanInput');
     if(scanInput) {
         scanInput.addEventListener('keydown', (e) => {
-            // The ProGlove scanner sends the full code followed by 'Enter' (key === 'Enter')
-            if (e.key === 'Enter') {
-                e.preventDefault(); // Stop the browser from submitting forms or scrolling
-                
-                const scannedValue = scanInput.value.trim();
-
-                if (scannedValue) {
-                    // Trigger the main processing function immediately
-                    processScan(scannedValue);
-                }
-                // Note: processScan clears the input field at the end, resetting it for the next scan.
+            if (e.key === 'Enter' && scanInput.value.trim()) {
+                e.preventDefault();
+                processScan(scanInput.value);
             }
         });
     }
@@ -846,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.exportReturnData = exportReturnData;
     window.exportAllData = exportAllData;
     window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
-    window.getLivePrepReport = getLivePrepReport; // Exposed for testing/debugging
+    window.getLivePrepReport = getLivePrepReport;
 
     // Start the Firebase initialization process
     initializeFirebase();
