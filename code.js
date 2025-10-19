@@ -18,7 +18,8 @@ window.appData = {
     // Internal state
     db: null,
     appDataRef: null,
-    user: null,
+    lastCleanup: null,
+    lastSync: null,
 };
 
 // CORRECTED USER LIST
@@ -33,6 +34,9 @@ const USERS = [
 
 // --- UTILITY FUNCTIONS ---
 
+/**
+ * Converts an ISO timestamp or Date object to the standard YYYY-MM-DD format.
+ */
 function formatDateStandard(date) {
     const d = new Date(date);
     let month = '' + (d.getMonth() + 1);
@@ -43,6 +47,27 @@ function formatDateStandard(date) {
     if (day.length < 2) day = '0' + day;
 
     return [year, month, day].join('-');
+}
+
+/**
+ * Ensures an input date string is in the required YYYY-MM-DD format.
+ * If the input date is null or invalid, it returns today's standard date.
+ * @param {string} dateString - Date string from JSON or other source.
+ * @returns {string} - Date in 'YYYY-MM-DD' format.
+ */
+function sanitizeDateString(dateString) {
+    if (!dateString) {
+        return formatDateStandard(new Date());
+    }
+    
+    // Try to parse using new Date(). If it fails, it returns Invalid Date.
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+        console.warn(`Invalid date string received: ${dateString}. Defaulting to today.`);
+        return formatDateStandard(new Date());
+    }
+
+    return formatDateStandard(date);
 }
 
 function showMessage(message, type = 'info', duration = 3000) {
@@ -75,8 +100,7 @@ function showMessage(message, type = 'info', duration = 3000) {
 // Imports are assumed to be handled by the HTML file using type="module"
 
 /**
- * Initializes Firebase, sets up the Realtime Database reference,
- * and handles the initial authentication.
+ * Initializes Firebase, sets up the Realtime Database reference.
  */
 async function initializeFirebase() {
     try {
@@ -87,6 +111,13 @@ async function initializeFirebase() {
             console.error("Firebase config is missing.");
             showMessage("❌ Firebase configuration is missing.", 'error');
             return;
+        }
+
+        // Check if firebase is defined (loaded via HTML script tags)
+        if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
+             console.error("Firebase library not loaded.");
+             showMessage("❌ Firebase library not loaded. Check HTML scripts.", 'error');
+             return;
         }
 
         const app = firebase.initializeApp(firebaseConfig);
@@ -157,7 +188,9 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
-    firebase.database().ref(`artifacts/${__app_id}/public/data/bowl_data`).set(dataToSave)
+    // Use the determined path from initializeFirebase
+    const path = window.appData.appDataRef.path.toString();
+    firebase.database().ref(path).set(dataToSave)
         .then(() => {
             console.log("⬇️ Data successfully written to Firebase.");
         })
@@ -192,14 +225,18 @@ function updateDisplay() {
     ).length;
     document.getElementById('returnedTodayCount').textContent = returnedTodayCount;
 
-    // 4. MY SCANS COUNT (Dish Letter Specific Count - Key Requirement)
+    // 4. MY SCANS COUNT (Dish Letter Specific Count)
     let myScansCount = 0;
     
     if (window.appData.user && window.appData.dishLetter) {
         myScansCount = window.appData.myScans.filter(scan => 
+            // 1. Must be a Kitchen Scan
             scan.type === 'kitchen' && 
+            // 2. Must be today (using standard date format)
             formatDateStandard(new Date(scan.timestamp)) === today &&
+            // 3. Must match current user
             scan.user === window.appData.user &&
+            // 4. MUST MATCH THE SELECTED DISH LETTER
             scan.dishLetter === window.appData.dishLetter
         ).length;
     }
@@ -308,18 +345,17 @@ function processScan(vytCode) {
 
 /**
  * Handles a scan at the Kitchen Prep Station.
- * A kitchen scan's purpose is to start a new prepared cycle.
- * It removes the bowl from any previous state (Active/Prepared/Returned) and resets it to Prepared (Unknown).
+ * A kitchen scan's purpose is to start a new prepared cycle, making the bowl available for JSON assignment.
  */
 function kitchenScan(vytCode, timestamp) {
-    // 1. Check if the bowl is currently Active or Prepared
+    // 1. Find and remove the bowl from any previous state (Prepared or Active)
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytCode === vytCode);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytCode === vytCode);
     
     const isCurrentlyPrepared = preparedIndex !== -1;
     const isCurrentlyActive = activeIndex !== -1;
 
-    // 2. Remove from previous prepared/active state (Close the old cycle)
+    // Remove from previous prepared/active state (This automatically closes the old record)
     if (isCurrentlyPrepared) {
         window.appData.preparedBowls.splice(preparedIndex, 1);
         console.log(`Kitchen Scan: Closed old prepared bowl record for ${vytCode}`);
@@ -329,16 +365,16 @@ function kitchenScan(vytCode, timestamp) {
         console.log(`Kitchen Scan: Closed old active bowl record for ${vytCode}`);
     }
 
-    // 3. Create NEW Prepared Bowl record (resets customer/company to Unknown)
+    // 2. Create NEW Prepared Bowl record (resets customer/company to Unknown)
     const newPreparedBowl = {
         vytCode: vytCode,
         dishLetter: window.appData.dishLetter,
         company: 'Unknown',
         customer: 'Unknown',
-        preparedDate: formatDateStandard(new Date(timestamp)),
-        preparedTime: timestamp,
+        preparedDate: formatDateStandard(new Date(timestamp)), // YYYY-MM-DD
+        preparedTime: timestamp, // ISO Timestamp
         user: window.appData.user,
-        state: 'PREPARED_UNKNOWN' // Custom internal state for clarity
+        state: 'PREPARED_UNKNOWN'
     };
 
     window.appData.preparedBowls.push(newPreparedBowl);
@@ -351,7 +387,7 @@ function kitchenScan(vytCode, timestamp) {
 
 /**
  * Handles a scan at the Return Station.
- * A return scan's purpose is to close the Active/Prepared cycle and log the return.
+ * Closes the Active/Prepared cycle and logs the return.
  */
 function returnScan(vytCode, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
@@ -394,7 +430,7 @@ function returnScan(vytCode, timestamp) {
 
 /**
  * Processes JSON data to convert Prepared Bowls to Active Bowls, or update existing Active Bowls.
- * This is where Customer/Company names are assigned.
+ * Enforces YYYY-MM-DD date format using sanitizeDateString.
  */
 function processJSONData(jsonString) {
     if (!window.appData.user) {
@@ -429,25 +465,30 @@ function processJSONData(jsonString) {
         // Find existing bowls in Prepared or Active state
         const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytCode === exactVytCode);
         const activeIndex = window.appData.activeBowls.findIndex(b => b.vytCode === exactVytCode);
+        
+        // Sanitize the date from the JSON, or use today's date if missing
+        const jsonAssignmentDate = sanitizeDateString(item.preparedDate || item.date);
 
-        // --- Logic: Update Active Bowl (If already assigned) ---
+        // --- Logic: 1. Update Existing Active Bowl (Temporal Overwrite) ---
         if (activeIndex !== -1) {
-            // Requirement: If already active, delete old customer/company and assign new
+            // Overwrites old data with the latest JSON data.
             const activeBowl = window.appData.activeBowls[activeIndex];
             activeBowl.company = item.company.trim();
             activeBowl.customer = item.customer.trim();
+            activeBowl.preparedDate = jsonAssignmentDate; // Use the date from the JSON or sanitized today
             activeBowl.updateTime = timestamp;
             updates++;
             continue;
         }
         
-        // --- Logic: Promote Prepared Bowl to Active Bowl ---
+        // --- Logic: 2. Promote Prepared Bowl to Active Bowl ---
         if (preparedIndex !== -1) {
             // Remove from Prepared and move to Active
             const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
             
             preparedBowl.company = item.company.trim();
             preparedBowl.customer = item.customer.trim();
+            preparedBowl.preparedDate = jsonAssignmentDate; // Use the date from the JSON or sanitized today
             preparedBowl.updateTime = timestamp; // Time of assignment/activation
             preparedBowl.state = 'ACTIVE_KNOWN';
             
@@ -456,15 +497,14 @@ function processJSONData(jsonString) {
             continue;
         }
 
-        // --- Logic: Create New Active Bowl if bowl was missed during prep scan but has JSON data
-        // This is a safety net but assumes the bowl was prepared.
+        // --- Logic: 3. Create New Active Bowl (If missed prep scan) ---
         if (preparedIndex === -1 && activeIndex === -1) {
             const newBowl = {
                 vytCode: exactVytCode,
                 dishLetter: item.dishLetter || 'N/A', // Use provided dishLetter or N/A
                 company: item.company.trim(),
                 customer: item.customer.trim(),
-                preparedDate: formatDateStandard(new Date(timestamp)),
+                preparedDate: jsonAssignmentDate, // Use the date from the JSON or sanitized today
                 preparedTime: timestamp,
                 user: window.appData.user, // Assign current user for data upload
                 state: 'ACTIVE_KNOWN'
@@ -628,11 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start the Firebase initialization process
     initializeFirebase();
 
-    // Check for daily cleanup every hour (or set a better interval)
-    setInterval(checkDailyCleanup, 3600000); // 1 hour
+    // Check for daily cleanup every hour
+    setInterval(checkDailyCleanup, 3600000); 
 });
-
-// Assuming firebase library is loaded via script tag in HTML:
-// <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-// <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
