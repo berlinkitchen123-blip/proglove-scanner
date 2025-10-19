@@ -20,7 +20,7 @@ window.appData = {
 
 const USERS = [
     {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
-    {name: "Jash", role: "Kitchen"}, {name: "Joes", role: "Kitchen"}, 
+    {name: "Jash", role: "Kitchen"}, {name: "Joel", role: "Kitchen"}, 
     {name: "Mary", role: "Kitchen"}, {name: "Rushal", role: "Kitchen"}, 
     {name: "Sreekanth", role: "Kitchen"}, 
     {name: "Sultan", role: "Return"}, 
@@ -803,8 +803,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
     window.getLivePrepReport = getLivePrepReport;
 
-    // Start the Firebase initialization process
-    initializeFirebase();
+    // Start the Firebase initialization process with a minimal delay to ensure SDK readiness
+    // This is the FIX for the TypeError due to script loading timing.
+    setTimeout(initializeFirebase, 0);
 
     setInterval(checkDailyDataReset, 3600000); 
 });
