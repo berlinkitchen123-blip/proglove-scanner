@@ -118,7 +118,8 @@ function initializeFirebase() { // Removed 'async' keyword
         // Define the public data path. This ensures the reference is properly set up.
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
-        loadFromFirebase();
+        // --- FINAL FIX: Apply delay ONLY to the listener call to prevent race condition ---
+        setTimeout(loadFromFirebase, 50); 
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
