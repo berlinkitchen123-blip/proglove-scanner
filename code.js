@@ -606,20 +606,28 @@ function processScan(vytUrl) {
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
-    // --- CRITICAL DUPLICATE CHECK ---
-    // Check if this bowl is already logged today (in prepared or active state)
-    const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
-    const isAlreadyActive = window.appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
+    // --- CRITICAL DUPLICATE CHECK (Kitchen Mode) ---
     
-    if (window.appData.mode === 'kitchen' && (isAlreadyPrepared || isAlreadyActive)) {
-        showMessage("⚠️ DUPLICATE SCAN: This bowl has already been prepared today.", 'error', 7000);
-        window.appData.isProcessingScan = false; // Release lock
-        return; // Stop processing and logging immediately
+    if (window.appData.mode === 'kitchen') {
+        const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
+        const isAlreadyActive = window.appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
+        
+        if (isAlreadyPrepared) {
+            showMessage("⚠️ DUPLICATE SCAN: This bowl has already been prepared today.", 'error', 7000);
+            window.appData.isProcessingScan = false; // Release lock
+            return; // Stop processing and logging immediately
+        }
+        
+        // **NEW LOGIC CHECK:** If active, we don't block. We recycle the bowl by deleting it from active and creating new prepared.
+        if (isAlreadyActive) {
+            // Do NOT return error here, proceed to kitchenScan for recycling
+        }
     }
     
-    // Check for duplicate in RETURN mode (Bowl must be returned only once per cycle)
+    // --- CRITICAL DUPLICATE CHECK (Return Mode) ---
     if (window.appData.mode === 'return') {
         const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
+        
         if (isAlreadyReturned) {
             showMessage("⚠️ DUPLICATE SCAN: This bowl has already been returned today.", 'error', 7000);
             window.appData.isProcessingScan = false; // Release lock
@@ -659,25 +667,28 @@ function processScan(vytUrl) {
  * Handles bowl prep (Kitchen Scan).
  */
 function kitchenScan(vytUrl, timestamp) {
-    // Note: Duplicate check moved to processScan to run before anything is logged.
-    
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     
     let statusMessage = "started a new prep cycle.";
 
+    // **💥 IMPLEMENTING RECYCLE LOGIC (RULE 1) 💥**
+    // IF the bowl is in Active (Out with customer) OR already in Prepared (Needs correction)
     if (activeIndex !== -1) {
+        // DELETE from Active (This is the crucial 'Recycle' step you requested)
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
         window.appData.returnedBowls.push(returnedBowl);
-        statusMessage = "closed active cycle and started new prep.";
+        statusMessage = "closed active cycle and started new prep (Recycled).";
     }
     
     if (preparedIndex !== -1) {
+        // Clear old prepared record for new record
         window.appData.preparedBowls.splice(preparedIndex, 1);
-        statusMessage = "closed old prepared record and started new prep.";
+        statusMessage = "cleared old prepared record for new prep.";
     }
 
+    // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
     const newPreparedBowl = {
         vytUrl: vytUrl, 
         dishLetter: window.appData.dishLetter,
@@ -1187,7 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearTimeout(window.appData.scanTimer);
                 }
 
-                // Set a short delay (50ms) to ensure the entire VYT string has been written
+                // Set delay to 50ms as requested for physical scanner stability
                 window.appData.scanTimer = setTimeout(() => {
                     // Check if input value is stable and scanning is active
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
@@ -1195,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
                     }
-                }, 50); // Set to 50ms as per your request for stable physical scanner timing
+                }, 50); // Set to 50ms as per your request
             }
         });
         
