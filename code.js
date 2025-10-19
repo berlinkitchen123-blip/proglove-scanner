@@ -174,7 +174,7 @@ function loadFromFirebase() {
             // Data is null (first load on an empty database).
             console.log("🆕 Initializing new data structure in Firebase.");
             
-            // Call syncToFirebase, which handles the timing issue internally.
+            // CRITICAL FIX: We call syncToFirebase, which handles the timing issue internally using the isInitialized flag.
             syncToFirebase();
         }
         
@@ -188,15 +188,14 @@ function loadFromFirebase() {
  * Pushes the current local state to Firebase.
  */
 function syncToFirebase() {
-    // CRITICAL FIX: Check isInitialized flag to stop endless retries
+    // CRITICAL FIX: Check isInitialized flag FIRST. If false, schedule retry with large delay.
     if (!window.appData.isInitialized) {
-        console.warn("Attempted to sync before full initialization. Scheduling final reliable retry.");
-        // Increase delay to 500ms for robust retry, guaranteeing Firebase has finished internal setup.
+        console.warn("Attempted to sync before full initialization. Scheduling reliable retry (500ms delay).");
         setTimeout(syncToFirebase, 500); 
         return; 
     }
     
-    // Now that isInitialized is true, the reference path should be ready.
+    // Once isInitialized is true, the reference path should be ready.
 
     window.appData.lastSync = new Date().toISOString();
 
@@ -210,7 +209,7 @@ function syncToFirebase() {
     };
 
     try {
-        // Use try-catch to handle the very unlikely remaining timing error and prevent crash
+        // Since isInitialized is true, we proceed, but we are extremely cautious with the path.
         const path = window.appData.appDataRef.path.toString(); 
         firebase.database().ref(path).set(dataToSave)
             .then(() => {
@@ -223,8 +222,9 @@ function syncToFirebase() {
                 showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
             });
     } catch(e) {
-         console.error("Final sync attempt failed due to reference setup.", e);
-         // If it fails here, the connection is fundamentally unstable, but we've stopped the loop.
+         // FINAL ESCAPE HATCH: If it crashes here, something is fundamentally wrong with the Firebase SDK setup.
+         console.error("CRITICAL ERROR: Failed sync attempt. Reference object is missing internal properties.", e);
+         // Do NOT retry automatically, as it will crash the function stack again.
     }
 }
 
