@@ -1211,17 +1211,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 50); // Set to 50ms as per your request
             }
         });
-        
-        // Retain the keydown listener for explicit Enter presses (as a manual fallback)
-        scanInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault(); 
-                const scannedValue = scanInput.value.trim();
-                if (scannedValue) {
-                    processScan(scannedValue);
-                }
-            }
-        });
     }
     
     // 💥 Aggressive Focus Fix: Force focus back to scanner input whenever typing starts
