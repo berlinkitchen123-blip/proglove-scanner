@@ -17,6 +17,7 @@ window.appData = {
     lastDataReset: null, 
     lastSync: null,
     isDomReady: false, 
+    isInitialized: false, // Flag to confirm successful Firebase setup
 };
 
 const USERS = [
@@ -130,6 +131,9 @@ function initializeFirebase() {
         // Define the public data path.
         window.appData.appDataRef = firebase.database().ref(`artifacts/${appId}/public/data/bowl_data`);
         
+        // Set the initialization flag AFTER the reference is defined
+        window.appData.isInitialized = true;
+
         // Start the permanent listener immediately.
         loadFromFirebase(); 
 
@@ -144,8 +148,9 @@ function initializeFirebase() {
  * Sets up the perpetual Firebase listener.
  */
 function loadFromFirebase() {
-    if (!window.appData.appDataRef) {
-        console.warn("loadFromFirebase called before appDataRef was set.");
+    // CRITICAL FIX: The isInitialized flag must be true before setting listener
+    if (!window.appData.isInitialized) {
+        console.warn("loadFromFirebase called before initialization was complete.");
         return; 
     }
 
@@ -180,17 +185,18 @@ function loadFromFirebase() {
 }
 
 /**
- * Pushes the current local state to Firebase. Contains the critical retry logic.
+ * Pushes the current local state to Firebase.
  */
 function syncToFirebase() {
-    // CRITICAL FIX: Added logic to handle timing bug when .path is not yet ready.
-    if (!window.appData.appDataRef || typeof window.appData.appDataRef.path === 'undefined') {
-        console.warn("Attempted to sync but appDataRef is incomplete or undefined. Scheduling retry (100ms delay).");
-        
-        // Retry after a short delay for internal Firebase setup to complete.
-        setTimeout(syncToFirebase, 100); 
+    // CRITICAL FIX: Check isInitialized flag to stop endless retries
+    if (!window.appData.isInitialized) {
+        console.warn("Attempted to sync before full initialization. Scheduling final reliable retry.");
+        // Increase delay to 500ms for robust retry, guaranteeing Firebase has finished internal setup.
+        setTimeout(syncToFirebase, 500); 
         return; 
     }
+    
+    // Now that isInitialized is true, the reference path should be ready.
 
     window.appData.lastSync = new Date().toISOString();
 
@@ -203,17 +209,23 @@ function syncToFirebase() {
         lastSync: window.appData.lastSync,
     };
 
-    const path = window.appData.appDataRef.path.toString(); 
-    firebase.database().ref(path).set(dataToSave)
-        .then(() => {
-            console.log("⬇️ Data successfully written to Firebase.");
-            const lastSyncInfoEl = document.getElementById('lastSyncInfo');
-            if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
-        })
-        .catch(error => {
-            console.error("Firebase synchronization failed:", error);
-            showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
-        });
+    try {
+        // Use try-catch to handle the very unlikely remaining timing error and prevent crash
+        const path = window.appData.appDataRef.path.toString(); 
+        firebase.database().ref(path).set(dataToSave)
+            .then(() => {
+                console.log("⬇️ Data successfully written to Firebase.");
+                const lastSyncInfoEl = document.getElementById('lastSyncInfo');
+                if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
+            })
+            .catch(error => {
+                console.error("Firebase synchronization failed:", error);
+                showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
+            });
+    } catch(e) {
+         console.error("Final sync attempt failed due to reference setup.", e);
+         // If it fails here, the connection is fundamentally unstable, but we've stopped the loop.
+    }
 }
 
 // --- UI AND MODE MANAGEMENT ---
