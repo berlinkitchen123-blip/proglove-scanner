@@ -341,15 +341,18 @@ function processScan(vytUrl) {
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl; 
 
-    // 1. Record raw scan history (for user stats)
-    const scanRecord = {
-        vytUrl: exactVytUrl,
-        timestamp: timestamp,
-        type: window.appData.mode,
-        user: window.appData.user,
-        dishLetter: window.appData.dishLetter
-    };
-    window.appData.myScans.push(scanRecord);
+    // Raw scan history is recorded regardless of outcome for user stats
+    if (window.appData.mode === 'kitchen') {
+        const scanRecord = {
+            vytUrl: exactVytUrl,
+            timestamp: timestamp,
+            type: window.appData.mode,
+            user: window.appData.user,
+            dishLetter: window.appData.dishLetter
+        };
+        window.appData.myScans.push(scanRecord);
+    }
+
     
     let result;
     if (window.appData.mode === 'kitchen') {
@@ -362,6 +365,7 @@ function processScan(vytUrl) {
         syncToFirebase();
         showMessage(result.message, 'success');
     } else {
+        // We don't sync on failure, but we still show the error message.
         showMessage(result.message, 'error');
     }
     
@@ -370,32 +374,33 @@ function processScan(vytUrl) {
     document.getElementById('scanInput').value = '';
 }
 
+
+// --- CORRECTED LOGIC START ---
 /**
- * Handles a scan at the Kitchen Prep Station.
+ * Handles a scan at the Kitchen Prep Station with duplication checks.
  */
 function kitchenScan(vytUrl, timestamp) {
-    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
-    const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
-    
-    let statusMessage = "started a new prep cycle.";
+    // Check for duplication first. A bowl cannot be prepared if it's already in the 'prepared' state.
+    const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === vytUrl);
+    if (isAlreadyPrepared) {
+        return { 
+            success: false, 
+            message: `❌ Error: ${vytUrl.slice(-10)} has already been prepared.` 
+        };
+    }
 
-    // 1. If the bowl is ACTIVE, close its cycle and move it to returned history.
+    // A bowl might be 'active' (out with a customer). The business rule is to close
+    // that cycle and start a new one. This part of the logic is maintained.
+    const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
         window.appData.returnedBowls.push(returnedBowl);
-        statusMessage = "closed active cycle and started new prep.";
-    }
-    
-    // 2. If the bowl was in Prepared, clear it out for a fresh record.
-    if (preparedIndex !== -1) {
-        window.appData.preparedBowls.splice(preparedIndex, 1);
-        statusMessage = "closed old prepared record and started new prep.";
     }
 
-    // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
+    // Create the NEW Prepared Bowl record. This only happens if it wasn't a duplicate.
     const newPreparedBowl = {
-        vytUrl: vytUrl, // Stored as a URL
+        vytUrl: vytUrl,
         dishLetter: window.appData.dishLetter,
         company: 'Unknown',
         customer: 'Unknown',
@@ -404,22 +409,30 @@ function kitchenScan(vytUrl, timestamp) {
         user: window.appData.user,
         state: 'PREPARED_UNKNOWN'
     };
-
     window.appData.preparedBowls.push(newPreparedBowl);
     
     return { 
         success: true, 
-        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle ${statusMessage}` 
+        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}.` 
     };
 }
 
 /**
- * Handles a scan at the Return Station.
+ * Handles a scan at the Return Station with duplication checks.
  */
 function returnScan(vytUrl, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
 
-    // 1. Try to find the bowl in Prepared state and move to Returned
+    // 1. Check for duplication: Is the bowl already returned?
+    const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === vytUrl && b.returnDate === returnDate);
+    if (isAlreadyReturned) {
+        return {
+            success: false,
+            message: `❌ Error: ${vytUrl.slice(-10)} has already been returned today.`
+        };
+    }
+
+    // 2. Find the bowl in 'Prepared' state and move it to 'Returned'.
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     if (preparedIndex !== -1) {
         const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
@@ -428,11 +441,11 @@ function returnScan(vytUrl, timestamp) {
         
         return { 
             success: true, 
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.` 
+            message: `📦 Returned: ${vytUrl.slice(-10)} (from Prepared list).` 
         };
     }
 
-    // 2. Try to find the bowl in Active state and move to Returned (CLOSES THE ACTIVE CYCLE)
+    // 3. Find the bowl in 'Active' state and move it to 'Returned'.
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
         const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
@@ -445,12 +458,13 @@ function returnScan(vytUrl, timestamp) {
         };
     }
     
-    // 3. If the bowl is not found in either state
+    // 4. If the bowl is not found in either list.
     return { 
         success: false, 
         message: `❌ Error: ${vytUrl.slice(-10)} not found in Prepared or Active inventory.` 
     };
 }
+// --- CORRECTED LOGIC END ---
 
 
 // --- DATA IMPORT/EXPORT ---
