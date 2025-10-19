@@ -1,12 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ProGlove Bowl Tracking System</title>
-    <!-- ⚠️ Tailwind CDN REMOVED to eliminate warning. CSS must be in styles.css -->
-    
-    <!-- Link to external styles.css (which should contain your dark theme utilities) -->
+    <!-- Link to external styles.css -->
     <link rel="stylesheet" href="styles.css">
 
     <!-- Firebase SDKs for Realtime Database -->
@@ -15,35 +14,83 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Final CSS to ensure all required dark theme styles are available -->
+    <style>
+        /* This internal block defines necessary global styles, overriding Tailwind assumptions */
+        .app-body {
+            background-color: #1f2937; /* Dark Gray Background */
+            color: #f3f4f6; /* Light text color */
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+        .app-card {
+            background-color: #374151; /* Slightly lighter card background */
+            border: 1px solid #4b5563; /* Subtle border */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .app-header {
+            background-color: #374151;
+            padding: 1.5rem;
+            border-bottom: 4px solid #db2777; /* border-pink-700 */
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        .header-title {
+            color: #f472b6; /* text-pink-400 */
+            font-weight: 800;
+            font-size: 1.875rem; /* text-3xl */
+        }
+        .accent-green {
+            background-color: #059669; /* bg-emerald-600 */
+            color: white;
+        }
+        .accent-red {
+            background-color: #dc2626; /* bg-red-600 */
+            color: white;
+        }
+        .accent-text-green {
+            color: #34d399; /* text-emerald-400 */
+        }
+        .accent-text-pink {
+            color: #f472b6; /* text-pink-400 */
+        }
+        /* Further specific styles can be added to the external styles.css */
+    </style>
 </head>
-<body class="bg-gray-900 text-white font-inter min-h-screen p-4 md:p-6">
+<body class="app-body">
 
     <!-- Fixed container for messages -->
     <div id="messageContainer" class="fixed top-0 left-0 right-0 z-50 p-4 max-w-sm mx-auto pointer-events-none"></div>
 
-    <div class="container mx-auto space-y-6 max-w-4xl">
+    <div class="container mx-auto max-w-4xl space-y-6">
         
         <!-- Header -->
-        <header class="bg-gray-800 shadow-2xl rounded-xl p-4 md:p-6 border-b-4 border-pink-700">
-            <h1 class="text-pink-400 font-extrabold text-3xl tracking-wide">🧤 PROGLOVE BOWL TRACKING</h1>
+        <header class="app-header">
+            <h1 class="header-title">🧤 PROGLOVE BOWL TRACKING</h1>
             <p class="text-gray-400 mt-1">Real-time Prep & Return Synchronization</p>
         </header>
 
         <!-- Mode Selection (Step 1) -->
-        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4" id="modeSelectionCard">
+        <section class="app-card" id="modeSelectionCard">
             <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">1. Select Operation Mode</h2>
-            <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex flex-col md:flex-row gap-4 mt-4">
                 <button id="kitchenBtn" onclick="setMode('kitchen')" class="flex-1 p-3 rounded-lg text-white font-bold bg-gray-600 transition duration-150 hover:bg-emerald-600">🍳 KITCHEN PREP</button>
                 <button id="returnBtn" onclick="setMode('return')" class="flex-1 p-3 rounded-lg text-white font-bold bg-gray-600 transition duration-150 hover:bg-red-600">🔄 RETURN SCAN</button>
             </div>
-            <div id="modeDisplay" class="text-center p-2 rounded bg-gray-500 text-sm font-semibold">Status: Please Select Mode</div>
+            <div id="modeDisplay" class="text-center p-2 rounded bg-gray-500 text-sm font-semibold mt-4">Status: Please Select Mode</div>
         </section>
 
         <!-- User & Dish Selection (Step 2) -->
-        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4 opacity-50 transition duration-300" id="userSelectionCard">
+        <section class="app-card opacity-50 transition duration-300" id="userSelectionCard">
             <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">2. Select User & Dish</h2>
             
-            <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex flex-col md:flex-row gap-4 mt-4">
                 <div class="flex-1">
                     <label for="userSelect" class="block text-gray-400 mb-1">User Name</label>
                     <select id="userSelect" onchange="selectUser(this.value)" class="w-full bg-gray-700 text-gray-200 p-2 rounded border border-gray-600" disabled>
@@ -61,27 +108,27 @@
         </section>
 
         <!-- Scanning Controls (Step 3) -->
-        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4 opacity-50 transition duration-300" id="scanningCard">
+        <section class="app-card opacity-50 transition duration-300" id="scanningCard">
             <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">3. Scanner Input</h2>
             
-            <div class="flex gap-4">
-                <button id="startBtn" onclick="startScanning()" class="flex-1 p-3 rounded-lg text-white font-bold bg-emerald-600 hover:bg-emerald-700 transition duration-150" disabled>▶ START SCANNER</button>
-                <button id="stopBtn" onclick="stopScanning()" class="flex-1 p-3 rounded-lg text-white font-bold bg-red-600 hover:bg-red-700 transition duration-150" disabled>⏹ STOP SCANNER</button>
+            <div class="flex gap-4 mt-4">
+                <button id="startBtn" onclick="startScanning()" class="flex-1 p-3 rounded-lg text-white font-bold accent-green hover:bg-emerald-700 transition duration-150" disabled>▶ START SCANNER</button>
+                <button id="stopBtn" onclick="stopScanning()" class="flex-1 p-3 rounded-lg text-white font-bold accent-red hover:bg-red-700 transition duration-150" disabled>⏹ STOP SCANNER</button>
             </div>
             
-            <div class="relative">
-                <input type="text" id="scanInput" placeholder="Select User and Press START..." class="w-full text-lg text-pink-400 bg-gray-900 border-4 border-gray-600 focus:border-pink-600 rounded-lg p-3 text-center transition duration-200" disabled autocomplete="off">
+            <div class="relative mt-4">
+                <input type="text" id="scanInput" placeholder="Select User and Press START..." class="w-full text-lg accent-text-pink bg-gray-900 border-4 border-gray-600 focus:border-pink-600 rounded-lg p-3 text-center transition duration-200" disabled autocomplete="off">
             </div>
 
             <!-- Metrics Panel -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-gray-700">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-gray-700 mt-4">
                 <div class="text-center">
                     <p class="text-xs text-gray-400">User Scans (<span id="myDishLetterLabel">---</span>)</p>
-                    <p id="myScansCount" class="text-emerald-400 font-extrabold text-2xl">0</p>
+                    <p id="myScansCount" class="accent-text-green font-extrabold text-2xl">0</p>
                 </div>
                 <div class="text-center">
                     <p class="text-xs text-gray-400">Prepared Today</p>
-                    <p id="preparedTodayCount" class="text-pink-400 font-extrabold text-2xl">0</p>
+                    <p id="preparedTodayCount" class="accent-text-pink font-extrabold text-2xl">0</p>
                 </div>
                 <div class="text-center">
                     <p class="text-xs text-gray-400">Active (Out)</p>
@@ -95,12 +142,12 @@
         </section>
         
         <!-- Live Statistics Table -->
-        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
+        <section class="app-card">
             <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2 mb-3">Live Prep Report (10 PM Cycle)</h2>
             <div class="overflow-x-auto bg-gray-900 rounded-lg">
                 <table class="min-w-full text-sm">
                     <thead>
-                        <tr class="text-pink-400 bg-gray-700">
+                        <tr class="accent-text-pink bg-gray-700">
                             <th class="px-3 py-2 text-left font-semibold">Dish</th>
                             <th class="px-3 py-2 text-left font-semibold">Count</th>
                             <th class="px-3 py-2 text-left font-semibold">Users</th>
@@ -114,7 +161,7 @@
         </section>
 
         <!-- Data Management -->
-        <section class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 space-y-4">
+        <section class="app-card space-y-4">
             <h2 class="text-gray-200 font-semibold text-xl border-b border-gray-700 pb-2">Data Management & Export</h2>
             
             <p id="lastSyncInfo" class="text-xs text-gray-500">Awaiting sync...</p>
