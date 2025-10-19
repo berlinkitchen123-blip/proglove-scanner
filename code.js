@@ -502,6 +502,31 @@ function selectDishLetter(value) {
     }
 }
 
+/**
+ * Function to manually clear all data in the active inventory (Active Bowls).
+ */
+function clearActiveInventory() {
+    if (!window.appData.isInitialized) {
+        showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
+        return;
+    }
+
+    const currentCount = window.appData.activeBowls.length;
+    if (currentCount === 0) {
+        showMessage("ℹ️ Active Inventory is already empty.", 'info');
+        return;
+    }
+
+    // 1. Clear the local array
+    window.appData.activeBowls = [];
+    
+    // 2. Sync to Firebase (this clears the data remotely)
+    syncToFirebase(); 
+    
+    showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
+}
+
+
 // --- Core Scanning, Export, Report, and Maintenance Logic ---
 
 /**
@@ -688,7 +713,8 @@ function flattenOrderData(order) {
             
             // Get standard dish fields
             const dishIdentifier = String(dish.label || dish.name || dish.id || 'N/A').trim().toUpperCase();
-            const safeDishId = dishIdentifier.length > 10 ? dishIdentifier.substring(0, 8) : dishIdentifier; 
+            // FIX: Ensure safeDishId is always a guaranteed unique string fallback
+            const safeDishId = String(dish.id || dishIdentifier).substring(0, 10).toUpperCase();
             
             if (!dish.users || !Array.isArray(dish.users)) continue;
             
@@ -721,33 +747,9 @@ function flattenOrderData(order) {
                     }
                 }
             } 
-            // --- 2. HANDLE VIRTUAL VYT CODES (Fallback for Missing Codes) ---
-            // This path should only be taken if bowlCodes is genuinely missing.
-            else {
-                // If VYT codes are missing, we use the ordered quantity to determine how many bowls to create.
-                const totalOrdered = dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 0), 0);
-                
-                // FIX: If VYT codes are missing, we MUST check if the ordered quantity is > 0.
-                if (totalOrdered > 0) {
-                    
-                    // The safe identifier uses the Dish ID as a guaranteed unique string fallback
-                    const finalIdentifier = String(dish.id || 'VIRTUAL_DISH').substring(0, 10).toUpperCase();
-
-                    for (let i = 0; i < totalOrdered; i++) {
-                         // Create a unique key for the VYT URL (e.g., VIRTUAL-ORDERID-DISHID-INDEX)
-                        const virtualVytBase = `VIRTUAL-${orderId.substring(0, 8)}-${finalIdentifier}-${i}`;
-                        
-                        // We do not check for existing records here; each iteration is assumed to be a new item.
-                        flattenedBowls.push({
-                            vytUrl: virtualVytBase, 
-                            dishLetter: dishLabel,
-                            company: companyName,
-                            customer: usernames.join(', '), 
-                            preparedDate: preparedDate,
-                        });
-                    }
-                }
-            }
+            // --- 2. 🛑 IGNORE VIRTUAL VYT CODES (Per User Request) ---
+            // If bowlCodes is empty, we skip the item to ensure the final patched count is 990.
+            // All logic related to creating VIRTUAL IDs is removed here.
         }
     }
     
@@ -792,7 +794,7 @@ function processJSONData(jsonString) {
     const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
     
     let allFlattenedBowls = [];
-    let totalItemsExpected = 0;
+    let totalItemsExpected = 0; // This metric now accurately reflects the total scannable items (VYT codes)
 
     // Flatten all nested orders into a single list of assignable bowls
     ordersToProcess.forEach(order => {
@@ -806,10 +808,10 @@ function processJSONData(jsonString) {
                 
                 // Only count non-addons
                 if (dishLabel !== 'ADDONS') {
-                    // Count items based on bowlCodes (preferred) or ordered quantity
+                    // Count items based ONLY on bowlCodes (the source of the 990)
                     totalItemsExpected += (dish.bowlCodes && dish.bowlCodes.length > 0) 
                         ? dish.bowlCodes.length 
-                        : dish.users.reduce((sum, user) => sum + (user.orderedQuantity || 0), 0);
+                        : 0; // If codes are missing, we expect 0 items to be patched here.
                 }
             });
         });
@@ -895,7 +897,7 @@ function processJSONData(jsonString) {
     }
 
     if (updates > 0 || creations > 0) {
-        showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls.`, 'success', 5000);
+        showMessage(`✅ JSON Import Complete: ${creations} new Active Bowls, ${updates} updated Active Bowls. Total Scannable Bowls: ${totalItemsPatched}`, 'success', 5000);
         syncToFirebase();
         const jsonDataEl = document.getElementById('jsonData');
         if(jsonDataEl) jsonDataEl.value = '';
@@ -1134,6 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.exportAllData = exportAllData;
     window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
     window.getLivePrepReport = getLivePrepReport;
+    window.clearActiveInventory = clearActiveInventory; // Expose new function
 
     // Start the Firebase initialization process directly (synchronously)
     initializeFirebase();
