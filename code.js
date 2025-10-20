@@ -1,7 +1,7 @@
 // ProGlove Scanner - Complete Bowl Tracking System
 
-// --- GLOBAL STATE ---
-window.appData = {
+// --- GLOBAL STATE (Using 'var' for maximum safety against scope/redeclaration errors) ---
+var appData = {
     mode: null,              
     user: null,               
     dishLetter: null,         
@@ -28,11 +28,12 @@ window.appData = {
     scanTimer: null, // Timer used for debouncing input
     isProcessingScan: false, // FLAG: Prevents the app from accepting new scans during the sync operation
 };
+window.appData = appData;
+
 
 // --- DATA CONSTANTS (Isolated to prevent redeclaration and syntax errors) ---
 // This IIFE (Immediately Invoked Function Expression) creates a safe, private scope
-// for constants, which resolves "Identifier 'USERS' has already been declared" and 
-// avoids the syntax error caused by improper termination/parsing on tablets.
+// for constants, which permanently resolves the 'USERS' redeclaration crash.
 const CONSTANTS = (function() {
     const USERS = [
         {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
@@ -137,16 +138,16 @@ function initializeFirebase() {
         }
 
         const app = firebase.initializeApp(firebaseConfig);
-        window.appData.db = firebase.database();
+        appData.db = firebase.database();
         // --- NEW: Define separate references to flatten the data structure ---
         const basePath = `artifacts/${appId}/public/data/`;
-        window.appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
-        window.appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
-        window.appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
-        window.appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
+        appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
+        appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
+        appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
+        appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
 
         // Asynchronously check if data exists and start listener.
-        ensureDatabaseInitialized(window.appData.refActive);
+        ensureDatabaseInitialized(appData.refActive);
         // Use one ref to check for initialization
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
@@ -166,10 +167,10 @@ async function ensureDatabaseInitialized(ref) {
         if (!snapshot.exists() || snapshot.val() === null) {
             console.log("🆕 Database structure is empty. Writing initial structure.");
             // Set empty arrays for all core paths to guarantee existence
-            await window.appData.refActive.set([]); 
-            await window.appData.refPrepared.set([]); 
-            await window.appData.refReturned.set([]);
-            await window.appData.refScans.set([]);
+            await appData.refActive.set([]); 
+            await appData.refPrepared.set([]); 
+            await appData.refReturned.set([]);
+            await appData.refScans.set([]);
             console.log("⬇️ Initial data structure written successfully.");
         } else {
             console.log("⬆️ Database contains existing data.");
@@ -177,7 +178,7 @@ async function ensureDatabaseInitialized(ref) {
 
         // ONLY after the initial data structure is guaranteed to exist (read or written),
         // we set the flag and start the continuous read listeners.
-        window.appData.isInitialized = true;
+        appData.isInitialized = true;
         loadFromFirebase();
 
     } catch (error) {
@@ -197,30 +198,30 @@ function loadFromFirebase() {
     document.getElementById('systemStatus')?.textContent = '🔄 Connecting to Cloud...'; 
 
     // 1. Listen to Active Bowls
-    window.appData.refActive.on('value', (snapshot) => {
-        if (window.appData.isInitialized) {
-            window.appData.activeBowls = snapshot.val() || [];
+    appData.refActive.on('value', (snapshot) => {
+        if (appData.isInitialized) {
+            appData.activeBowls = snapshot.val() || [];
             updateDisplay(); 
         }
     });
     // 2. Listen to Prepared Bowls
-    window.appData.refPrepared.on('value', (snapshot) => {
-        if (window.appData.isInitialized) {
-            window.appData.preparedBowls = snapshot.val() || [];
+    appData.refPrepared.on('value', (snapshot) => {
+        if (appData.isInitialized) {
+            appData.preparedBowls = snapshot.val() || [];
             updateDisplay(); 
         }
     });
     // 3. Listen to Returned Bowls (History)
-    window.appData.refReturned.on('value', (snapshot) => {
-        if (window.appData.isInitialized) {
-            window.appData.returnedBowls = snapshot.val() || [];
+    appData.refReturned.on('value', (snapshot) => {
+        if (appData.isInitialized) {
+            appData.returnedBowls = snapshot.val() || [];
             updateDisplay(); 
         }
     });
     // 4. Listen to Scan Logs (History/Metrics Source)
-    window.appData.refScans.on('value', (snapshot) => {
-        if (window.appData.isInitialized) {
-            window.appData.myScans = snapshot.val() || [];
+    appData.refScans.on('value', (snapshot) => {
+        if (appData.isInitialized) {
+            appData.myScans = snapshot.val() || [];
             updateDisplay(); 
             console.log("⬆️ All data synchronized from Firebase.");
 
@@ -234,7 +235,7 @@ function loadFromFirebase() {
  * Pushes the current local state to Firebase (Continuous Write) across all relevant paths.
  */
 function syncToFirebase() {
-    if (!window.appData.isInitialized) {
+    if (!appData.isInitialized) {
         console.warn("Sync attempted before full initialization. Skipping write.");
         return;
     }
@@ -242,15 +243,15 @@ function syncToFirebase() {
     // Perform writes only on the arrays that changed.
     // Use Promises to ensure all updates are initiated correctly.
     const writes = [
-        window.appData.refActive.set(window.appData.activeBowls),
-        window.appData.refPrepared.set(window.appData.preparedBowls),
-        window.appData.refReturned.set(window.appData.returnedBowls),
-        window.appData.refScans.set(window.appData.myScans),
+        appData.refActive.set(appData.activeBowls),
+        appData.refPrepared.set(appData.preparedBowls),
+        appData.refReturned.set(appData.returnedBowls),
+        appData.refScans.set(appData.myScans),
     ];
 
     Promise.all(writes)
         .then(() => {
-            window.appData.lastSync = new Date().toISOString();
+            appData.lastSync = new Date().toISOString();
             console.log("⬇️ Data successfully written to Firebase.");
         })
         .catch(error => {
@@ -263,19 +264,19 @@ function syncToFirebase() {
  * Function to manually clear all data in the active inventory (Active Bowls).
  */
 function clearActiveInventory() {
-    if (!window.appData.isInitialized) {
+    if (!appData.isInitialized) {
         showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
         return;
     }
 
-    const currentCount = window.appData.activeBowls.length;
+    const currentCount = appData.activeBowls.length;
     if (currentCount === 0) {
         showMessage("ℹ️ Active Inventory is already empty.", 'info');
         return;
     }
 
     // 1. Clear the local array
-    window.appData.activeBowls = [];
+    appData.activeBowls = [];
     // 2. Sync to Firebase (this clears the data remotely)
     syncToFirebase();
     showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
@@ -310,7 +311,7 @@ function populateUserDropdown(mode) {
  */
 function updateDisplay() {
     // CRITICAL FIX: Do not proceed if DOM is not fully ready 
-    if (!window.appData.isDomReady) return;
+    if (!appData.isDomReady) return;
     const today = formatDateStandard(new Date());
 
     const modeDisplay = document.getElementById('modeDisplay');
@@ -324,13 +325,13 @@ function updateDisplay() {
     const userSelectionCard = document.getElementById('userSelectionCard');
 
     // 1. Update Mode Display and Button States
-    if (window.appData.mode) {
-        const modeText = window.appData.mode === 'kitchen' ?
+    if (appData.mode) {
+        const modeText = appData.mode === 'kitchen' ?
             'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
         if(modeDisplay) {
             modeDisplay.textContent = modeText;
             modeDisplay.classList.remove('bg-gray-500', 'accent-red', 'accent-green');
-            modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'accent-green' : 'accent-red');
+            modeDisplay.classList.add(appData.mode === 'kitchen' ? 'accent-green' : 'accent-red');
         }
         if(userSelectionCard) userSelectionCard.style.opacity = 1; 
         if(userSelect) userSelect.disabled = false;
@@ -338,7 +339,7 @@ function updateDisplay() {
         if(kitchenBtn) kitchenBtn.classList.remove('accent-green', 'btn-neutral');
         if(returnBtn) returnBtn.classList.remove('accent-red', 'btn-neutral');
 
-        if (window.appData.mode === 'kitchen') {
+        if (appData.mode === 'kitchen') {
             if(kitchenBtn) kitchenBtn.classList.add('accent-green');
             if(returnBtn) returnBtn.classList.add('btn-neutral');
         } else {
@@ -359,7 +360,7 @@ function updateDisplay() {
     if (dishSection) {
         // If mode is 'kitchen', show it.
         // Otherwise, hide it using the class defined in CSS.
-        if (window.appData.mode === 'kitchen') {
+        if (appData.mode === 'kitchen') {
             dishSection.classList.remove('hidden');
         } else {
             dishSection.classList.add('hidden');
@@ -367,31 +368,31 @@ function updateDisplay() {
     }
 
     // 3. Enable Scanning Controls (Step 3)
-    const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
+    const isReadyToScan = appData.mode && appData.user && (appData.mode === 'return' || appData.dishLetter);
     if (isReadyToScan) {
         if(scanningCard) scanningCard.style.opacity = 1;
         if(dishLetterSelect) dishLetterSelect.disabled = false;
-        if (scanInput) scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
+        if (scanInput) scanInput.placeholder = `Ready to Scan in ${appData.mode.toUpperCase()} Mode...`;
     } else {
         if(scanningCard) scanningCard.style.opacity = 0.5;
-        if (window.appData.mode === 'kitchen' && dishLetterSelect) dishLetterSelect.disabled = !window.appData.user;
+        if (appData.mode === 'kitchen' && dishLetterSelect) dishLetterSelect.disabled = !appData.user;
 
-        window.appData.scanning = false;
+        appData.scanning = false;
     }
 
 
     // --- Core Metrics Update (Global Inventory) ---
     // These metrics are visible at all times and do not depend on the scanning state.
     const activeCountEl = document.getElementById('activeCount'); 
-    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length; 
+    if (activeCountEl) activeCountEl.textContent = appData.activeBowls.length; 
 
     const preparedTodayCountEl = document.getElementById('preparedTodayCount');
-    if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
-    const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
+    if (preparedTodayCountEl) preparedTodayCountEl.textContent = appData.preparedBowls.length;
+    const returnedTodayCount = appData.returnedBowls.filter(bowl => 
         formatDateStandard(bowl.returnDate) === today
     ).length;
     const exportReturnCountEl = document.getElementById('exportReturnCount');
-    if (exportReturnCountEl) exportReturnCountEl.textContent = window.appData.returnedBowls.length;
+    if (exportReturnCountEl) exportReturnCountEl.textContent = appData.returnedBowls.length;
     // Show total history count
 
 
@@ -399,12 +400,12 @@ function updateDisplay() {
     // This metric IS dependent on the user and dish selection, but NOT scanning state.
     let myScansCount = 0;
     const { start, end } = getReportingDayTimestamp();
-    if (window.appData.user && window.appData.dishLetter) {
-        myScansCount = window.appData.myScans.filter(scan => 
+    if (appData.user && appData.dishLetter) {
+        myScansCount = appData.myScans.filter(scan => 
             scan.type === 'kitchen' && 
             scan.timestamp >= start && scan.timestamp < end &&
-            scan.user === window.appData.user &&
-            scan.dishLetter === window.appData.dishLetter
+            scan.user === appData.user &&
+            scan.dishLetter === appData.dishLetter
         ).length;
     }
 
@@ -412,18 +413,18 @@ function updateDisplay() {
     const myDishLetterLabelEl = document.getElementById('myDishLetterLabel'); 
 
     if (myScansCountEl) myScansCountEl.textContent = myScansCount;
-    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
+    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = appData.dishLetter || '---';
     // Update Scan Status/Input state
     const scanStatusEl = document.getElementById('scanStatus');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
-    if(scanStatusEl) scanStatusEl.textContent = window.appData.scanning ? 'Active' : 'Stopped';
+    if(scanStatusEl) scanStatusEl.textContent = appData.scanning ? 'Active' : 'Stopped';
 
     if(scanInput) {
-        scanInput.disabled = !window.appData.scanning;
+        scanInput.disabled = !appData.scanning;
         scanInput.classList.remove('scanning-active');
 
-        if (window.appData.scanning && isReadyToScan) {
+        if (appData.scanning && isReadyToScan) {
             scanInput.classList.add('scanning-active');
             if(startBtn) startBtn.disabled = true;
             if(stopBtn) stopBtn.disabled = false;
@@ -434,15 +435,15 @@ function updateDisplay() {
     }
 
     const selectedUserEl = document.getElementById('selectedUser');
-    if(selectedUserEl) selectedUserEl.textContent = window.appData.user || '---';
+    if(selectedUserEl) selectedUserEl.textContent = appData.user || '---';
 
     const selectedDishLetterEl = document.getElementById('selectedDishLetter');
-    if(selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
+    if(selectedDishLetterEl) selectedDishLetterEl.textContent = appData.dishLetter || '---';
     const exportActiveCountEl = document.getElementById('exportActiveCount');
-    if(exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
+    if(exportActiveCountEl) exportActiveCountEl.textContent = appData.activeBowls.length;
 
     const exportPreparedCountEl = document.getElementById('exportPreparedCount');
-    if(exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
+    if(exportPreparedCountEl) exportPreparedCountEl.textContent = appData.preparedBowls.length;
 
     const livePrepData = getLivePrepReport();
     renderLivePrepReport(livePrepData);
@@ -453,10 +454,10 @@ function updateDisplay() {
  */
 function setMode(mode) {
     if (mode !== 'kitchen' && mode !== 'return') return;
-    window.appData.user = null;
-    window.appData.dishLetter = null;
+    appData.user = null;
+    appData.dishLetter = null;
 
-    window.appData.mode = mode;
+    appData.mode = mode;
     stopScanning(); 
 
     populateUserDropdown(mode);
@@ -477,25 +478,25 @@ function selectUser(userName) {
     // Use the constants object defined at the top
     const user = CONSTANTS.USERS.find(u => u.name === userName);
     if (!user) {
-        window.appData.user = null;
+        appData.user = null;
         updateDisplay();
         return;
     }
 
-    if (!window.appData.mode) {
+    if (!appData.mode) {
         showMessage("❌ ERROR: Please select an Operation Mode (Kitchen/Return) first.", 'error');
         const userSelect = document.getElementById('userSelect');
         if(userSelect) userSelect.value = ''; 
         return;
     }
 
-    window.appData.user = userName;
+    appData.user = userName;
 
-    if (window.appData.mode === 'return') {
-        window.appData.dishLetter = null;
+    if (appData.mode === 'return') {
+        appData.dishLetter = null;
         showMessage(`User selected: ${userName}. Ready to scan in RETURN mode.`, 'success');
     } else {
-        window.appData.dishLetter = null;
+        appData.dishLetter = null;
         showMessage(`User selected: ${userName}. Please select a Dish Letter.`, 'info');
         const dishLetterSelect = document.getElementById('dishLetterSelect');
         if(dishLetterSelect) dishLetterSelect.value = ''; 
@@ -507,7 +508,7 @@ function selectUser(userName) {
  * Handles dish letter selection (Kitchen mode only).
  */
 function selectDishLetter(value) {
-    if (window.appData.mode !== 'kitchen' || !window.appData.user) {
+    if (appData.mode !== 'kitchen' || !appData.user) {
         showMessage("❌ ERROR: User or Mode not properly set.", 'error');
         const dishLetterSelect = document.getElementById('dishLetterSelect');
         if(dishLetterSelect) dishLetterSelect.value = ''; 
@@ -516,7 +517,7 @@ function selectDishLetter(value) {
 
     const upperValue = value.trim().toUpperCase();
     if (CONSTANTS.DISH_LETTERS.includes(upperValue)) {
-        window.appData.dishLetter = upperValue;
+        appData.dishLetter = upperValue;
         showMessage(`Dish Letter selected: ${upperValue}. Ready to scan.`, 'success');
         updateDisplay();
     } else {
@@ -528,19 +529,19 @@ function selectDishLetter(value) {
  * Function to manually clear all data in the active inventory (Active Bowls).
  */
 function clearActiveInventory() {
-    if (!window.appData.isInitialized) {
+    if (!appData.isInitialized) {
         showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
         return;
     }
 
-    const currentCount = window.appData.activeBowls.length;
+    const currentCount = appData.activeBowls.length;
     if (currentCount === 0) {
         showMessage("ℹ️ Active Inventory is already empty.", 'info');
         return;
     }
 
     // 1. Clear the local array
-    window.appData.activeBowls = [];
+    appData.activeBowls = [];
     // 2. Sync to Firebase (this clears the data remotely)
     syncToFirebase();
     showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
@@ -553,13 +554,13 @@ function clearActiveInventory() {
  * Activates the scanner input.
  */
 function startScanning() {
-    const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
+    const isReadyToScan = appData.mode && appData.user && (appData.mode === 'return' || appData.dishLetter);
     if (!isReadyToScan) {
         showMessage("❌ ERROR: Cannot start scanning. Complete Steps 1 & 2 first.", 'error');
         return;
     }
 
-    window.appData.scanning = true;
+    appData.scanning = true;
     const scanInput = document.getElementById('scanInput');
     // Ensure focus is explicitly set and held for scanner
     if(scanInput) scanInput.focus();
@@ -571,7 +572,7 @@ function startScanning() {
  * Deactivates the scanner input.
  */
 function stopScanning() {
-    window.appData.scanning = false;
+    appData.scanning = false;
     const scanInput = document.getElementById('scanInput');
     if(scanInput) scanInput.blur();
     showMessage("🛑 Scanner Deactivated.", 'info');
@@ -582,31 +583,31 @@ function stopScanning() {
  * Main handler for VYT scan input.
  */
 function processScan(vytUrl) {
-    if (!window.appData.scanning || !window.appData.user) {
+    if (!appData.scanning || !appData.user) {
         showMessage("❌ ERROR: Scanner not active or user not selected.", 'error');
         return;
     }
 
     // Prevent re-processing while current scan is being handled
-    if (window.appData.isProcessingScan) {
+    if (appData.isProcessingScan) {
         console.warn("Scan in progress. Ignoring current input.");
         return;
     }
 
-    window.appData.isProcessingScan = true;
+    appData.isProcessingScan = true;
     // Set flag to lock processing
 
     const timestamp = new Date().toISOString();
     const exactVytUrl = vytUrl;
     // --- CRITICAL DUPLICATE CHECK (Kitchen Mode) ---
 
-    if (window.appData.mode === 'kitchen') {
-        const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
-        const isAlreadyActive = window.appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
+    if (appData.mode === 'kitchen') {
+        const isAlreadyPrepared = appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
+        const isAlreadyActive = appData.activeBowls.some(b => b.vytUrl === exactVytUrl);
 
         if (isAlreadyPrepared) {
             showMessage("⚠️ DUPLICATE SCAN: This bowl has already been prepared today.", 'error', 7000);
-            window.appData.isProcessingScan = false; // Release lock
+            appData.isProcessingScan = false; // Release lock
             return; // Stop processing and logging immediately
         }
 
@@ -618,11 +619,11 @@ function processScan(vytUrl) {
     }
 
     // --- CRITICAL DUPLICATE CHECK (Return Mode) ---
-    if (window.appData.mode === 'return') {
-        const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
+    if (appData.mode === 'return') {
+        const isAlreadyReturned = appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
         if (isAlreadyReturned) {
             showMessage("⚠️ DUPLICATE SCAN: This bowl has already been returned today.", 'error', 7000);
-            window.appData.isProcessingScan = false; // Release lock
+            appData.isProcessingScan = false; // Release lock
             return;
             // Stop processing and logging immediately
         }
@@ -632,15 +633,15 @@ function processScan(vytUrl) {
     const scanRecord = {
         vytUrl: exactVytUrl,
         timestamp: timestamp,
-        type: window.appData.mode,
-        user: window.appData.user,
-        dishLetter: window.appData.mode === 'kitchen' ?
-            window.appData.dishLetter : 'N/A' 
+        type: appData.mode,
+        user: appData.user,
+        dishLetter: appData.mode === 'kitchen' ?
+            appData.dishLetter : 'N/A' 
     };
-    window.appData.myScans.push(scanRecord);
+    appData.myScans.push(scanRecord);
 
     let result;
-    if (window.appData.mode === 'kitchen') {
+    if (appData.mode === 'kitchen') {
         result = kitchenScan(exactVytUrl, timestamp);
     } else { 
         result = returnScan(exactVytUrl, timestamp);
@@ -653,7 +654,7 @@ function processScan(vytUrl) {
         showMessage(result.message, 'error');
     }
 
-    window.appData.isProcessingScan = false;
+    appData.isProcessingScan = false;
     // Release flag after sync starts
     updateDisplay(); 
 }
@@ -663,42 +664,42 @@ function processScan(vytUrl) {
  */
 function kitchenScan(vytUrl, timestamp) {
     // Note: Duplicate check moved to processScan to run before anything is logged.
-    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
-    const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
+    const preparedIndex = appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
+    const activeIndex = appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     let statusMessage = "started a new prep cycle.";
 
     // **💥 IMPLEMENTING RECYCLE LOGIC (RULE 1) 💥**
     // IF the bowl is in Active (Out with customer)
     if (activeIndex !== -1) {
         // DELETE from Active (This is the crucial 'Recycle' step you requested)
-        const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
+        const returnedBowl = appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
-        window.appData.returnedBowls.push(returnedBowl);
+        appData.returnedBowls.push(returnedBowl);
         statusMessage = "closed active cycle and started new prep (Recycled).";
     }
 
     // Logic 2: If the bowl was in Prepared, clear old prepared record for new record
     if (preparedIndex !== -1) {
-        window.appData.preparedBowls.splice(preparedIndex, 1);
+        appData.preparedBowls.splice(preparedIndex, 1);
         statusMessage = "cleared old prepared record for new prep.";
     }
 
     // 3. Create NEW Prepared Bowl record (starts a new prep cycle)
     const newPreparedBowl = {
         vytUrl: vytUrl, 
-        dishLetter: window.appData.dishLetter,
+        dishLetter: appData.dishLetter,
         company: 'Unknown',
         customer: 'Unknown',
         preparedDate: formatDateStandard(new Date(timestamp)), 
         preparedTime: timestamp, 
-        user: window.appData.user,
+        user: appData.user,
         state: 'PREPARED_UNKNOWN'
     };
-    window.appData.preparedBowls.push(newPreparedBowl);
+    appData.preparedBowls.push(newPreparedBowl);
 
     return { 
         success: true, 
-        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle: ${statusMessage}` 
+        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${appData.dishLetter}. Cycle: ${statusMessage}` 
     };
 }
 
@@ -710,11 +711,11 @@ function returnScan(vytUrl, timestamp) {
     const returnDate = formatDateStandard(new Date(timestamp));
 
     // 1. Try to find the bowl in Prepared state and move to Returned
-    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
+    const preparedIndex = appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     if (preparedIndex !== -1) {
-        const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
+        const returnedBowl = appData.preparedBowls.splice(preparedIndex, 1)[0];
         returnedBowl.returnDate = returnDate;
-        window.appData.returnedBowls.push(returnedBowl);
+        appData.returnedBowls.push(returnedBowl);
         return { 
             success: true, 
             message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.` 
@@ -722,11 +723,11 @@ function returnScan(vytUrl, timestamp) {
     }
 
     // 2. Try to find the bowl in Active state and move to Returned (CLOSES THE ACTIVE CYCLE)
-    const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
+    const activeIndex = appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
-        const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
+        const returnedBowl = appData.activeBowls.splice(activeIndex, 1)[0];
         returnedBowl.returnDate = returnDate;
-        window.appData.returnedBowls.push(returnedBowl);
+        appData.returnedBowls.push(returnedBowl);
         return { 
             success: true, 
             message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed).` 
@@ -904,13 +905,13 @@ function processJSONData(jsonString) {
 
         const exactVytUrl = item.vytUrl; 
 
-        const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === exactVytUrl);
-        const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === exactVytUrl);
+        const preparedIndex = appData.preparedBowls.findIndex(b => b.vytUrl === exactVytUrl);
+        const activeIndex = appData.activeBowls.findIndex(b => b.vytUrl === exactVytUrl);
 
         const jsonAssignmentDate = formatDateStandard(item.preparedDate || item.date || timestamp);
         // Logic 1: Update Existing Active Bowl (Temporal Overwrite)
         if (activeIndex !== -1) {
-            const activeBowl = window.appData.activeBowls[activeIndex];
+            const activeBowl = appData.activeBowls[activeIndex];
             // Overwrite Company/Customer with NEW details from the patch
             activeBowl.company = item.company.trim();
             activeBowl.customer = item.customer.trim();
@@ -924,7 +925,7 @@ function processJSONData(jsonString) {
         // Logic 2: Promote Prepared Bowl to Active Bowl (MATCHING VYT URL)
         if (preparedIndex !== -1) {
             // Remove from Prepared and move to Active
-            const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
+            const preparedBowl = appData.preparedBowls.splice(preparedIndex, 1)[0];
             preparedBowl.company = item.company.trim();
             preparedBowl.customer = item.customer.trim();
             preparedBowl.preparedDate = jsonAssignmentDate; 
@@ -932,7 +933,7 @@ function processJSONData(jsonString) {
             preparedBowl.state = 'ACTIVE_KNOWN';
             // Status changed: Assigned and Out.
 
-            window.appData.activeBowls.push(preparedBowl);
+            appData.activeBowls.push(preparedBowl);
             creations++;
             continue;
         }
@@ -946,11 +947,11 @@ function processJSONData(jsonString) {
                 customer: item.customer.trim(),
                 preparedDate: jsonAssignmentDate, 
                 preparedTime: timestamp,
-                user: window.appData.user ||
+                user: appData.user ||
                     'SYSTEM', // Assign SYSTEM user if no operator selected
                 state: 'ACTIVE_KNOWN' // Status: Assigned and Out.
             };
-            window.appData.activeBowls.push(newBowl);
+            appData.activeBowls.push(newBowl);
             creations++;
         }
     }
@@ -1007,19 +1008,19 @@ function exportData(data, filename, source) {
 }
 
 function exportActiveBowls() {
-    exportData(window.appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.csv`, 
+    exportData(appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.csv`, 
         'Active Bowls');
 }
 
 function exportReturnData() {
-    exportData(window.appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.csv`, 'Returned Bowls');
+    exportData(appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.csv`, 'Returned Bowls');
 }
 
 function exportAllData() {
     const fullData = [
-        ...window.appData.activeBowls.map(b => ({ ...b, source: 'Active' })),
-        ...window.appData.preparedBowls.map(b => ({ ...b, source: 'Prepared' })),
-        ...window.appData.returnedBowls.map(b => ({ ...b, source: 'Returned' })),
+        ...appData.activeBowls.map(b => ({ ...b, source: 'Active' })),
+        ...appData.preparedBowls.map(b => ({ ...b, source: 'Prepared' })),
+        ...appData.returnedBowls.map(b => ({ ...b, source: 'Returned' })),
     ];
     // NOTE: This aggregates the three main lists. myScans is huge and often skipped.
     exportData(fullData, `all_combined_bowl_data_${formatDateStandard(new Date())}.csv`, 'Combined Data');
@@ -1031,7 +1032,7 @@ function exportAllData() {
 function getLivePrepReport() {
     const { start, end } = getReportingDayTimestamp();
 
-    const todaysKitchenScans = window.appData.myScans.filter(scan => 
+    const todaysKitchenScans = appData.myScans.filter(scan => 
         scan.type === 'kitchen' && 
         scan.timestamp >= start && 
         scan.timestamp < end
@@ -1103,17 +1104,17 @@ function checkDailyDataReset() {
     const now = new Date();
     const cutoffHour = 22; // 10 PM
     const today = formatDateStandard(now);
-    const lastResetDate = window.appData.lastDataReset ? formatDateStandard(new Date(window.appData.lastDataReset)) : null;
+    const lastResetDate = appData.lastDataReset ? formatDateStandard(new Date(appData.lastDataReset)) : null;
 
     if (now.getHours() >= cutoffHour && lastResetDate !== today) {
-        const bowlsToKeep = window.appData.returnedBowls.filter(bowl => 
+        const bowlsToKeep = appData.returnedBowls.filter(bowl => 
             formatDateStandard(bowl.returnDate) === today
         );
-        const removedCount = window.appData.returnedBowls.length - bowlsToKeep.length;
+        const removedCount = appData.returnedBowls.length - bowlsToKeep.length;
 
         if (removedCount > 0) {
-            window.appData.returnedBowls = bowlsToKeep;
-            window.appData.lastDataReset = now.toISOString();
+            appData.returnedBowls = bowlsToKeep;
+            appData.lastDataReset = now.toISOString();
             syncToFirebase();
             console.log(`🧹 Daily Data Reset (10 PM): Removed ${removedCount} returned bowl records from previous days.`);
         }
@@ -1126,18 +1127,18 @@ function checkDailyDataReset() {
 function resetTodaysPreparedBowls() {
     const { start, end } = getReportingDayTimestamp();
 
-    const initialPreparedCount = window.appData.preparedBowls.length;
-    window.appData.preparedBowls = [];
+    const initialPreparedCount = appData.preparedBowls.length;
+    appData.preparedBowls = [];
 
-    const initialScanCount = window.appData.myScans.length;
-    window.appData.myScans = window.appData.myScans.filter(scan => 
+    const initialScanCount = appData.myScans.length;
+    appData.myScans = appData.myScans.filter(scan => 
         !(scan.type === 'kitchen' && scan.timestamp >= start && scan.timestamp < end)
     );
-    const removedScans = initialScanCount - window.appData.myScans.length;
+    const removedScans = initialScanCount - appData.myScans.length;
 
     console.log(`🗑️ Removed ALL ${initialPreparedCount} prepared bowls and ${removedScans} kitchen scans from the current reporting window`);
     if (initialPreparedCount > 0 || removedScans > 0) {
-        window.appData.lastSync = new Date().toISOString();
+        appData.lastSync = new Date().toISOString();
 
         syncToFirebase();
         updateDisplay();
@@ -1151,7 +1152,7 @@ function resetTodaysPreparedBowls() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Mark DOM as ready immediately
-    window.appData.isDomReady = true;
+    appData.isDomReady = true;
 
     const dishLetterSelect = document.getElementById('dishLetterSelect');
 
@@ -1172,14 +1173,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Length check is crucial for performance and avoiding single keypresses
             if (scannedValue.length > 5) { 
 
-                if (window.appData.scanTimer) {
-                    clearTimeout(window.appData.scanTimer);
+                if (appData.scanTimer) {
+                    clearTimeout(appData.scanTimer);
                 }
 
                 // Set delay to 50ms as requested for physical scanner stability
-                window.appData.scanTimer = setTimeout(() => {
+                appData.scanTimer = setTimeout(() => {
                     // Check if input value is stable and scanning is active
-                    if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
+                    if (scanInput.value.trim() === scannedValue && appData.scanning && !appData.isProcessingScan) {
                         processScan(scannedValue);
                         // CRITICAL: Clear input field AFTER successful processing
                         scanInput.value = ''; 
@@ -1204,7 +1205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         const scanInput = document.getElementById('scanInput');
         // Only run if scanning is active, the input isn't focused, and the key is a character (not Shift/Alt/Ctrl)
-        if (window.appData.scanning && scanInput && document.activeElement !== scanInput && e.key.length === 1 && /[\w\d]/.test(e.key)) {
+        if (appData.scanning && scanInput && document.activeElement !== scanInput && e.key.length === 1 && /[\w\d]/.test(e.key)) {
             scanInput.focus();
         }
     });
