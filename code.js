@@ -389,11 +389,59 @@ function detectVytCode(input) {
 document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 Initializing Scanner System...');
     initializeFirebase();
+    // initializeUI is called from within loadFromFirebase/loadFromStorage
 });
+
+function initializeUI() {
+    initializeUsers(); // Initial load for all users (if no mode set) or just to set up dropdown
+    setupEventListeners(); // Assuming this function exists in your HTML/other JS
+    updateDisplay();
+    startDailyCleanupTimer();
+    updateOvernightStats();
+}
+
+function setupEventListeners() {
+    // Placeholder for your actual event listeners
+    document.getElementById('progloveInput')?.addEventListener('change', (e) => processScan(e.target.value));
+    document.getElementById('progloveInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            processScan(e.target.value);
+            e.target.value = ''; // Clear input after scan
+        }
+    });
+
+    document.getElementById('userDropdown')?.addEventListener('change', selectUser);
+    document.getElementById('dishDropdown')?.addEventListener('change', selectDishLetter);
+    document.getElementById('kitchenBtn')?.addEventListener('click', () => setMode('kitchen'));
+    document.getElementById('returnBtn')?.addEventListener('click', () => setMode('return'));
+    document.getElementById('startBtn')?.addEventListener('click', startScanning);
+    document.getElementById('stopBtn')?.addEventListener('click', stopScanning);
+    document.getElementById('processJsonBtn')?.addEventListener('click', processJSONData);
+    document.getElementById('exportActiveBtn')?.addEventListener('click', exportActiveBowls);
+    document.getElementById('exportReturnBtn')?.addEventListener('click', exportReturnData);
+    document.getElementById('exportAllBtn')?.addEventListener('click', exportAllData);
+    document.getElementById('checkFirebaseBtn')?.addEventListener('click', checkFirebaseData);
+    document.getElementById('syncFirebaseBtn')?.addEventListener('click', syncToFirebase);
+    document.getElementById('loadFirebaseBtn')?.addEventListener('click', loadFromFirebase);
+}
 
 function updateLastActivity() {
     window.appData.lastActivity = Date.now();
 }
+
+// utility function placeholder - needs to be defined for initializeUI to work
+function showMessage(message, type) {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    // Assume you have an HTML element to display messages (e.g., #messageBox)
+    const msgBox = document.getElementById('messageBox');
+    if (msgBox) {
+        msgBox.textContent = message;
+        msgBox.className = `message ${type}`;
+        msgBox.style.display = 'block';
+        setTimeout(() => msgBox.style.display = 'none', 5000);
+    }
+}
+
 
 // ========== ENHANCED JSON PROCESSING WITH DATE EXTRACTION ==========
 
@@ -781,27 +829,27 @@ function stopScanning() {
 
 // ========== USER AND MODE MANAGEMENT ==========
 function initializeUsers() {
+    // This is primarily for initial setup/placeholder. loadUsers is called after mode selection.
     const dropdown = document.getElementById('userDropdown');
     if (!dropdown) return;
-    dropdown.innerHTML = '<option value="">-- Select User --</option>';
-    USERS.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user.name;
-        option.textContent = user.name + (user.role ? ` (${user.role})` : '');
-        dropdown.appendChild(option);
-    });
+    dropdown.innerHTML = '<option value="">-- Select Mode First --</option>'; 
 }
 
 function setMode(mode) {
     window.appData.mode = mode;
-    Object.assign(window.appData, { user: null, dishLetter: null, scanning: false });
+    // Reset user and stop scanning when changing mode
+    Object.assign(window.appData, { user: null, dishLetter: null, scanning: false }); 
+    
     document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
     document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
     document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
-    document.getElementById('userDropdown').value = '';
+    
     const dishDropdown = document.getElementById('dishDropdown');
     if(dishDropdown) dishDropdown.value = '';
-    loadUsers();
+
+    // Correctly load users after setting the mode
+    loadUsers(); 
+    
     updateStatsLabels();
     updateDisplay();
     showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
@@ -812,15 +860,26 @@ function updateStatsLabels() {
     if(prepLabel) prepLabel.textContent = window.appData.mode === 'kitchen' ? 'Prepared Today' : 'Returned Today';
 }
 
+/**
+ * FIX: This is the critical function to ensure users are filtered and loaded correctly
+ * based on the active mode (Kitchen or Return).
+ */
 function loadUsers() {
     const dropdown = document.getElementById('userDropdown');
-    if (!dropdown || !window.appData.mode) return;
+    if (!dropdown) return;
     
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
     
-    // FIX: Make the comparison case-insensitive
+    const currentMode = window.appData.mode;
+
+    if (!currentMode) {
+        // If no mode is set (e.g., initial load), don't populate the list yet.
+        return;
+    }
+
+    // Filter users based on mode.role (case-insensitive)
     const usersToShow = USERS.filter(user => 
-        user.role.toLowerCase() === window.appData.mode.toLowerCase()
+        user.role.toLowerCase() === currentMode.toLowerCase()
     );
 
     usersToShow.forEach(user => {
@@ -829,6 +888,9 @@ function loadUsers() {
         option.textContent = user.name;
         dropdown.appendChild(option);
     });
+
+    // Ensure the user selection is reset in the UI
+    dropdown.value = '';
 }
 
 
@@ -841,7 +903,13 @@ function selectUser() {
         if (window.appData.mode === 'kitchen') {
             document.getElementById('dishSection').classList.remove('hidden');
             loadDishLetters();
+        } else {
+            // Automatically start scanning in return mode once user is selected
+            startScanning();
         }
+    } else {
+        // If user selects "-- Select User --"
+        window.appData.scanning = false;
     }
     updateDisplay();
 }
@@ -882,6 +950,7 @@ function updateDisplay() {
     const returnedToday = returnedBowls.filter(b => b.returnDate === today).length;
     const userScansToday = myScans.filter(s => s.user === user && new Date(s.timestamp).toLocaleDateString('en-GB') === today).length;
     
+    // Ensure prepLabel is updated based on current mode
     document.getElementById('prepCount').textContent = mode === 'kitchen' ? preparedToday : returnedToday;
     document.getElementById('myScansCount').textContent = userScansToday;
     
@@ -896,8 +965,31 @@ function updateOvernightStats() {
     const today10AM = new Date(now); today10AM.setHours(10, 0, 0, 0);
     const yesterday10PM = new Date(now); yesterday10PM.setDate(yesterday10PM.getDate() - 1); yesterday10PM.setHours(22, 0, 0, 0);
     const isOvernight = now >= yesterday10PM && now <= today10AM;
-    cycleInfo.textContent = `Cycle: ${isOvernight ? 'Yesterday 10PM - Today 10AM' : 'Today 10PM - Tomorrow 10AM'}`;
-    const scans = window.appData.myScans.filter(s => new Date(s.timestamp) >= yesterday10PM && new Date(s.timestamp) <= today10AM);
+    cycleInfo.textContent = `Cycle: ${isOvernight ? 'Yesterday 10PM - Today 10AM' : 'Today 10AM - Tomorrow 10AM'}`;
+    
+    // Determine the correct time window for scans
+    let filterStart = today10AM;
+    let filterEnd = new Date(now);
+
+    if (isOvernight) {
+        filterStart = yesterday10PM;
+    } else {
+        // If not overnight, check if it's past 10 AM today
+        if (now.getHours() >= 10) {
+            filterStart = today10AM;
+        } else {
+            // Before 10 AM, use yesterday's 10 AM
+            filterStart = new Date(now);
+            filterStart.setDate(filterStart.getDate() - 1);
+            filterStart.setHours(10, 0, 0, 0);
+        }
+    }
+    
+    const scans = window.appData.myScans.filter(s => {
+        const scanTime = new Date(s.timestamp);
+        return scanTime >= filterStart && scanTime <= filterEnd;
+    });
+
     const stats = Object.values(scans.reduce((acc, { dish, user, timestamp }) => {
         const key = `${dish}-${user}`;
         if (!acc[key]) acc[key] = { dish, user, count: 0, scans: [] };
@@ -905,11 +997,12 @@ function updateOvernightStats() {
         acc[key].scans.push(timestamp);
         return acc;
     }, {})).sort((a,b) => (a.dish > b.dish) ? 1 : -1);
+    
     if (stats.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No overnight scans</td></tr>';
+        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No current cycle scans</td></tr>';
         return;
     }
-    statsBody.innerHTML = stats.map(s => `<tr><td class="dish-header">${s.dish}</td><td>${s.user}</td><td>${s.count}</td><td>${new Date(s.scans[0]).toLocaleTimeString()}</td><td>${new Date(s.scans[s.scans.length - 1]).toLocaleTimeString()}</td></tr>`).join('');
+    statsBody.innerHTML = stats.map(s => `<tr><td class="dish-header">${s.dish || 'N/A'}</td><td>${s.user}</td><td>${s.count}</td><td>${new Date(s.scans[0]).toLocaleTimeString()}</td><td>${new Date(s.scans[s.scans.length - 1]).toLocaleTimeString()}</td></tr>`).join('');
 }
 
 // ========== CLEANUP AND MAINTENANCE FUNCTIONS ==========
@@ -977,5 +1070,5 @@ window.exportAllData = exportAllData;
 window.checkFirebaseData = checkFirebaseData;
 window.syncToFirebase = syncToFirebase;
 window.loadFromFirebase = loadFromFirebase;
-
-
+// Assuming showMessage is globally available (e.g., defined in the HTML or another script)
+window.showMessage = showMessage; 
