@@ -1,3 +1,5 @@
+[file name]: index (1).html
+[file content begin]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -301,6 +303,46 @@
         .metric-value { font-size: 1.5rem; font-weight: 800; }
         .metric-label { font-size: 0.75rem; color: var(--color-text-secondary); }
 
+        /* --- Firebase Status Styles --- */
+        .firebase-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+            display: inline-block;
+        }
+
+        .firebase-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .firebase-status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .firebase-status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .firebase-status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .firebase-status.unknown {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border: 1px solid #d6d8db;
+        }
+
         /* --- Animations & Effects --- */
 
         /* Glow for the active scanner button */
@@ -351,6 +393,10 @@
         <header class="app-header header-shadow">
             <h1 class="header-title">🧤 PROGLOVE BOWL TRACKING</h1>
             <p class="header-subtitle">Real-time Prep & Return Synchronization</p>
+            <div style="margin-top: 10px;">
+                <span id="systemStatus" class="status-box">Loading...</span>
+                <span id="firebaseStatus" class="firebase-status unknown">⚪ Firebase Unknown</span>
+            </div>
         </header>
 
         <!-- Mode Selection (Step 1) -->
@@ -468,4 +514,4 @@
     <script src="code.js"></script>
 </body>
 </html>
-
+[file content end]
