@@ -682,7 +682,10 @@ function processScan(input) {
         showMessage("❌ Scan processing error", "error");
     } finally {
         // IMPORTANT: Always release the lock
-        window.appData.isProcessingScan = false;
+        // Use a short timeout to prevent the lock from re-engaging too quickly
+        setTimeout(() => {
+            window.appData.isProcessingScan = false;
+        }, 100); 
     }
 }
 
@@ -811,9 +814,15 @@ function updateStatsLabels() {
 
 function loadUsers() {
     const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
+    if (!dropdown || !window.appData.mode) return;
+    
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
-    const usersToShow = USERS.filter(user => user.role === window.appData.mode);
+    
+    // FIX: Make the comparison case-insensitive
+    const usersToShow = USERS.filter(user => 
+        user.role.toLowerCase() === window.appData.mode.toLowerCase()
+    );
+
     usersToShow.forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
@@ -821,6 +830,7 @@ function loadUsers() {
         dropdown.appendChild(option);
     });
 }
+
 
 function selectUser() {
     const dropdown = document.getElementById('userDropdown');
@@ -967,4 +977,5 @@ window.exportAllData = exportAllData;
 window.checkFirebaseData = checkFirebaseData;
 window.syncToFirebase = syncToFirebase;
 window.loadFromFirebase = loadFromFirebase;
+
 
