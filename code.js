@@ -1,3 +1,5 @@
+[file name]: code.js
+[file content begin]
 // ProGlove Scanner - Complete Bowl Tracking System
 window.appData = {
     mode: null,
@@ -114,15 +116,46 @@ function initializeFirebase() {
                 console.log('✅ Firebase app initialized');
             }
 
+            // Update Firebase connection status
+            updateFirebaseConnectionStatus('connected');
             loadFromFirebase();
         })
         .catch((error) => {
             console.error('❌ Failed to load Firebase SDK:', error);
+            updateFirebaseConnectionStatus('disconnected');
             loadFromStorage();
             initializeUI();
             showMessage('⚠️ Using local storage (Firebase failed)', 'warning');
             document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Local Storage';
         });
+}
+
+// NEW FUNCTION: Update Firebase connection status display
+function updateFirebaseConnectionStatus(status) {
+    const statusElement = document.getElementById('firebaseStatus');
+    if (!statusElement) return;
+    
+    switch(status) {
+        case 'connected':
+            statusElement.innerHTML = '🟢 Firebase Connected';
+            statusElement.className = 'firebase-status connected';
+            break;
+        case 'connecting':
+            statusElement.innerHTML = '🟡 Firebase Connecting...';
+            statusElement.className = 'firebase-status connecting';
+            break;
+        case 'disconnected':
+            statusElement.innerHTML = '🔴 Firebase Disconnected';
+            statusElement.className = 'firebase-status disconnected';
+            break;
+        case 'error':
+            statusElement.innerHTML = '🔴 Firebase Error';
+            statusElement.className = 'firebase-status error';
+            break;
+        default:
+            statusElement.innerHTML = '⚪ Firebase Unknown';
+            statusElement.className = 'firebase-status unknown';
+    }
 }
 
 // ========== SMART DATA MERGING SYSTEM ==========
@@ -136,6 +169,7 @@ function loadFromFirebase() {
 
         showMessage('🔄 Loading from cloud...', 'info');
         document.getElementById('systemStatus').textContent = '🔄 Connecting to Cloud...';
+        updateFirebaseConnectionStatus('connecting');
 
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Firebase connection timeout')), 10000);
@@ -172,6 +206,7 @@ function loadFromFirebase() {
 
                     showMessage('✅ Cloud data loaded with smart merge', 'success');
                     document.getElementById('systemStatus').textContent = '✅ Cloud Connected';
+                    updateFirebaseConnectionStatus('connected');
 
                     cleanupIncompleteBowls();
                     initializeUI();
@@ -180,6 +215,7 @@ function loadFromFirebase() {
                     console.log('❌ No data in Firebase, using local data');
                     showMessage('❌ No cloud data - using local data', 'warning');
                     document.getElementById('systemStatus').textContent = '✅ Cloud Connected (No Data)';
+                    updateFirebaseConnectionStatus('connected');
                     loadFromStorage();
                     initializeUI();
                 }
@@ -188,6 +224,7 @@ function loadFromFirebase() {
                 console.error('Firebase load error:', error);
                 showMessage('❌ Cloud load failed: ' + error.message, 'error');
                 document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Load Error';
+                updateFirebaseConnectionStatus('error');
                 loadFromStorage();
                 initializeUI();
             });
@@ -195,6 +232,7 @@ function loadFromFirebase() {
         console.error('Firebase error:', error);
         showMessage('❌ Firebase error: ' + error.message, 'error');
         document.getElementById('systemStatus').textContent = '⚠️ Offline Mode - Firebase Error';
+        updateFirebaseConnectionStatus('error');
         loadFromStorage();
         initializeUI();
     }
@@ -637,7 +675,10 @@ function downloadCSV(csvData, filename) {
 function syncToFirebase() {
     try {
         saveToStorage();
-        if (typeof firebase === 'undefined') return;
+        if (typeof firebase === 'undefined') {
+            updateFirebaseConnectionStatus('disconnected');
+            return;
+        }
         const db = firebase.database();
         const backupData = {
             activeBowls: window.appData.activeBowls || [], preparedBowls: window.appData.preparedBowls || [],
@@ -648,8 +689,15 @@ function syncToFirebase() {
         db.ref('progloveData').set(backupData).then(() => {
             window.appData.lastSync = new Date().toISOString();
             document.getElementById('systemStatus').textContent = '✅ Cloud Synced';
-        }).catch(err => document.getElementById('systemStatus').textContent = '⚠️ Sync Failed');
-    } catch (e) { console.error('Sync error:', e); }
+            updateFirebaseConnectionStatus('connected');
+        }).catch(err => {
+            document.getElementById('systemStatus').textContent = '⚠️ Sync Failed';
+            updateFirebaseConnectionStatus('error');
+        });
+    } catch (e) { 
+        console.error('Sync error:', e);
+        updateFirebaseConnectionStatus('error');
+    }
 }
 
 function saveToStorage() {
@@ -803,284 +851,219 @@ function returnScan(vytInfo) {
     };
     window.appData.returnedBowls.push(returnedBowl);
 
-    // Log the scan for user stats and global history
-    window.appData.myScans.push({ type: 'return', code: fullCode, user: window.appData.user, timestamp: new Date().toISOString() });
-    const message = `✅ Returned: ${fullCode.slice(-8)}`;
+    // Log the scan for the user's stats
+    window.appData.myScans.push({ type: 'return', code: fullCode, dish: preparedBowl.dish, user: window.appData.user, timestamp: new Date().toISOString() });
+    
+    // Create the message and add to global history
+    const message = `✅ ${preparedBowl.dish} Returned: ${fullCode.slice(-8)}`;
     window.appData.scanHistory.unshift({ type: 'return', code: fullCode, user: window.appData.user, timestamp: new Date().toISOString(), message });
     
     syncToFirebase(); // Sync changes
     return { message, type: "success" };
 }
 
-function startScanning() {
-    if (!window.appData.user) { showMessage('❌ Select user first', 'error'); return; }
-    if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) { showMessage('❌ Select dish letter first', 'error'); return; }
-    window.appData.scanning = true;
-    updateDisplay();
-    document.getElementById('progloveInput').focus();
-    showMessage(`🎯 SCANNING ACTIVE`, 'success');
+function cleanupIncompleteBowls() {
+    const today = new Date().toLocaleDateString('en-GB');
+    window.appData.preparedBowls = window.appData.preparedBowls.filter(bowl => bowl.date === today);
+    window.appData.returnedBowls = window.appData.returnedBowls.filter(bowl => bowl.returnDate === today);
 }
 
-function stopScanning() {
-    window.appData.scanning = false;
-    updateDisplay();
-    showMessage(`⏹ Scanning stopped`, 'info');
+function startDailyCleanupTimer() {
+    const now = new Date();
+    const nextCleanup = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+    const timeUntilCleanup = nextCleanup - now;
+    setTimeout(() => {
+        cleanupIncompleteBowls();
+        window.appData.lastCleanup = new Date().toISOString();
+        syncToFirebase();
+        setInterval(cleanupIncompleteBowls, 24 * 60 * 60 * 1000);
+    }, timeUntilCleanup);
 }
 
+function updateOvernightStats() {
+    const today = new Date().toLocaleDateString('en-GB');
+    const overnightActive = window.appData.activeBowls.filter(bowl => bowl.date !== today).length;
+    if (overnightActive > 0) {
+        document.getElementById('overnightActiveValue').textContent = overnightActive;
+        document.getElementById('overnightStats').style.display = 'block';
+    } else {
+        document.getElementById('overnightStats').style.display = 'none';
+    }
+}
 
-// ========== USER AND MODE MANAGEMENT (FIXED FOR TABLETS) ==========
+// ========== USER INTERFACE FUNCTIONS ==========
+
+// FIXED: Initialize users properly
 function initializeUsers() {
-    // This is primarily for initial setup/placeholder. loadUsers is called after mode selection.
-    const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    dropdown.innerHTML = '<option value="">-- Select Mode First --</option>'; 
+    const userDropdown = document.getElementById('userDropdown');
+    if (!userDropdown) return;
+
+    // Clear existing options except the first one
+    while (userDropdown.options.length > 1) {
+        userDropdown.remove(1);
+    }
+
+    // Add all users from the USERS array
+    USERS.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.name;
+        option.textContent = `${user.name} (${user.role})`;
+        userDropdown.appendChild(option);
+    });
+
+    // If no user is selected, select the first one
+    if (!window.appData.user && userDropdown.options.length > 0) {
+        userDropdown.selectedIndex = 0;
+        selectUser(); // This will set the user and update the mode
+    }
+}
+
+function selectUser() {
+    const userDropdown = document.getElementById('userDropdown');
+    if (!userDropdown) return;
+
+    const selectedUserName = userDropdown.value;
+    const selectedUser = USERS.find(user => user.name === selectedUserName);
+    
+    if (selectedUser) {
+        window.appData.user = selectedUser.name;
+        console.log(`👤 User selected: ${selectedUser.name} (${selectedUser.role})`);
+        
+        // Automatically set mode based on user role
+        if (selectedUser.role === 'Kitchen') {
+            setMode('kitchen');
+        } else if (selectedUser.role === 'Return') {
+            setMode('return');
+        }
+        
+        updateDisplay();
+    }
+}
+
+function selectDishLetter() {
+    const dishDropdown = document.getElementById('dishDropdown');
+    if (!dishDropdown) return;
+
+    window.appData.dishLetter = dishDropdown.value;
+    console.log(`🍽️ Dish letter selected: ${window.appData.dishLetter}`);
+    updateDisplay();
 }
 
 function setMode(mode) {
     window.appData.mode = mode;
-    // Reset user and stop scanning when changing mode
-    Object.assign(window.appData, { user: null, dishLetter: null, scanning: false }); 
+    console.log(`🎯 Mode set to: ${mode}`);
     
-    document.getElementById('kitchenBtn').classList.toggle('active', mode === 'kitchen');
-    document.getElementById('returnBtn').classList.toggle('active', mode === 'return');
-    document.getElementById('dishSection').classList.toggle('hidden', mode !== 'kitchen');
+    // Update UI to reflect mode
+    const kitchenBtn = document.getElementById('kitchenBtn');
+    const returnBtn = document.getElementById('returnBtn');
     
-    const dishDropdown = document.getElementById('dishDropdown');
-    if(dishDropdown) dishDropdown.value = '';
-
-    // Correctly load users after setting the mode
-    loadUsers(); 
-    
-    // IMPORTANT FIX FOR TABLETS: Manually reset the dropdown value after loading options
-    const userDropdown = document.getElementById('userDropdown');
-    if (userDropdown) {
-        userDropdown.value = '';
+    if (kitchenBtn && returnBtn) {
+        if (mode === 'kitchen') {
+            kitchenBtn.classList.add('active');
+            returnBtn.classList.remove('active');
+        } else if (mode === 'return') {
+            returnBtn.classList.add('active');
+            kitchenBtn.classList.remove('active');
+        }
     }
     
-    updateStatsLabels();
     updateDisplay();
-    showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
 }
 
-/**
- * FIX: This is the critical function to ensure users are filtered and loaded correctly
- * based on the active mode (Kitchen or Return) and is robust for dynamic updates.
- */
-function loadUsers() {
-    const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    
-    // 1. CLEAR AND RESET THE DROPDOWN
-    dropdown.innerHTML = '<option value="">-- Select User --</option>';
-    dropdown.value = ''; 
-    
-    const currentMode = window.appData.mode;
-
-    if (!currentMode) {
+function startScanning() {
+    if (!window.appData.user) {
+        showMessage('❌ Please select a user first', 'error');
         return;
     }
-
-    // Filter users based on mode.role (case-insensitive)
-    const usersToShow = USERS.filter(user => 
-        user.role.toLowerCase() === currentMode.toLowerCase()
-    );
-
-    // 2. POPULATE OPTIONS
-    usersToShow.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user.name;
-        option.textContent = user.name;
-        dropdown.appendChild(option);
-    });
-
-    // 3. Re-select the placeholder to force a proper 'change' event on first user selection
-    dropdown.value = '';
-}
-
-
-function selectUser() {
-    const dropdown = document.getElementById('userDropdown');
-    if (!dropdown) return;
-    
-    const selectedValue = dropdown.value;
-    
-    // Only proceed if a user (not the placeholder) is selected AND it's a new selection
-    if (selectedValue && selectedValue !== window.appData.user) {
-        window.appData.user = selectedValue;
-        
-        showMessage(`✅ ${window.appData.user} selected`, 'success');
-        
-        if (window.appData.mode === 'kitchen') {
-            document.getElementById('dishSection').classList.remove('hidden');
-            loadDishLetters();
-        } else if (window.appData.mode === 'return') {
-            // Automatically start scanning in return mode once user is selected
-            startScanning();
-        }
-    } else if (!selectedValue) {
-        // Handle case where user selects the placeholder or nothing
-        window.appData.user = null;
-        window.appData.scanning = false;
-        stopScanning();
+    if (window.appData.mode === 'kitchen' && !window.appData.dishLetter) {
+        showMessage('❌ Please select a dish letter first', 'error');
+        return;
     }
+    
+    window.appData.scanning = true;
+    console.log('🔴 Scanning started');
+    showMessage('✅ Scanning started', 'success');
     updateDisplay();
 }
 
-function loadDishLetters() {
-    const dropdown = document.getElementById('dishDropdown');
-    if (!dropdown) return;
-    dropdown.innerHTML = '<option value="">-- Dish Letter --</option>';
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'.split('').forEach(l => {
-        const option = document.createElement('option');
-        option.value = l; option.textContent = l; dropdown.appendChild(option);
-    });
-}
-
-function selectDishLetter() {
-    const dropdown = document.getElementById('dishDropdown');
-    if (!dropdown) return;
-    window.appData.dishLetter = dropdown.value;
-    if(window.appData.dishLetter) showMessage(`📝 Dish ${window.appData.dishLetter} selected`, 'success');
+function stopScanning() {
+    window.appData.scanning = false;
+    console.log('⭕ Scanning stopped');
+    showMessage('⭕ Scanning stopped', 'info');
     updateDisplay();
 }
 
-// ========== DISPLAY AND UTILITY FUNCTIONS ==========
 function updateDisplay() {
-    const { user, scanning, mode, dishLetter, activeBowls, preparedBowls, returnedBowls, myScans } = window.appData;
-    const today = new Date().toLocaleDateString('en-GB');
-    const canScan = user && (mode !== 'kitchen' || dishLetter);
-    document.getElementById('startBtn').disabled = !canScan || scanning;
-    document.getElementById('stopBtn').disabled = !scanning;
-    const input = document.getElementById('progloveInput');
-    document.getElementById('scanSection').classList.toggle('scanning-active', scanning);
-    if(input) input.disabled = !scanning;
-    if(input && !scanning) input.placeholder = "Click START SCANNING...";
-    if(input && scanning) input.placeholder = "Scan VYT code...";
-    
-    document.getElementById('activeCount').textContent = activeBowls.length;
-    const preparedToday = preparedBowls.filter(b => b.date === today).length;
-    const returnedToday = returnedBowls.filter(b => b.returnDate === today).length;
-    const userScansToday = myScans.filter(s => s.user === user && new Date(s.timestamp).toLocaleDateString('en-GB') === today).length;
-    
-    // Ensure prepLabel is updated based on current mode
-    document.getElementById('prepCount').textContent = mode === 'kitchen' ? preparedToday : returnedToday;
-    document.getElementById('myScansCount').textContent = userScansToday;
-    
-    document.getElementById('exportInfo').innerHTML = `<strong>Data Status:</strong> Active: ${activeBowls.length} • Prepared: ${preparedToday} • Returns: ${returnedToday}`;
+    const activeCount = window.appData.activeBowls.length;
+    const preparedCount = window.appData.preparedBowls.length;
+    const returnedCount = window.appData.returnedBowls.length;
+    const scanCount = window.appData.myScans.length;
+
+    document.getElementById('activeCount').textContent = activeCount;
+    document.getElementById('preparedCount').textContent = preparedCount;
+    document.getElementById('returnedCount').textContent = returnedCount;
+    document.getElementById('scanCount').textContent = scanCount;
+
+    const userDisplay = document.getElementById('currentUser');
+    const modeDisplay = document.getElementById('currentMode');
+    const dishDisplay = document.getElementById('currentDish');
+    const scanningDisplay = document.getElementById('scanningStatus');
+
+    if (userDisplay) userDisplay.textContent = window.appData.user || 'Not selected';
+    if (modeDisplay) modeDisplay.textContent = window.appData.mode || 'Not set';
+    if (dishDisplay) dishDisplay.textContent = window.appData.dishLetter || 'Not set';
+    if (scanningDisplay) scanningDisplay.textContent = window.appData.scanning ? '🟢 ACTIVE' : '⭕ INACTIVE';
+
+    updateScanHistory();
 }
 
-function updateOvernightStats() {
-    const statsBody = document.getElementById('overnightStatsBody');
-    const cycleInfo = document.getElementById('cycleInfo');
-    if (!statsBody || !cycleInfo) return;
-    const now = new Date();
-    const today10AM = new Date(now); today10AM.setHours(10, 0, 0, 0);
-    const yesterday10PM = new Date(now); yesterday10PM.setDate(yesterday10PM.getDate() - 1); yesterday10PM.setHours(22, 0, 0, 0);
-    const isOvernight = now >= yesterday10PM && now <= today10AM;
-    cycleInfo.textContent = `Cycle: ${isOvernight ? 'Yesterday 10PM - Today 10AM' : 'Today 10AM - Tomorrow 10AM'}`;
-    
-    // Determine the correct time window for scans
-    let filterStart = today10AM;
-    let filterEnd = new Date(now);
+function updateScanHistory() {
+    const historyContainer = document.getElementById('scanHistory');
+    if (!historyContainer) return;
 
-    if (isOvernight) {
-        filterStart = yesterday10PM;
-    } else {
-        // If not overnight, check if it's past 10 AM today
-        if (now.getHours() >= 10) {
-            filterStart = today10AM;
-        } else {
-            // Before 10 AM, use yesterday's 10 AM
-            filterStart = new Date(now);
-            filterStart.setDate(filterStart.getDate() - 1);
-            filterStart.setHours(10, 0, 0, 0);
-        }
-    }
-    
-    const scans = window.appData.myScans.filter(s => {
-        const scanTime = new Date(s.timestamp);
-        return scanTime >= filterStart && scanTime <= filterEnd;
+    const recentHistory = window.appData.scanHistory.slice(0, 10);
+    historyContainer.innerHTML = '';
+
+    recentHistory.forEach(entry => {
+        const div = document.createElement('div');
+        div.className = `history-item ${entry.type}`;
+        div.textContent = `${entry.timestamp.split('T')[1].split('.')[0]} - ${entry.message || `${entry.type}: ${entry.code.slice(-8)}`}`;
+        historyContainer.appendChild(div);
     });
-
-    const stats = Object.values(scans.reduce((acc, { dish, user, timestamp }) => {
-        const key = `${dish}-${user}`;
-        if (!acc[key]) acc[key] = { dish, user, count: 0, scans: [] };
-        acc[key].count++;
-        acc[key].scans.push(timestamp);
-        return acc;
-    }, {})).sort((a,b) => (a.dish > b.dish) ? 1 : -1);
-    
-    if (stats.length === 0) {
-        statsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No current cycle scans</td></tr>';
-        return;
-    }
-    statsBody.innerHTML = stats.map(s => `<tr><td class="dish-header">${s.dish || 'N/A'}</td><td>${s.user}</td><td>${s.count}</td><td>${new Date(s.scans[0]).toLocaleTimeString()}</td><td>${new Date(s.scans[s.scans.length - 1]).toLocaleTimeString()}</td></tr>`).join('');
-}
-
-// ========== CLEANUP AND MAINTENANCE FUNCTIONS ==========
-function cleanupIncompleteBowls() {
-    const initialCount = window.appData.activeBowls.length;
-    window.appData.activeBowls = window.appData.activeBowls.filter(b => !(b.company && b.company !== "Unknown" && (!b.customer || b.customer === "Unknown")));
-    if (initialCount - window.appData.activeBowls.length > 0) console.log(`✅ Cleaned up ${initialCount - window.appData.activeBowls.length} incomplete bowls`);
-}
-
-function startDailyCleanupTimer() { setInterval(() => { const now = new Date(); if (now.getHours() === 19 && now.getMinutes() === 0) clearReturnData(); }, 60000); }
-function clearReturnData() {
-    const today = new Date().toLocaleDateString('en-GB');
-    if (window.appData.lastCleanup === today) return;
-    window.appData.returnedBowls = [];
-    window.appData.lastCleanup = today;
-    syncToFirebase();
-    showMessage('✅ Return data cleared', 'success');
-    updateDisplay();
 }
 
 function checkFirebaseData() {
-    if (typeof firebase === 'undefined') return showMessage('❌ Firebase not loaded', 'error');
-    firebase.database().ref('progloveData').once('value').then(s => {
-        if (s.exists()) {
-            const d = s.val();
-            showMessage(`✅ Firebase: ${d.activeBowls?.length || 0}a, ${d.preparedBowls?.length || 0}p, ${d.returnedBowls?.length || 0}r`, 'success');
+    if (typeof firebase === 'undefined') {
+        showMessage('❌ Firebase not loaded', 'error');
+        return;
+    }
+    const db = firebase.database();
+    const appDataRef = db.ref('progloveData');
+    appDataRef.once('value').then(snapshot => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const stats = {
+                active: data.activeBowls?.length || 0,
+                prepared: data.preparedBowls?.length || 0,
+                returned: data.returnedBowls?.length || 0,
+                scans: data.myScans?.length || 0,
+                lastSync: data.lastSync || 'Never'
+            };
+            showMessage(`📊 Firebase: ${stats.active}A ${stats.prepared}P ${stats.returned}R ${stats.scans}S | Last: ${stats.lastSync}`, 'info');
         } else {
             showMessage('❌ No data in Firebase', 'warning');
         }
-    }).catch(err => showMessage('❌ Error: ' + err.message, 'error'));
-}
-
-function extractCompanyFromUniqueIdentifier(id) {
-    if (!id) return "Unknown";
-    const parts = id.split('-');
-    return parts.length >= 3 ? parts.slice(2, -1).join(' ').trim() : id;
-}
-
-function combineCustomerNamesByDish() {
-    const groups = window.appData.activeBowls.reduce((acc, b) => { (acc[b.dish] = acc[b.dish] || []).push(b); return acc; }, {});
-    Object.values(groups).forEach(bowls => {
-        if (bowls.length > 1) {
-            const customers = [...new Set(bowls.map(b => b.customer).filter(c => c && c !== "Unknown"))].join(', ');
-            bowls.forEach(b => { b.customer = customers; b.multipleCustomers = true; });
-        } else if (bowls[0].customer && bowls[0].customer !== "Unknown") {
-            bowls[0].multipleCustomers = false;
-        }
+    }).catch(err => {
+        showMessage('❌ Firebase check failed: ' + err.message, 'error');
     });
 }
 
-function getCustomerNameColor(bowl) {
-    return bowl.multipleCustomers ? 'red-text' : (bowl.customer && bowl.customer !== "Unknown" ? 'green-text' : '');
+function extractCompanyFromUniqueIdentifier(uniqueIdentifier) {
+    if (!uniqueIdentifier) return null;
+    const parts = uniqueIdentifier.split('-');
+    return parts.length > 0 ? parts[0] : null;
 }
 
-// ========== GLOBAL FUNCTION EXPORTS ==========
-window.setMode = setMode;
-window.selectUser = selectUser;
-window.selectDishLetter = selectDishLetter;
-window.startScanning = startScanning;
-window.stopScanning = stopScanning;
-window.processJSONData = processJSONData;
-window.exportActiveBowls = exportActiveBowls;
-window.exportReturnData = exportReturnData;
-window.exportAllData = exportAllData;
-window.checkFirebaseData = checkFirebaseData;
-window.syncToFirebase = syncToFirebase;
-window.loadFromFirebase = loadFromFirebase;
-// Assuming showMessage is globally available (e.g., defined in the HTML or another script)
-window.showMessage = showMessage; 
+// ========== INITIALIZATION ==========
+console.log('🚀 Scanner System loaded successfully');
+[file content end]
