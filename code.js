@@ -110,19 +110,12 @@ function showScanError(message) {
     const scanInput = document.getElementById('scanInput');
     if (!scanInput) return; // Failsafe
 
-    // 1. Set the placeholder to the error message
     scanInput.placeholder = message;
-
-    // 2. Add an error class for styling (red placeholder text)
     scanInput.classList.add('scanning-error');
 
-    // 3. Set a timer to clear the error and restore the default placeholder
     setTimeout(() => {
         scanInput.classList.remove('scanning-error');
-
-        // Restore default placeholder based on state
         const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
-
         if (!window.appData.scanning) {
             scanInput.placeholder = "Scanner stopped.";
         } else if (isReadyToScan) {
@@ -135,13 +128,8 @@ function showScanError(message) {
 
 
 // --- FIREBASE SETUP & SYNC ---
-
-/**
- * Initializes Firebase using hardcoded keys (for GitHub deployment).
- */
 function initializeFirebase() {
     try {
-        // Your Firebase Configuration (Pre-inserted for GitHub functionality)
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -151,184 +139,109 @@ function initializeFirebase() {
             messagingSenderId: "177575768177",
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
-
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ?
-            JSON.parse(__firebase_config) :
-            HARDCODED_FIREBASE_CONFIG;
-
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : HARDCODED_FIREBASE_CONFIG;
         const appId = firebaseConfig.projectId;
-
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-            console.error("Firebase library not loaded.");
-            showMessage("❌ ERROR: Firebase library not loaded. Check index.html script tags.", 'error');
+            showMessage("❌ ERROR: Firebase library not loaded.", 'error');
             return;
         }
-
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
-
-        // --- NEW: Define separate references to flatten the data structure ---
         const basePath = `artifacts/${appId}/public/data/`;
         window.appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
         window.appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
         window.appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
         window.appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
-
-        // Asynchronously check if data exists and start listener.
-        ensureDatabaseInitialized(window.appData.refActive); // Use one ref to check for initialization
-
+        ensureDatabaseInitialized(window.appData.refActive);
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        showMessage("❌ ERROR: Firebase failed to initialize. Check configuration or Firebase project rules.", 'error');
+        showMessage("❌ ERROR: Firebase failed to initialize.", 'error');
     }
 }
 
-/**
- * Checks for initial data existence and initializes listener. (Asynchronous Fix)
- */
 async function ensureDatabaseInitialized(ref) {
     try {
-        // Use .once on the *Active Bowls* ref to check for initialization
         const snapshot = await ref.once('value');
-
         if (!snapshot.exists() || snapshot.val() === null) {
-            console.log("🆕 Database structure is empty. Writing initial structure.");
-
-            // Set empty arrays for all core paths to guarantee existence
             await window.appData.refActive.set([]);
             await window.appData.refPrepared.set([]);
             await window.appData.refReturned.set([]);
             await window.appData.refScans.set([]);
-
-            console.log("⬇️ Initial data structure written successfully.");
-        } else {
-            console.log("⬆️ Database contains existing data.");
         }
-
-        // ONLY after the initial data structure is guaranteed to exist (read or written),
-        // we set the flag and start the continuous read listeners.
         window.appData.isInitialized = true;
         loadFromFirebase();
-
     } catch (error) {
-        console.error("CRITICAL ERROR: Failed during initial data check/write. Check rules.", error);
-        showMessage("❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.", 'error', 10000);
+        console.error("CRITICAL ERROR: Failed during initial data check/write.", error);
+        showMessage("❌ CRITICAL ERROR: Database access failed.", 'error', 10000);
     }
 }
 
-
-/**
- * Sets up the perpetual Firebase listeners (Continuous Read) for all separate paths.
- */
 function loadFromFirebase() {
-    // 1. Listen to Active Bowls
     window.appData.refActive.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.activeBowls = snapshot.val() || [];
             updateDisplay();
         }
     });
-
-    // 2. Listen to Prepared Bowls
     window.appData.refPrepared.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.preparedBowls = snapshot.val() || [];
             updateDisplay();
         }
     });
-
-    // 3. Listen to Returned Bowls (History)
     window.appData.refReturned.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.returnedBowls = snapshot.val() || [];
             updateDisplay();
         }
     });
-
-    // 4. Listen to Scan Logs (History/Metrics Source)
     window.appData.refScans.on('value', (snapshot) => {
         if (window.appData.isInitialized) {
             window.appData.myScans = snapshot.val() || [];
             updateDisplay();
-            console.log("⬆️ All data synchronized from Firebase.");
-
             const lastSyncInfoEl = document.getElementById('lastSyncInfo');
             if (lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
         }
     });
 }
 
-/**
- * Pushes the current local state to Firebase (Continuous Write) across all relevant paths.
- */
 function syncToFirebase() {
-    if (!window.appData.isInitialized) {
-        console.warn("Sync attempted before full initialization. Skipping write.");
-        return;
-    }
-
-    // Perform writes only on the arrays that changed.
-    // Use Promises to ensure all updates are initiated correctly.
+    if (!window.appData.isInitialized) return;
     const writes = [
         window.appData.refActive.set(window.appData.activeBowls),
         window.appData.refPrepared.set(window.appData.preparedBowls),
         window.appData.refReturned.set(window.appData.returnedBowls),
         window.appData.refScans.set(window.appData.myScans),
     ];
-
-    Promise.all(writes)
-        .then(() => {
-            window.appData.lastSync = new Date().toISOString();
-            console.log("⬇️ Data successfully written to Firebase.");
-        })
-        .catch(error => {
-            console.error("Firebase synchronization failed:", error);
-            showMessage("❌ ERROR: Data sync failed. Check connection.", 'error');
-        });
+    Promise.all(writes).catch(error => {
+        console.error("Firebase synchronization failed:", error);
+        showMessage("❌ ERROR: Data sync failed.", 'error');
+    });
 }
 
-/**
- * Function to manually clear all data in the active inventory (Active Bowls).
- */
 function clearActiveInventory() {
     if (!window.appData.isInitialized) {
-        showMessage("❌ Cannot clear data. Application not fully initialized.", 'error');
+        showMessage("❌ Cannot clear data.", 'error');
         return;
     }
-
     const currentCount = window.appData.activeBowls.length;
     if (currentCount === 0) {
         showMessage("ℹ️ Active Inventory is already empty.", 'info');
         return;
     }
-
-    // 1. Clear the local array
     window.appData.activeBowls = [];
-
-    // 2. Sync to Firebase (this clears the data remotely)
     syncToFirebase();
-
-    showMessage(`✅ Successfully cleared ${currentCount} Active Bowl records. Count is now 0.`, 'success', 5000);
+    showMessage(`✅ Cleared ${currentCount} Active Bowl records.`, 'success', 5000);
 }
 
-
 // --- UI AND MODE MANAGEMENT ---
-
-/**
- * Filters the user dropdown based on the selected mode.
- */
 function populateUserDropdown(mode) {
     const userSelect = document.getElementById('userSelect');
     if (!userSelect) return;
-
     userSelect.innerHTML = '<option value="" disabled selected>-- Select User --</option>';
-
     if (!mode) return;
-
-    const filteredUsers = USERS.filter(user => user.role.toLowerCase() === mode);
-
-    filteredUsers.forEach(user => {
+    USERS.filter(user => user.role.toLowerCase() === mode).forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
         option.textContent = user.name;
@@ -336,15 +249,9 @@ function populateUserDropdown(mode) {
     });
 }
 
-/**
- * Updates all displayed metrics and UI states.
- */
 function updateDisplay() {
-    // CRITICAL FIX: Do not proceed if DOM is not fully ready 
     if (!window.appData.isDomReady) return;
-
     const today = formatDateStandard(new Date());
-
     const modeDisplay = document.getElementById('modeDisplay');
     const kitchenBtn = document.getElementById('kitchenBtn');
     const returnBtn = document.getElementById('returnBtn');
@@ -354,304 +261,146 @@ function updateDisplay() {
     const scanInput = document.getElementById('scanInput');
     const scanningCard = document.getElementById('scanningCard');
     const userSelectionCard = document.getElementById('userSelectionCard');
-
-    // 1. Update Mode Display and Button States
     if (window.appData.mode) {
-        const modeText = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
-        if (modeDisplay) {
-            modeDisplay.textContent = modeText;
-            modeDisplay.classList.remove('bg-gray-500', 'accent-red', 'accent-green');
-            modeDisplay.classList.add(window.appData.mode === 'kitchen' ? 'accent-green' : 'accent-red');
-        }
-        if (userSelectionCard) userSelectionCard.style.opacity = 1;
-        if (userSelect) userSelect.disabled = false;
-
-        if (kitchenBtn) kitchenBtn.classList.remove('accent-green', 'btn-neutral');
-        if (returnBtn) returnBtn.classList.remove('accent-red', 'btn-neutral');
-
-        if (window.appData.mode === 'kitchen') {
-            if (kitchenBtn) kitchenBtn.classList.add('accent-green');
-            if (returnBtn) returnBtn.classList.add('btn-neutral');
-        } else {
-            if (returnBtn) returnBtn.classList.add('accent-red');
-            if (kitchenBtn) kitchenBtn.classList.add('btn-neutral');
-        }
-
+        modeDisplay.textContent = window.appData.mode === 'kitchen' ? 'Status: Kitchen Prep Mode 🍳' : 'Status: Return Scan Mode 🔄';
+        modeDisplay.className = `status-box mt-4 ${window.appData.mode === 'kitchen' ? 'accent-green' : 'accent-red'}`;
+        userSelectionCard.style.opacity = 1;
+        userSelect.disabled = false;
+        kitchenBtn.className = `mode-button flex-1 ${window.appData.mode === 'kitchen' ? 'accent-green' : 'btn-neutral hover-green'}`;
+        returnBtn.className = `mode-button flex-1 ${window.appData.mode === 'return' ? 'accent-red' : 'btn-neutral hover-red'}`;
     } else {
-        if (modeDisplay) modeDisplay.textContent = 'Status: Please Select Mode';
-        if (userSelectionCard) userSelectionCard.style.opacity = 0.5;
-        if (scanningCard) scanningCard.style.opacity = 0.5;
-        if (userSelect) userSelect.disabled = true;
-        if (kitchenBtn) kitchenBtn.classList.add('btn-neutral');
-        if (returnBtn) returnBtn.classList.add('btn-neutral');
+        modeDisplay.textContent = 'Status: Please Select Mode';
+        modeDisplay.className = 'status-box status-neutral mt-4';
+        userSelectionCard.style.opacity = 0.5;
+        scanningCard.style.opacity = 0.5;
+        userSelect.disabled = true;
+        kitchenBtn.className = 'mode-button btn-neutral hover-green flex-1';
+        returnBtn.className = 'mode-button btn-neutral hover-red flex-1';
     }
-
-    // 2. Dish Section Visibility (Only for Kitchen mode)
-    if (dishSection) {
-        // If mode is 'kitchen', show it. Otherwise, hide it using the class defined in CSS.
-        if (window.appData.mode === 'kitchen') {
-            dishSection.classList.remove('hidden');
-        } else {
-            dishSection.classList.add('hidden');
-        }
-    }
-
-    // 3. Enable Scanning Controls (Step 3)
+    dishSection.classList.toggle('hidden', window.appData.mode !== 'kitchen');
     const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
-
-    if (isReadyToScan) {
-        if (scanningCard) scanningCard.style.opacity = 1;
-        if (dishLetterSelect) dishLetterSelect.disabled = false;
-        if (scanInput && !scanInput.classList.contains('scanning-error')) {
-            scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
-        }
-    } else {
-        if (scanningCard) scanningCard.style.opacity = 0.5;
-        if (window.appData.mode === 'kitchen' && dishLetterSelect) dishLetterSelect.disabled = !window.appData.user;
-
-        window.appData.scanning = false;
+    scanningCard.style.opacity = isReadyToScan ? 1 : 0.5;
+    if (dishLetterSelect) dishLetterSelect.disabled = window.appData.mode !== 'kitchen' || !window.appData.user;
+    if (scanInput && !scanInput.classList.contains('scanning-error')) {
+        scanInput.placeholder = isReadyToScan ? `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...` : 'Complete Steps 1 & 2...';
     }
-
-
-    // --- Core Metrics Update (Global Inventory) ---
-    // These metrics are visible at all times and do not depend on the scanning state.
-
-    const activeCountEl = document.getElementById('activeCount');
-    if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length;
-
-    const preparedTodayCountEl = document.getElementById('preparedTodayCount');
-    if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
-
-    const returnedTodayCount = window.appData.returnedBowls.filter(bowl =>
-        bowl.returnDate === today
-    ).length;
-    const exportReturnCountEl = document.getElementById('exportReturnCount');
-    if (exportReturnCountEl) exportReturnCountEl.textContent = window.appData.returnedBowls.length; // Show total history count
-
-
-    // --- User Scan Count (Kitchen Team Productivity) ---
-    // This metric IS dependent on the user and dish selection, but NOT scanning state.
-    let myScansCount = 0;
+    window.appData.scanning = isReadyToScan && window.appData.scanning;
+    document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
+    document.getElementById('preparedTodayCount').textContent = window.appData.preparedBowls.length;
+    document.getElementById('exportReturnCount').textContent = window.appData.returnedBowls.length;
     const { start, end } = getReportingDayTimestamp();
-
-    if (window.appData.user && window.appData.dishLetter) {
-        myScansCount = window.appData.myScans.filter(scan =>
-            scan.type === 'kitchen' &&
-            scan.timestamp >= start && scan.timestamp < end &&
-            scan.user === window.appData.user &&
-            scan.dishLetter === window.appData.dishLetter
-        ).length;
-    }
-
-    const myScansCountEl = document.getElementById('myScansCount');
-    const myDishLetterLabelEl = document.getElementById('myDishLetterLabel');
-
-    if (myScansCountEl) myScansCountEl.textContent = myScansCount;
-    if (myDishLetterLabelEl) myDishLetterLabelEl.textContent = window.appData.dishLetter || '---';
-
-    // Update Scan Status/Input state
-    const scanStatusEl = document.getElementById('scanStatus');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-
-    if (scanStatusEl) scanStatusEl.textContent = window.appData.scanning ? 'Active' : 'Stopped';
-
-    if (scanInput) {
-        scanInput.disabled = !window.appData.scanning;
-        scanInput.classList.remove('scanning-active');
-
-        if (window.appData.scanning && isReadyToScan) {
-            scanInput.classList.add('scanning-active');
-            if (startBtn) startBtn.disabled = true;
-            if (stopBtn) stopBtn.disabled = false;
-        } else {
-            if (startBtn) startBtn.disabled = !isReadyToScan;
-            if (stopBtn) stopBtn.disabled = true;
-        }
-    }
-
-    const selectedUserEl = document.getElementById('selectedUser');
-    if (selectedUserEl) selectedUserEl.textContent = window.appData.user || '---';
-
-    const selectedDishLetterEl = document.getElementById('selectedDishLetter');
-    if (selectedDishLetterEl) selectedDishLetterEl.textContent = window.appData.dishLetter || '---';
-
-    const exportActiveCountEl = document.getElementById('exportActiveCount');
-    if (exportActiveCountEl) exportActiveCountEl.textContent = window.appData.activeBowls.length;
-
-    const exportPreparedCountEl = document.getElementById('exportPreparedCount');
-    if (exportPreparedCountEl) exportPreparedCountEl.textContent = window.appData.preparedBowls.length;
-
-    const livePrepData = getLivePrepReport();
-    renderLivePrepReport(livePrepData);
+    const myScansCount = window.appData.user && window.appData.dishLetter ? window.appData.myScans.filter(s => s.type === 'kitchen' && s.timestamp >= start && s.timestamp < end && s.user === window.appData.user && s.dishLetter === window.appData.dishLetter).length : 0;
+    document.getElementById('myScansCount').textContent = myScansCount;
+    document.getElementById('myDishLetterLabel').textContent = window.appData.dishLetter || '---';
+    scanInput.disabled = !window.appData.scanning;
+    scanInput.classList.toggle('scanning-active', window.appData.scanning);
+    document.getElementById('startBtn').disabled = !isReadyToScan || window.appData.scanning;
+    document.getElementById('stopBtn').disabled = !window.appData.scanning;
+    renderLivePrepReport(getLivePrepReport());
 }
 
-/**
- * Handles mode selection (Kitchen or Return).
- */
 function setMode(mode) {
     if (mode !== 'kitchen' && mode !== 'return') return;
-
+    window.appData.mode = mode;
     window.appData.user = null;
     window.appData.dishLetter = null;
-
-    window.appData.mode = mode;
     stopScanning();
-
     populateUserDropdown(mode);
-
-    const userSelect = document.getElementById('userSelect');
-    if (userSelect) userSelect.value = '';
-    const dishLetterSelect = document.getElementById('dishLetterSelect');
-    if (dishLetterSelect) dishLetterSelect.value = '';
-
-    showMessage(`Mode switched to: ${mode.toUpperCase()}. Please select a user.`, 'info');
+    document.getElementById('userSelect').value = '';
+    const dishSelect = document.getElementById('dishLetterSelect');
+    if (dishSelect) dishSelect.value = '';
+    showMessage(`Mode: ${mode.toUpperCase()}. Select user.`, 'info');
     updateDisplay();
 }
 
-/**
- * Handles user selection.
- */
 function selectUser(userName) {
-    const user = USERS.find(u => u.name === userName);
-    if (!user) {
+    if (!USERS.find(u => u.name === userName)) {
         window.appData.user = null;
         updateDisplay();
         return;
     }
-
     if (!window.appData.mode) {
-        showMessage("❌ ERROR: Please select an Operation Mode (Kitchen/Return) first.", 'error');
-        const userSelect = document.getElementById('userSelect');
-        if (userSelect) userSelect.value = '';
+        showMessage("❌ Select Mode first.", 'error');
+        document.getElementById('userSelect').value = '';
         return;
     }
-
     window.appData.user = userName;
-
     if (window.appData.mode === 'return') {
         window.appData.dishLetter = null;
-        showMessage(`User selected: ${userName}. Ready to scan in RETURN mode.`, 'success');
+        showMessage(`User: ${userName}. Ready to scan.`, 'success');
     } else {
         window.appData.dishLetter = null;
-        showMessage(`User selected: ${userName}. Please select a Dish Letter.`, 'info');
-        const dishLetterSelect = document.getElementById('dishLetterSelect');
-        if (dishLetterSelect) dishLetterSelect.value = '';
+        showMessage(`User: ${userName}. Select Dish Letter.`, 'info');
+        const dishSelect = document.getElementById('dishLetterSelect');
+        if (dishSelect) dishSelect.value = '';
     }
     updateDisplay();
 }
 
-/**
- * Handles dish letter selection (Kitchen mode only).
- */
 function selectDishLetter(value) {
     if (window.appData.mode !== 'kitchen' || !window.appData.user) {
-        showMessage("❌ ERROR: User or Mode not properly set.", 'error');
-        const dishLetterSelect = document.getElementById('dishLetterSelect');
-        if (dishLetterSelect) dishLetterSelect.value = '';
+        showMessage("❌ Set User/Mode.", 'error');
+        document.getElementById('dishLetterSelect').value = '';
         return;
     }
-
-    const upperValue = value.trim().toUpperCase();
-    if (DISH_LETTERS.includes(upperValue)) {
-        window.appData.dishLetter = upperValue;
-        showMessage(`Dish Letter selected: ${upperValue}. Ready to scan.`, 'success');
-        updateDisplay();
+    if (DISH_LETTERS.includes(value.trim().toUpperCase())) {
+        window.appData.dishLetter = value.trim().toUpperCase();
+        showMessage(`Dish: ${window.appData.dishLetter}. Ready to scan.`, 'success');
     } else {
-        showMessage("❌ ERROR: Invalid Dish Letter/Number selected.", 'error');
+        showMessage("❌ Invalid Dish.", 'error');
     }
-}
-
-
-// --- Core Scanning, Export, Report, and Maintenance Logic ---
-
-/**
- * Activates the scanner input.
- */
-function startScanning() {
-    const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
-
-    if (!isReadyToScan) {
-        showMessage("❌ ERROR: Cannot start scanning. Complete Steps 1 & 2 first.", 'error');
-        return;
-    }
-
-    window.appData.scanning = true;
-    const scanInput = document.getElementById('scanInput');
-    // Ensure focus is explicitly set and held for scanner
-    if (scanInput) scanInput.focus();
-    showMessage("✅ Scanner Activated. Ready to scan.", 'success');
     updateDisplay();
 }
 
-/**
- * Deactivates the scanner input.
- */
+// --- Core Scanning, Export, Report, and Maintenance Logic ---
+function startScanning() {
+    const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
+    if (!isReadyToScan) {
+        showMessage("❌ Complete Steps 1 & 2.", 'error');
+        return;
+    }
+    window.appData.scanning = true;
+    document.getElementById('scanInput').focus();
+    showMessage("✅ Scanner Activated.", 'success');
+    updateDisplay();
+}
+
 function stopScanning() {
     window.appData.scanning = false;
-    const scanInput = document.getElementById('scanInput');
-    if (scanInput) scanInput.blur();
+    document.getElementById('scanInput').blur();
     showMessage("🛑 Scanner Deactivated.", 'info');
     updateDisplay();
 }
 
-/**
- * Main handler for VYT scan input.
- */
 function processScan(vytUrl) {
+    if (window.appData.isProcessingScan) return;
     if (!window.appData.scanning || !window.appData.user) {
-        showScanError("❌ ERROR: Scanner not active or user not selected.");
-        // ** ADDED FOR COOLDOWN **
+        showScanError("❌ Scanner not active.");
+        return;
+    }
+    window.appData.isProcessingScan = true;
+    
+    const timestamp = new Date().toISOString();
+    
+    if (window.appData.mode === 'kitchen' && window.appData.preparedBowls.some(b => b.vytUrl === vytUrl)) {
+        showScanError("⚠️ DUPLICATE: Already prepared.");
+        setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
+        return;
+    }
+    if (window.appData.mode === 'return' && window.appData.returnedBowls.some(b => b.vytUrl === vytUrl && b.returnDate === formatDateStandard(timestamp))) {
+        showScanError("⚠️ DUPLICATE: Already returned.");
         setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
         return;
     }
 
-    // Prevent re-processing while current scan is being handled
-    if (window.appData.isProcessingScan) {
-        console.warn("Scan in progress. Ignoring current input.");
-        return;
-    }
-
-    window.appData.isProcessingScan = true; // Set flag to lock processing
-
-    const timestamp = new Date().toISOString();
-    const exactVytUrl = vytUrl;
-
-    // --- CRITICAL DUPLICATE CHECK (KITCHEN MODE) ---
-    if (window.appData.mode === 'kitchen') {
-        const isAlreadyPrepared = window.appData.preparedBowls.some(b => b.vytUrl === exactVytUrl);
-        if (isAlreadyPrepared) {
-            showScanError("⚠️ DUPLICATE: Already prepared today.");
-            setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
-            return;
-        }
-    }
-
-    // --- CRITICAL DUPLICATE CHECK (Return Mode) ---
-    if (window.appData.mode === 'return') {
-        const isAlreadyReturned = window.appData.returnedBowls.some(b => b.vytUrl === exactVytUrl && formatDateStandard(b.returnDate) === formatDateStandard(timestamp));
-        if (isAlreadyReturned) {
-            showScanError("⚠️ DUPLICATE: Already returned today.");
-            setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
-            return;
-        }
-    }
-
-    const scanRecord = {
-        vytUrl: exactVytUrl,
-        timestamp: timestamp,
+    window.appData.myScans.push({
+        vytUrl, timestamp,
         type: window.appData.mode,
         user: window.appData.user,
         dishLetter: window.appData.mode === 'kitchen' ? window.appData.dishLetter : 'N/A'
-    };
-    window.appData.myScans.push(scanRecord);
+    });
 
-    let result;
-    if (window.appData.mode === 'kitchen') {
-        result = kitchenScan(exactVytUrl, timestamp);
-    } else {
-        result = returnScan(exactVytUrl, timestamp);
-    }
+    const result = window.appData.mode === 'kitchen' ? kitchenScan(vytUrl, timestamp) : returnScan(vytUrl, timestamp);
 
     if (result.success) {
         syncToFirebase();
@@ -660,338 +409,183 @@ function processScan(vytUrl) {
         showScanError(result.message);
     }
     
-    // ** THIS IS THE SECOND MAJOR CHANGE FOR THE 100ms COOLDOWN **
-    // Release the processing flag after a 100ms cooldown to prevent rapid re-scans.
-    setTimeout(() => {
-        window.appData.isProcessingScan = false;
-    }, 100);
-    
+    setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
     updateDisplay();
 }
 
-/**
- * Handles bowl prep (Kitchen Scan).
- */
 function kitchenScan(vytUrl, timestamp) {
+    let statusMessage = "new prep cycle.";
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
-    let statusMessage = "started a new prep cycle.";
-
     if (activeIndex !== -1) {
-        const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
-        returnedBowl.returnDate = formatDateStandard(new Date(timestamp));
-        window.appData.returnedBowls.push(returnedBowl);
-        statusMessage = "closed active cycle and started new prep (Recycled).";
+        const recycledBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
+        recycledBowl.returnDate = formatDateStandard(timestamp);
+        window.appData.returnedBowls.push(recycledBowl);
+        statusMessage = "recycled from active.";
     }
-
-    const newPreparedBowl = {
-        vytUrl: vytUrl,
+    window.appData.preparedBowls.push({
+        vytUrl,
         dishLetter: window.appData.dishLetter,
-        company: 'Unknown',
-        customer: 'Unknown',
-        preparedDate: formatDateStandard(new Date(timestamp)),
+        preparedDate: formatDateStandard(timestamp),
         preparedTime: timestamp,
         user: window.appData.user,
         state: 'PREPARED_UNKNOWN'
-    };
-    window.appData.preparedBowls.push(newPreparedBowl);
-
-    return {
-        success: true,
-        message: `✅ Kitchen Prep: ${vytUrl.slice(-10)} assigned to Dish ${window.appData.dishLetter}. Cycle: ${statusMessage}`
-    };
+    });
+    return { success: true, message: `✅ Prep: ${vytUrl.slice(-10)} (${statusMessage})` };
 }
 
-/**
- * Handles bowl return (Return Scan).
- */
 function returnScan(vytUrl, timestamp) {
-    const returnDate = formatDateStandard(new Date(timestamp));
-
+    const returnDate = formatDateStandard(timestamp);
     const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === vytUrl);
     if (preparedIndex !== -1) {
-        const returnedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
-        returnedBowl.returnDate = returnDate;
-        window.appData.returnedBowls.push(returnedBowl);
-        return {
-            success: true,
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Was Prepared). Available for next prep.`
-        };
+        const returned = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
+        returned.returnDate = returnDate;
+        window.appData.returnedBowls.push(returned);
+        return { success: true, message: `📦 Return: ${vytUrl.slice(-10)} (from Prepared)` };
     }
-
     const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === vytUrl);
     if (activeIndex !== -1) {
-        const returnedBowl = window.appData.activeBowls.splice(activeIndex, 1)[0];
-        returnedBowl.returnDate = returnDate;
-        window.appData.returnedBowls.push(returnedBowl);
-        return {
-            success: true,
-            message: `📦 Returned: ${vytUrl.slice(-10)} (Active Cycle Closed).`
-        };
+        const returned = window.appData.activeBowls.splice(activeIndex, 1)[0];
+        returned.returnDate = returnDate;
+        window.appData.returnedBowls.push(returned);
+        return { success: true, message: `📦 Return: ${vytUrl.slice(-10)} (from Active)` };
     }
-
-    return {
-        success: false,
-        message: `❌ NOT FOUND: ${vytUrl.slice(-10)} is not Active or Prepared.`
-    };
+    return { success: false, message: `❌ NOT FOUND: ${vytUrl.slice(-10)}` };
 }
 
-/**
- * Flattens the complex JSON delivery order into an array of simple bowl records, 
- * grouping users with the same dish into a single record.
- * @param {object} order The single, nested order object.
- * @returns {Array} An array of flattened bowl records.
- */
 function flattenOrderData(order) {
-    const flattenedBowls = [];
-
-    if (!order || !order.id || !order.name || !order.boxes || !Array.isArray(order.boxes)) {
-        console.warn("Invalid or incomplete top-level order data, skipping order.", order);
-        return [];
-    }
-
-    const companyName = String(order.name).trim();
-    const dishVytMap = new Map();
-
+    if (!order || !order.boxes) return [];
+    const companyName = String(order.name || '').trim();
+    const dishMap = new Map();
     for (const box of order.boxes) {
-        if (!box.dishes || !Array.isArray(box.dishes)) continue;
-        for (const dish of box.dishes) {
-            const dishLabel = String(dish.label || 'N/A').trim().toUpperCase();
-            if (dishLabel === 'ADDONS') continue;
-            
-            const codes = dish.bowlCodes && Array.isArray(dish.bowlCodes) && dish.bowlCodes.length > 0 ? dish.bowlCodes : [];
-            if (!dish.users || !Array.isArray(dish.users) || dish.users.length === 0) continue;
-
-            const usernames = dish.users.map(user => String(user.username || user.id).trim());
-            const preparedDate = order.readyTime;
-
-            if (codes.length > 0) {
-                for (const vytUrl of codes) {
-                    const safeVytUrl = vytUrl.trim();
-                    const existingRecord = dishVytMap.get(safeVytUrl);
-                    if (existingRecord) {
-                        existingRecord.customer = Array.from(existingRecord.customer).concat(usernames);
-                    } else {
-                        dishVytMap.set(safeVytUrl, {
-                            vytUrl: safeVytUrl,
-                            dishLetter: dishLabel,
-                            company: companyName,
-                            customer: usernames,
-                            preparedDate: preparedDate,
-                        });
-                    }
+        for (const dish of (box.dishes || [])) {
+            const dishLabel = String(dish.label || '').trim().toUpperCase();
+            if (dishLabel === 'ADDONS' || !dish.bowlCodes || dish.bowlCodes.length === 0) continue;
+            for (const vytUrl of dish.bowlCodes) {
+                const safeUrl = vytUrl.trim();
+                if (!dishMap.has(safeUrl)) {
+                    dishMap.set(safeUrl, { vytUrl: safeUrl, dishLetter: dishLabel, company: companyName, customers: new Set() });
+                }
+                for (const user of (dish.users || [])) {
+                    dishMap.get(safeUrl).customers.add(String(user.username || user.id).trim());
                 }
             }
         }
     }
-
-    dishVytMap.forEach(record => {
-        flattenedBowls.push({
-            ...record,
-            customer: record.customer.join(', ')
-        });
-    });
-    return flattenedBowls;
+    return Array.from(dishMap.values()).map(d => ({ ...d, customer: Array.from(d.customers).join(', ') }));
 }
 
-/**
- * Processes JSON customer data to convert Prepared Bowls to Active Bowls.
- */
 function processJSONData(jsonString) {
-    if (!jsonString || jsonString.trim() === '' || jsonString.includes('Paste JSON data here')) {
-        showMessage("❌ ERROR: JSON text area is empty. Please paste data.", 'error');
-        return;
+    if (!jsonString || jsonString.trim() === '') {
+        return showMessage("❌ JSON empty.", 'error');
     }
-
-    let rawData;
+    let data;
     try {
-        rawData = JSON.parse(jsonString);
+        data = JSON.parse(jsonString);
     } catch (e) {
-        showMessage(`❌ ERROR: JSON Parsing Error: ${e.message}`, 'error');
-        return;
+        return showMessage("❌ Invalid JSON.", 'error');
     }
+    const orders = Array.isArray(data) ? data : [data];
+    const bowls = orders.flatMap(flattenOrderData);
+    if (bowls.length === 0) return showMessage("ℹ️ No scannable bowls in JSON.", 'info');
 
-    const ordersToProcess = Array.isArray(rawData) ? rawData : [rawData];
-    let allFlattenedBowls = [];
-    ordersToProcess.forEach(order => {
-        allFlattenedBowls = allFlattenedBowls.concat(flattenOrderData(order));
-    });
-    
-    if (allFlattenedBowls.length === 0) {
-        showMessage("❌ ERROR: No assignable bowl records found.", 'error');
-        return;
-    }
-
-    let updates = 0;
-    let creations = 0;
-    const timestamp = new Date().toISOString();
-
-    for (const item of allFlattenedBowls) {
-        const exactVytUrl = item.vytUrl;
-        const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === exactVytUrl);
-        const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === exactVytUrl);
-        const jsonAssignmentDate = formatDateStandard(item.preparedDate || timestamp);
-
+    let creations = 0, updates = 0;
+    const now = new Date().toISOString();
+    bowls.forEach(item => {
+        const preparedIndex = window.appData.preparedBowls.findIndex(b => b.vytUrl === item.vytUrl);
+        const activeIndex = window.appData.activeBowls.findIndex(b => b.vytUrl === item.vytUrl);
+        const assignmentDate = formatDateStandard(item.preparedDate || now);
         if (activeIndex !== -1) {
-            const activeBowl = window.appData.activeBowls[activeIndex];
-            activeBowl.company = item.company.trim();
-            activeBowl.customer = item.customer.trim();
-            activeBowl.preparedDate = jsonAssignmentDate;
-            activeBowl.updateTime = timestamp;
+            Object.assign(window.appData.activeBowls[activeIndex], { company: item.company, customer: item.customer, preparedDate: assignmentDate, updateTime: now });
             updates++;
         } else if (preparedIndex !== -1) {
-            const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
-            const activeBowl = {
-                ...preparedBowl,
-                company: item.company.trim(),
-                customer: item.customer.trim(),
-                preparedDate: jsonAssignmentDate,
-                updateTime: timestamp,
-                state: 'ACTIVE_KNOWN'
-            };
-            window.appData.activeBowls.push(activeBowl);
+            const bowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
+            Object.assign(bowl, { company: item.company, customer: item.customer, preparedDate: assignmentDate, updateTime: now, state: 'ACTIVE_KNOWN' });
+            window.appData.activeBowls.push(bowl);
             creations++;
         } else {
-            const newBowl = {
-                vytUrl: exactVytUrl,
-                dishLetter: item.dishLetter,
-                company: item.company.trim(),
-                customer: item.customer.trim(),
-                preparedDate: jsonAssignmentDate,
-                preparedTime: timestamp,
-                user: 'SYSTEM',
-                state: 'ACTIVE_KNOWN'
-            };
-            window.appData.activeBowls.push(newBowl);
+            window.appData.activeBowls.push({ vytUrl: item.vytUrl, dishLetter: item.dishLetter, company: item.company, customer: item.customer, preparedDate: assignmentDate, preparedTime: now, user: 'SYSTEM', state: 'ACTIVE_KNOWN' });
             creations++;
         }
-    }
-
-    if (updates > 0 || creations > 0) {
-        showMessage(`✅ JSON Import Complete: ${creations} new active, ${updates} updated.`, 'success', 5000);
+    });
+    if (creations > 0 || updates > 0) {
+        showMessage(`✅ JSON: ${creations} created, ${updates} updated.`, 'success');
         syncToFirebase();
         document.getElementById('jsonData').value = '';
     } else {
-        showMessage("ℹ️ No bowls updated or created.", 'info');
+        showMessage("ℹ️ No changes from JSON.", 'info');
     }
 }
 
-/**
- * Exports data structures as CSV files (for Excel/Spreadsheets).
- */
 function exportData(data, filename, source) {
-    if (!data || data.length === 0) {
-        showMessage(`ℹ️ Cannot export. ${source} is empty.`, 'warning');
-        return;
-    }
-
+    if (!data || data.length === 0) return showMessage(`ℹ️ ${source} is empty.`, 'warning');
     const headers = Object.keys(data[0]);
-    let csvContent = headers.join(',') + '\n';
-
-    data.forEach(row => {
-        const values = headers.map(header => {
-            let value = String(row[header] || '').replace(/"/g, '""');
-            if (value.includes(',')) {
-                value = `"${value}"`;
-            }
-            return value;
-        });
-        csvContent += values.join(',') + '\n';
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${String(row[h] || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
     link.click();
     URL.revokeObjectURL(link.href);
-    showMessage(`💾 Exported to ${filename}`, 'success');
+    showMessage(`💾 Exported ${source}.`, 'success');
 }
 
-function exportActiveBowls() {
-    exportData(window.appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.csv`, 'Active Bowls');
-}
-
-function exportReturnData() {
-    exportData(window.appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.csv`, 'Returned Bowls');
-}
-
+function exportActiveBowls() { exportData(window.appData.activeBowls, `active_bowls_${formatDateStandard(new Date())}.csv`, 'Active Bowls'); }
+function exportReturnData() { exportData(window.appData.returnedBowls, `returned_bowls_${formatDateStandard(new Date())}.csv`, 'Returned Bowls'); }
 function exportAllData() {
-    const fullData = [
+    exportData([
         ...window.appData.activeBowls.map(b => ({ ...b, source: 'Active' })),
         ...window.appData.preparedBowls.map(b => ({ ...b, source: 'Prepared' })),
         ...window.appData.returnedBowls.map(b => ({ ...b, source: 'Returned' })),
-    ];
-    exportData(fullData, `all_combined_bowl_data_${formatDateStandard(new Date())}.csv`, 'Combined Data');
+    ], `all_data_${formatDateStandard(new Date())}.csv`, 'All Data');
 }
 
-/**
- * Calculates LIVE statistics for prepared dishes (Kitchen Scans), sorted by Dish Letter then User.
- */
 function getLivePrepReport() {
     const { start, end } = getReportingDayTimestamp();
-    const todaysKitchenScans = window.appData.myScans.filter(scan => scan.type === 'kitchen' && scan.timestamp >= start && scan.timestamp < end);
-    const groupedData = todaysKitchenScans.reduce((acc, scan) => {
-        if (!acc[scan.dishLetter]) {
-            acc[scan.dishLetter] = { users: new Map(), count: 0 };
-        }
-        acc[scan.dishLetter].users.set(scan.user, (acc[scan.dishLetter].users.get(scan.user) || 0) + 1);
-        acc[scan.dishLetter].count++;
+    const scans = window.appData.myScans.filter(s => s.type === 'kitchen' && s.timestamp >= start && s.timestamp < end);
+    const report = scans.reduce((acc, { dishLetter, user }) => {
+        if (!acc[dishLetter]) acc[dishLetter] = { users: {} };
+        acc[dishLetter].users[user] = (acc[dishLetter].users[user] || 0) + 1;
         return acc;
     }, {});
-    return Object.entries(groupedData)
-        .map(([dishLetter, data]) => ({
-            dishLetter,
-            ...data,
-            users: Array.from(data.users.entries(), ([name, count]) => ({ name, count })).sort((a,b) => a.name.localeCompare(b.name))
-        }))
-        .sort((a, b) => DISH_LETTERS.indexOf(a.dishLetter) - DISH_LETTERS.indexOf(b.dishLetter));
+    return Object.entries(report).map(([dishLetter, data]) => ({
+        dishLetter, users: Object.entries(data.users).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
+    })).sort((a, b) => DISH_LETTERS.indexOf(a.dishLetter) - DISH_LETTERS.indexOf(b.dishLetter));
 }
 
-/**
- * Renders the live statistics table.
- */
 function renderLivePrepReport(stats) {
-    const container = document.getElementById('livePrepReportBody');
-    if (!container) return;
-
+    const body = document.getElementById('livePrepReportBody');
+    if (!body) return;
     if (stats.length === 0) {
-        container.innerHTML = `<tr><td colspan="3" class="px-3 py-2 text-center text-gray-400">No kitchen scans recorded today.</td></tr>`;
+        body.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 p-2">No kitchen scans in this cycle.</td></tr>';
         return;
     }
-
-    container.innerHTML = stats.flatMap(dish => 
-        dish.users.map((user, index) => `
+    body.innerHTML = stats.flatMap(({ dishLetter, users }) =>
+        users.map((user, i) => `
             <tr class="hover:bg-gray-700">
-                ${index === 0 ? `<td rowspan="${dish.users.length}" class="px-3 py-2 font-bold text-center border-r border-gray-700 text-pink-400">${dish.dishLetter}</td>` : ''}
-                <td class="px-3 py-2 text-gray-300">${user.name}</td>
-                <td class="px-3 py-2 text-center font-bold text-gray-200">${user.count}</td>
+                ${i === 0 ? `<td rowspan="${users.length}" class="font-bold text-center text-pink-400 p-2 border-r border-gray-700">${dishLetter}</td>` : ''}
+                <td class="p-2">${user.name}</td>
+                <td class="text-center font-bold p-2">${user.count}</td>
             </tr>
-        `)
+        `).join('')
     ).join('');
 }
 
-
-/**
- * Manually resets prepared bowls and scan history for the current reporting cycle.
- */
 function resetTodaysPreparedBowls() {
     const { start } = getReportingDayTimestamp();
-    const preparedCount = window.appData.preparedBowls.length;
-    const scansToRemove = window.appData.myScans.filter(s => s.type === 'kitchen' && s.timestamp >= start).length;
-    
+    const originalPreparedCount = window.appData.preparedBowls.length;
+    const originalScansCount = window.appData.myScans.length;
     window.appData.preparedBowls = [];
     window.appData.myScans = window.appData.myScans.filter(s => !(s.type === 'kitchen' && s.timestamp >= start));
-
-    if (preparedCount > 0 || scansToRemove > 0) {
+    const removedScans = originalScansCount - window.appData.myScans.length;
+    if (originalPreparedCount > 0 || removedScans > 0) {
+        showMessage(`✅ Reset: ${originalPreparedCount} prepared & ${removedScans} scans removed.`, 'success');
         syncToFirebase();
-        showMessage(`✅ Reset Successful: ${preparedCount} prepared bowls & ${scansToRemove} kitchen scans removed.`, 'success');
     } else {
-        showMessage('ℹ️ No prepared bowls or scans found to remove.', 'info');
+        showMessage("ℹ️ Nothing to reset.", 'info');
     }
 }
 
 // --- INITIALIZATION ---
-
 document.addEventListener('DOMContentLoaded', () => {
     window.appData.isDomReady = true;
 
@@ -1007,8 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const scanInput = document.getElementById('scanInput');
     if (scanInput) {
-        // ** THIS IS THE ONLY CHANGE FROM YOUR ORIGINAL FILE **
-        // This replaces both old listeners with one that works for ProGlove.
+        // 💥 FINAL AND CORRECTED SCANNER LOGIC 💥
         scanInput.addEventListener('input', () => {
             if (window.appData.scanTimer) {
                 clearTimeout(window.appData.scanTimer);
@@ -1016,10 +609,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.appData.scanTimer = setTimeout(() => {
                 const scannedValue = scanInput.value.trim();
                 scanInput.value = ''; // Clear input immediately
-                if (scannedValue.length > 5 && window.appData.scanning && !window.appData.isProcessingScan) {
+                if (scannedValue.length > 5) {
                     processScan(scannedValue);
                 }
-            }, 50); // 50ms debounce timer
+            }, 50); // 50ms debounce timer as requested
         });
     }
 
