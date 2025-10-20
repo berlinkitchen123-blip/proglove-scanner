@@ -403,7 +403,7 @@ function updateDisplay() {
         if (scanningCard) scanningCard.style.opacity = 1;
         if (dishLetterSelect) dishLetterSelect.disabled = false;
         if (scanInput && !scanInput.classList.contains('scanning-error')) {
-             scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
+            scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
         }
     } else {
         if (scanningCard) scanningCard.style.opacity = 0.5;
@@ -1212,9 +1212,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Check if input value is stable and scanning is active
                     if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
                         processScan(scannedValue);
-                        // CRITICAL: Clear input field AFTER successful processing
-                        scanInput.value = '';
                     }
+                     // CRITICAL FIX: Clear input field AFTER processing attempt (even if it failed or was skipped)
+                    scanInput.value = '';
                 }, 50); // Set to 50ms as per your request
             }
         });
@@ -1250,3 +1250,5 @@ document.addEventListener('DOMContentLoaded', () => {
     // The daily data reset interval is NO LONGER needed as cleanup is removed
     // setInterval(checkDailyDataReset, 3600000); 
 });
+
+
