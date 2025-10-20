@@ -184,7 +184,6 @@ function clearActiveInventory() {
 }
 
 // --- UI AND MODE MANAGEMENT ---
-// ... (All original UI functions are here, unchanged)
 function populateUserDropdown(mode) {
     const userSelect = document.getElementById('userSelect');
     if (!userSelect) return;
@@ -521,11 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') {
                 e.preventDefault(); 
                 const scannedValue = scanInput.value.trim();
+                
+                // This clears the input field immediately after 'Enter' is pressed.
+                scanInput.value = ''; 
+
                 if (scannedValue.length > 5) {
                     processScan(scannedValue);
                 }
-                // This clears the input field AFTER processing, ready for the next scan.
-                scanInput.value = ''; 
             }
         });
     }
