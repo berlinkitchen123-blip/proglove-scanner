@@ -251,7 +251,6 @@ function populateUserDropdown(mode) {
 
 function updateDisplay() {
     if (!window.appData.isDomReady) return;
-    const today = formatDateStandard(new Date());
     const modeDisplay = document.getElementById('modeDisplay');
     const kitchenBtn = document.getElementById('kitchenBtn');
     const returnBtn = document.getElementById('returnBtn');
@@ -601,7 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const scanInput = document.getElementById('scanInput');
     if (scanInput) {
-        // 💥 FINAL AND CORRECTED SCANNER LOGIC 💥
+        // 💥 FINAL, CORRECTED SCANNER LOGIC 💥
         scanInput.addEventListener('input', () => {
             if (window.appData.scanTimer) {
                 clearTimeout(window.appData.scanTimer);
