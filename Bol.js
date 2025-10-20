@@ -113,12 +113,14 @@ function showMessage(message, type = 'info', duration = 3000) {
 
 // --- FIREBASE SETUP & SYNC ---
 
+// Global appData is already defined
+
 /**
- * Initializes Firebase using hardcoded keys (for GitHub deployment).
+ * Initializes Firebase and starts the database listeners.
  */
 function initializeFirebase() { 
     try {
-        // Your Firebase Configuration (Pre-inserted for GitHub functionality)
+        // Firebase configuration
         const HARDCODED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyCL3hffCHosBceIRGR1it2dYEDb3uxIrJw",
             authDomain: "proglove-scanner.firebaseapp.com",
@@ -128,114 +130,122 @@ function initializeFirebase() {
             messagingSenderId: "177575768177",
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
-        const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
 
-        const appId = firebaseConfig.projectId;
         if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
             console.error("Firebase library not loaded.");
-            showMessage("❌ ERROR: Firebase library not loaded. Check index.html script tags.", 'error');
+            showMessage("❌ ERROR: Firebase library not loaded.", 'error');
             return;
         }
 
-        const app = firebase.initializeApp(firebaseConfig);
+        // Initialize Firebase
+        firebase.initializeApp(HARDCODED_FIREBASE_CONFIG);
         appData.db = firebase.database();
-        // --- NEW: Define separate references to flatten the data structure ---
-        const basePath = `artifacts/${appId}/public/data/`;
+
+        // Define separate references to flatten the data structure
+        const basePath = `artifacts/${HARDCODED_FIREBASE_CONFIG.projectId}/public/data/`;
         appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
         appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
         appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
         appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
 
-        // Asynchronously check if data exists and start listener.
+        // Start database initialization
         ensureDatabaseInitialized(appData.refActive);
-        // Use one ref to check for initialization
 
         showMessage("✅ Application initialized. Please select an operation mode.", 'success');
+
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        showMessage("❌ ERROR: Firebase failed to initialize. Check configuration or Firebase project rules.", 'error');
+        showMessage("❌ ERROR: Firebase failed to initialize.", 'error');
     }
 }
 
 /**
- * Checks for initial data existence and initializes listener. (Asynchronous Fix)
+ * Checks if the database paths exist and initializes them if empty.
  */
 async function ensureDatabaseInitialized(ref) {
     try {
-        // Use .once on the *Active Bowls* ref to check for initialization
         const snapshot = await ref.once('value');
+
         if (!snapshot.exists() || snapshot.val() === null) {
             console.log("🆕 Database structure is empty. Writing initial structure.");
-            // Set empty arrays for all core paths to guarantee existence
+
+            // Initialize all core paths
             await appData.refActive.set([]); 
             await appData.refPrepared.set([]); 
             await appData.refReturned.set([]);
             await appData.refScans.set([]);
+
             console.log("⬇️ Initial data structure written successfully.");
         } else {
             console.log("⬆️ Database contains existing data.");
         }
 
-        // ONLY after the initial data structure is guaranteed to exist (read or written),
-        // we set the flag and start the continuous read listeners.
+        // Flag database as initialized and start continuous listeners
         appData.isInitialized = true;
         loadFromFirebase();
 
-    } 
-    // Safer for environments without optional chaining support
-    const statusEl = document.getElementById('systemStatus');
-    if (statusEl) {
-        statusEl.textContent = '⚠️ Offline Mode - CRITICAL DB Error';
-    }
+    } catch (error) {
+        console.error("CRITICAL ERROR: Failed during initial data check/write.", error);
 
-    showMessage(
-        "❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.",
-        'error',
-        10000
-    );
+        const statusEl = document.getElementById('systemStatus');
+        if (statusEl) {
+            statusEl.textContent = '⚠️ Offline Mode - CRITICAL DB Error';
+        }
+
+        showMessage(
+            "❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.",
+            'error',
+            10000
+        );
+    }
 }
 
 /**
- * Sets up the perpetual Firebase listeners (Continuous Read) for all separate paths.
+ * Sets up continuous Firebase listeners for all paths.
  */
 function loadFromFirebase() {
-    // FIX: Use optional chaining to prevent crash if systemStatus is null
-    document.getElementById('systemStatus')?.textContent = '🔄 Connecting to Cloud...'; 
+    const statusEl = document.getElementById('systemStatus');
+    if (statusEl) statusEl.textContent = '🔄 Connecting to Cloud...'; 
 
-    // 1. Listen to Active Bowls
-    appData.refActive.on('value', (snapshot) => {
+    // Active Bowls
+    appData.refActive.on('value', snapshot => {
         if (appData.isInitialized) {
             appData.activeBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
-    // 2. Listen to Prepared Bowls
-    appData.refPrepared.on('value', (snapshot) => {
+
+    // Prepared Bowls
+    appData.refPrepared.on('value', snapshot => {
         if (appData.isInitialized) {
             appData.preparedBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
-    // 3. Listen to Returned Bowls (History)
-    appData.refReturned.on('value', (snapshot) => {
+
+    // Returned Bowls
+    appData.refReturned.on('value', snapshot => {
         if (appData.isInitialized) {
             appData.returnedBowls = snapshot.val() || [];
-            updateDisplay(); 
+            updateDisplay();
         }
     });
-    // 4. Listen to Scan Logs (History/Metrics Source)
-    appData.refScans.on('value', (snapshot) => {
+
+    // Scan Logs
+    appData.refScans.on('value', snapshot => {
         if (appData.isInitialized) {
             appData.myScans = snapshot.val() || [];
-            updateDisplay(); 
-            console.log("⬆️ All data synchronized from Firebase.");
+            updateDisplay();
 
-            const lastSyncInfoEl = document.getElementById('lastSyncInfo');
-            if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
+            const lastSyncEl = document.getElementById('lastSyncInfo');
+            if (lastSyncEl) {
+                lastSyncEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
+            }
+
+            console.log("⬆️ All data synchronized from Firebase.");
         }
     });
 }
-
 /**
  * Pushes the current local state to Firebase (Continuous Write) across all relevant paths.
  */
