@@ -1197,22 +1197,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const scanInput = document.getElementById('scanInput');
     if (scanInput) {
-        // 💥 FINAL AND CORRECTED SCANNER LOGIC 💥
-        scanInput.addEventListener('input', () => {
-            if (window.appData.scanTimer) {
-                clearTimeout(window.appData.scanTimer);
-            }
-            window.appData.scanTimer = setTimeout(() => {
-                const scannedValue = scanInput.value.trim();
-                
-                // 1. Instantly clear the input field. This is the most critical step.
-                scanInput.value = '';
+        // 💥 FINAL SCANNER FIX: Robust Debounce Input Capture for ProGlove
+        scanInput.addEventListener('input', (e) => {
+            const scannedValue = e.target.value.trim();
+            // Length check is crucial for performance and avoiding single keypresses
+            if (scannedValue.length > 5) {
 
-                // 2. Process the captured value only if it's valid.
-                if (scannedValue.length > 5 && window.appData.scanning && !window.appData.isProcessingScan) {
-                    processScan(scannedValue);
+                if (window.appData.scanTimer) {
+                    clearTimeout(window.appData.scanTimer);
                 }
-            }, 50); // Using the 50ms timer as we agreed.
+
+                // Set delay to 50ms as requested for physical scanner stability
+                window.appData.scanTimer = setTimeout(() => {
+                    // Check if input value is stable and scanning is active
+                    if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
+                        processScan(scannedValue);
+                        // CRITICAL FIX: Clear input field AFTER successful processing
+                        scanInput.value = '';
+                    }
+                }, 50); // Set to 50ms as per your request
+            }
+        });
+        
+        // Retain the keydown listener for explicit Enter presses (as a manual fallback)
+        scanInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); 
+                const scannedValue = scanInput.value.trim();
+                if (scannedValue) {
+                    processScan(scannedValue);
+                    // CRITICAL FIX: Also clear the input here to prevent race conditions
+                    scanInput.value = ''; 
+                }
+            }
         });
     }
 
