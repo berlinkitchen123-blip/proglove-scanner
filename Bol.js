@@ -181,14 +181,19 @@ async function ensureDatabaseInitialized(ref) {
         appData.isInitialized = true;
         loadFromFirebase();
 
-    } catch (error) {
-        console.error("CRITICAL ERROR: Failed during initial data check/write. Check rules.", error);
-        // FIX: Use optional chaining to prevent crash if systemStatus is null
-        document.getElementById('systemStatus')?.textContent = '⚠️ Offline Mode - CRITICAL DB Error';
-        showMessage("❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.", 'error', 10000);
+    } 
+    // Safer for environments without optional chaining support
+    const statusEl = document.getElementById('systemStatus');
+    if (statusEl) {
+        statusEl.textContent = '⚠️ Offline Mode - CRITICAL DB Error';
     }
-}
 
+    showMessage(
+        "❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.",
+        'error',
+        10000
+    );
+}
 
 /**
  * Sets up the perpetual Firebase listeners (Continuous Read) for all separate paths.
