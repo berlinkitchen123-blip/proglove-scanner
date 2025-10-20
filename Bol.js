@@ -1,14 +1,11 @@
 // ProGlove Scanner - Complete Bowl Tracking System
 
-// --- GLOBAL STATE (Using 'var' for maximum safety against scope/redeclaration errors) ---
-var appData = {var appData = {};
-favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)Uncaught SyntaxError: Invalid left-hand side in assignment (at Bol.js?v=2025102005:187:9)Understand this error
-favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)Uncaught SyntaxError: Invalid left-hand side in assignment (at Bol.js?v=2025102005:187:9)Understand this error
-favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)
+// --- GLOBAL STATE ---
+var appData = {
     mode: null,              
     user: null,               
     dishLetter: null,         
-    scanning: false,          
+    scanning: false,      
 
     // Core data structures (Synced with Firebase)
     myScans: [],              
