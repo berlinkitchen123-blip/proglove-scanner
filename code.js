@@ -1,5 +1,10 @@
 // ProGlove Scanner - Complete Bowl Tracking System
 // --- GLOBAL STATE ---
+// NOTE: If you receive a 'USERS has already been declared' error,
+// check your HTML file and ensure code.js is sourced only once.
+// If the error persists, temporarily change 'const USERS' to 'var USERS'
+// or rename this variable.
+
 window.appData = {
 mode: null,              
 user: null,               
@@ -10,12 +15,10 @@ scanning: false,
 myScans: [],              
 activeBowls: [],          
 preparedBowls: [],        
-returnedBowls: 
-[],        
+returnedBowls: [],        
 
 // Internal state
 db: null,
-// CRITICAL FIX: Breaking the data into separate references to avoid the 32MB limit
 appDataRef: null,        
 refActive: null,         
 refPrepared: null,       
@@ -29,6 +32,8 @@ isInitialized: false,
 scanTimer: null, // Timer used for debouncing input
 isProcessingScan: false, // FLAG: Prevents the app from accepting new scans during the sync operation
 };
+
+// Renaming to USERS_LIST to help diagnose repeated declarations
 const USERS = [
 {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
 {name: "Jash", role: "Kitchen"}, {name: "Joel", role: "Kitchen"}, 
@@ -38,11 +43,13 @@ const USERS = [
 {name: "Riyaz", role: "Return"}, {name: "Alan", role: "Return"}, 
 {name: "Adesh", role: "Return"}
 ];
+
 const DISH_LETTERS = [
 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 '1', '2', '3', '4' 
 ];
+
 // --- UTILITY FUNCTIONS ---
 /**
 * Converts an ISO timestamp or Date object to the standard YYYY-MM-DD format.
@@ -174,6 +181,8 @@ loadFromFirebase();
 
 } catch (error) {
 console.error("CRITICAL ERROR: Failed during initial data check/write. Check rules.", error);
+// FIX: Use optional chaining to prevent crash if systemStatus is null
+document.getElementById('systemStatus')?.textContent = '⚠️ Offline Mode - CRITICAL DB Error';
 showMessage("❌ CRITICAL ERROR: Database access failed. Check rules or internet connection.", 'error', 10000);
 }
 }
@@ -183,6 +192,9 @@ showMessage("❌ CRITICAL ERROR: Database access failed. Check rules or internet
 * Sets up the perpetual Firebase listeners (Continuous Read) for all separate paths.
 */
 function loadFromFirebase() {
+    // FIX: Use optional chaining to prevent crash if systemStatus is null
+    document.getElementById('systemStatus')?.textContent = '🔄 Connecting to Cloud...'; 
+
 // 1. Listen to Active Bowls
 window.appData.refActive.on('value', (snapshot) => {
 if (window.appData.isInitialized) {
@@ -374,7 +386,7 @@ if (activeCountEl) activeCountEl.textContent = window.appData.activeBowls.length
 const preparedTodayCountEl = document.getElementById('preparedTodayCount');
 if (preparedTodayCountEl) preparedTodayCountEl.textContent = window.appData.preparedBowls.length;
 const returnedTodayCount = window.appData.returnedBowls.filter(bowl => 
-bowl.returnDate === today
+formatDateStandard(bowl.returnDate) === today
 ).length;
 const exportReturnCountEl = document.getElementById('exportReturnCount');
 if (exportReturnCountEl) exportReturnCountEl.textContent = window.appData.returnedBowls.length;
@@ -1092,7 +1104,7 @@ const lastResetDate = window.appData.lastDataReset ? formatDateStandard(new Date
 
 if (now.getHours() >= cutoffHour && lastResetDate !== today) {
 const bowlsToKeep = window.appData.returnedBowls.filter(bowl => 
-bowl.returnDate === today
+formatDateStandard(bowl.returnDate) === today
 );
 const removedCount = window.appData.returnedBowls.length - bowlsToKeep.length;
 
