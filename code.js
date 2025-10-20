@@ -600,19 +600,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const scanInput = document.getElementById('scanInput');
     if (scanInput) {
-        // 💥 FINAL, CORRECTED SCANNER LOGIC 💥
-        scanInput.addEventListener('input', () => {
-            if (window.appData.scanTimer) {
-                clearTimeout(window.appData.scanTimer);
-            }
-            window.appData.scanTimer = setTimeout(() => {
-                const scannedValue = scanInput.value.trim();
-                scanInput.value = ''; // Clear input immediately
-                if (scannedValue.length > 5) {
-                    processScan(scannedValue);
+        // This is the original input listener from your file, which works for ProGlove.
+        scanInput.addEventListener('input', (e) => {
+            const scannedValue = e.target.value.trim();
+            if (scannedValue.length > 5) {
+                if (window.appData.scanTimer) {
+                    clearTimeout(window.appData.scanTimer);
                 }
-            }, 50); // 50ms debounce timer as requested
+                window.appData.scanTimer = setTimeout(() => {
+                    if (scanInput.value.trim() === scannedValue && window.appData.scanning && !window.appData.isProcessingScan) {
+                        processScan(scannedValue);
+                        scanInput.value = '';
+                    }
+                }, 50); // 50ms timer
+            }
         });
+        // The keydown listener has been removed to prevent conflicts.
     }
 
     document.addEventListener('keydown', (e) => {
