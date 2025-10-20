@@ -1,7 +1,10 @@
 // ProGlove Scanner - Complete Bowl Tracking System
 
 // --- GLOBAL STATE (Using 'var' for maximum safety against scope/redeclaration errors) ---
-var appData = {
+var appData = {Uncaught SyntaxError: Invalid left-hand side in assignment (at Bol.js?v=2025102005:187:9)Understand this error
+favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)Uncaught SyntaxError: Invalid left-hand side in assignment (at Bol.js?v=2025102005:187:9)Understand this error
+favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)Uncaught SyntaxError: Invalid left-hand side in assignment (at Bol.js?v=2025102005:187:9)Understand this error
+favicon.ico:1  GET https://berlinkitchen123-blip.github.io/favicon.ico 404 (Not Found)
     mode: null,              
     user: null,               
     dishLetter: null,         
@@ -164,7 +167,7 @@ async function ensureDatabaseInitialized(ref) {
     try {
         // Use .once on the *Active Bowls* ref to check for initialization
         const snapshot = await ref.once('value');
-        if (!snapshot.exists() || snapshot.val() === null) {
+        if (!snapshot.exists() || snapshot.val() = null) {
             console.log("🆕 Database structure is empty. Writing initial structure.");
             // Set empty arrays for all core paths to guarantee existence
             await appData.refActive.set([]); 
