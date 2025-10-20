@@ -410,6 +410,7 @@ function setupEventListeners() {
         }
     });
 
+    // NOTE: selectUser is called on 'change' event
     document.getElementById('userDropdown')?.addEventListener('change', selectUser);
     document.getElementById('dishDropdown')?.addEventListener('change', selectDishLetter);
     document.getElementById('kitchenBtn')?.addEventListener('click', () => setMode('kitchen'));
@@ -827,7 +828,7 @@ function stopScanning() {
 }
 
 
-// ========== USER AND MODE MANAGEMENT ==========
+// ========== USER AND MODE MANAGEMENT (FIXED FOR TABLETS) ==========
 function initializeUsers() {
     // This is primarily for initial setup/placeholder. loadUsers is called after mode selection.
     const dropdown = document.getElementById('userDropdown');
@@ -850,30 +851,32 @@ function setMode(mode) {
     // Correctly load users after setting the mode
     loadUsers(); 
     
+    // IMPORTANT FIX FOR TABLETS: Manually reset the dropdown value after loading options
+    const userDropdown = document.getElementById('userDropdown');
+    if (userDropdown) {
+        userDropdown.value = '';
+    }
+    
     updateStatsLabels();
     updateDisplay();
     showMessage(`📱 ${mode.toUpperCase()} mode`, 'info');
 }
 
-function updateStatsLabels() {
-    const prepLabel = document.getElementById('prepLabel');
-    if(prepLabel) prepLabel.textContent = window.appData.mode === 'kitchen' ? 'Prepared Today' : 'Returned Today';
-}
-
 /**
  * FIX: This is the critical function to ensure users are filtered and loaded correctly
- * based on the active mode (Kitchen or Return).
+ * based on the active mode (Kitchen or Return) and is robust for dynamic updates.
  */
 function loadUsers() {
     const dropdown = document.getElementById('userDropdown');
     if (!dropdown) return;
     
+    // 1. CLEAR AND RESET THE DROPDOWN
     dropdown.innerHTML = '<option value="">-- Select User --</option>';
+    dropdown.value = ''; 
     
     const currentMode = window.appData.mode;
 
     if (!currentMode) {
-        // If no mode is set (e.g., initial load), don't populate the list yet.
         return;
     }
 
@@ -882,6 +885,7 @@ function loadUsers() {
         user.role.toLowerCase() === currentMode.toLowerCase()
     );
 
+    // 2. POPULATE OPTIONS
     usersToShow.forEach(user => {
         const option = document.createElement('option');
         option.value = user.name;
@@ -889,7 +893,7 @@ function loadUsers() {
         dropdown.appendChild(option);
     });
 
-    // Ensure the user selection is reset in the UI
+    // 3. Re-select the placeholder to force a proper 'change' event on first user selection
     dropdown.value = '';
 }
 
@@ -897,19 +901,27 @@ function loadUsers() {
 function selectUser() {
     const dropdown = document.getElementById('userDropdown');
     if (!dropdown) return;
-    window.appData.user = dropdown.value;
-    if (window.appData.user) {
+    
+    const selectedValue = dropdown.value;
+    
+    // Only proceed if a user (not the placeholder) is selected AND it's a new selection
+    if (selectedValue && selectedValue !== window.appData.user) {
+        window.appData.user = selectedValue;
+        
         showMessage(`✅ ${window.appData.user} selected`, 'success');
+        
         if (window.appData.mode === 'kitchen') {
             document.getElementById('dishSection').classList.remove('hidden');
             loadDishLetters();
-        } else {
+        } else if (window.appData.mode === 'return') {
             // Automatically start scanning in return mode once user is selected
             startScanning();
         }
-    } else {
-        // If user selects "-- Select User --"
+    } else if (!selectedValue) {
+        // Handle case where user selects the placeholder or nothing
+        window.appData.user = null;
         window.appData.scanning = false;
+        stopScanning();
     }
     updateDisplay();
 }
