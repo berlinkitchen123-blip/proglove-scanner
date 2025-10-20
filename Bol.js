@@ -164,7 +164,7 @@ async function ensureDatabaseInitialized(ref) {
     try {
         // Use .once on the *Active Bowls* ref to check for initialization
         const snapshot = await ref.once('value');
-        if (!snapshot.exists() || snapshot.val() = null) {
+        if (!snapshot.exists() || snapshot.val() === null) {
             console.log("🆕 Database structure is empty. Writing initial structure.");
             // Set empty arrays for all core paths to guarantee existence
             await appData.refActive.set([]); 
