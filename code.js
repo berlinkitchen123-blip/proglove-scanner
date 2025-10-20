@@ -13,7 +13,8 @@ window.appData = {
     lastActivity: Date.now(),
     lastCleanup: null,
     lastSync: null,
-    isProcessingScan: false // FLAG TO PREVENT DOUBLE SCANS
+    isProcessingScan: false, // FLAG TO PREVENT CONCURRENT SCANS
+    lastScannedCode: null    // { code: '...', timestamp: ... } to prevent duplicates
 };
 
 // CORRECTED USER LIST
@@ -624,61 +625,139 @@ function loadFromStorage() {
 }
 
 // ========== SCANNING AND BOWL MANAGEMENT ==========
+
+// More robust scan processing to prevent both concurrent and duplicate scans
 function processScan(input) {
-    if (window.appData.isProcessingScan) return;
-    if (!window.appData.scanning) { showMessage('❌ Scanning not active', 'error'); return; }
-    window.appData.isProcessingScan = true;
-    const startTime = Date.now();
-    const vytInfo = detectVytCode(input);
-    if (!vytInfo) {
-        showMessage("❌ Invalid VYT code", "error");
-        setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
+    // Prevent concurrent executions of this function
+    if (window.appData.isProcessingScan) {
+        console.warn('⚠️ Scan ignored: processing already in progress.');
         return;
     }
-    try {
-        const result = window.appData.mode === 'kitchen' ? kitchenScan(vytInfo) : returnScan(vytInfo);
-        showMessage(result.message, result.type);
-        document.getElementById('responseTimeValue').textContent = Date.now() - startTime;
-    } catch (e) {
-        showMessage("❌ Scan processing error", "error");
+
+    if (!window.appData.scanning) {
+        showMessage('❌ Scanning not active', 'error');
+        return;
     }
-    updateDisplay();
-    updateOvernightStats();
-    updateLastActivity();
-    setTimeout(() => { window.appData.isProcessingScan = false; }, 100);
+
+    window.appData.isProcessingScan = true; // Set processing lock
+    const startTime = Date.now();
+
+    try {
+        const vytInfo = detectVytCode(input);
+        if (!vytInfo) {
+            showMessage("❌ Invalid or partial VYT code", "error");
+            return; // Exit if the code is not valid
+        }
+        
+        const now = Date.now();
+        const lastScan = window.appData.lastScannedCode;
+        const DUPLICATE_SCAN_WINDOW_MS = 2000; // 2-second window to ignore duplicates
+
+        // Prevent accidental double-scans of the SAME bowl within the window
+        if (lastScan && lastScan.code === vytInfo.fullUrl && (now - lastScan.timestamp) < DUPLICATE_SCAN_WINDOW_MS) {
+            console.warn(`Duplicate scan ignored: ${vytInfo.fullUrl}`);
+            showMessage('⚠️ Duplicate scan ignored', 'warning');
+            return; // Exit if it's a duplicate
+        }
+
+        // If it's a new, valid scan, update the last scanned code immediately
+        window.appData.lastScannedCode = { code: vytInfo.fullUrl, timestamp: now };
+
+        // Process the scan based on the current mode
+        const result = window.appData.mode === 'kitchen' ? kitchenScan(vytInfo) : returnScan(vytInfo);
+        
+        // Only show a message if the processing was successful
+        if (result) {
+            showMessage(result.message, result.type);
+        }
+
+        // Update UI and stats
+        document.getElementById('responseTimeValue').textContent = `${Date.now() - startTime}ms`;
+        updateDisplay();
+        updateOvernightStats();
+        updateLastActivity();
+
+    } catch (e) {
+        console.error('Scan processing error:', e);
+        showMessage("❌ Scan processing error", "error");
+    } finally {
+        // IMPORTANT: Always release the lock
+        window.appData.isProcessingScan = false;
+    }
 }
+
 
 function kitchenScan(vytInfo) {
     const today = new Date().toLocaleDateString('en-GB');
-    if (window.appData.preparedBowls.some(b => b.code === vytInfo.fullUrl && b.date === today && b.user === window.appData.user && b.dish === window.appData.dishLetter)) {
-        return { message: "❌ You already prepared this bowl today", type: "error" };
+    const fullCode = vytInfo.fullUrl;
+
+    // Check if this exact bowl was already prepared by this user today with the same dish letter
+    if (window.appData.preparedBowls.some(b => b.code === fullCode && b.date === today && b.user === window.appData.user && b.dish === window.appData.dishLetter)) {
+        return { message: `❌ You already prepared this bowl today`, type: "error" };
     }
+
     let hadCustomerData = false;
-    const activeIndex = window.appData.activeBowls.findIndex(b => b.code === vytInfo.fullUrl);
+    // Find and remove the bowl from the active list if it exists
+    const activeIndex = window.appData.activeBowls.findIndex(b => b.code === fullCode);
     if (activeIndex !== -1) {
         window.appData.activeBowls.splice(activeIndex, 1);
-        hadCustomerData = true;
+        hadCustomerData = true; // Mark that this bowl was previously active
     }
-    const preparedBowl = { code: vytInfo.fullUrl, dish: window.appData.dishLetter, user: window.appData.user, company: "Unknown", customer: "Unknown", date: today, time: new Date().toLocaleTimeString(), timestamp: new Date().toISOString(), status: 'PREPARED' };
+
+    // Create the new prepared bowl record
+    const preparedBowl = {
+        code: fullCode,
+        dish: window.appData.dishLetter,
+        user: window.appData.user,
+        company: "Unknown",
+        customer: "Unknown",
+        date: today,
+        time: new Date().toLocaleTimeString(),
+        timestamp: new Date().toISOString(),
+        status: 'PREPARED'
+    };
     window.appData.preparedBowls.push(preparedBowl);
-    window.appData.myScans.push({ type: 'kitchen', code: vytInfo.fullUrl, dish: window.appData.dishLetter, user: window.appData.user, timestamp: new Date().toISOString(), hadPreviousCustomer: hadCustomerData });
-    const message = `✅ ${window.appData.dishLetter} Prepared: ${vytInfo.fullUrl.slice(-8)} ${hadCustomerData ? '(reset)' : ''}`;
-    window.appData.scanHistory.unshift({ type: 'kitchen', code: vytInfo.fullUrl, user: window.appData.user, timestamp: new Date().toISOString(), message });
-    syncToFirebase();
+
+    // Log the scan for the user's stats
+    window.appData.myScans.push({ type: 'kitchen', code: fullCode, dish: window.appData.dishLetter, user: window.appData.user, timestamp: new Date().toISOString(), hadPreviousCustomer: hadCustomerData });
+    
+    // Create the message and add to global history
+    const message = `✅ ${window.appData.dishLetter} Prepared: ${fullCode.slice(-8)} ${hadCustomerData ? '(reset)' : ''}`;
+    window.appData.scanHistory.unshift({ type: 'kitchen', code: fullCode, user: window.appData.user, timestamp: new Date().toISOString(), message });
+    
+    syncToFirebase(); // Sync changes
     return { message, type: "success" };
 }
 
 function returnScan(vytInfo) {
     const today = new Date().toLocaleDateString('en-GB');
-    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.code === vytInfo.fullUrl && b.date === today);
-    if (preparedIndex === -1) return { message: "❌ Bowl not prepared today", type: "error" };
+    const fullCode = vytInfo.fullUrl;
+
+    // Check if the bowl was prepared today. It must be in the prepared list to be returned.
+    const preparedIndex = window.appData.preparedBowls.findIndex(b => b.code === fullCode && b.date === today);
+    if (preparedIndex === -1) {
+        return { message: "❌ Bowl not prepared today", type: "error" };
+    }
+
+    // Remove from prepared list and add to returned list
     const preparedBowl = window.appData.preparedBowls.splice(preparedIndex, 1)[0];
-    const returnedBowl = { code: vytInfo.fullUrl, dish: preparedBowl.dish, returnedBy: window.appData.user, returnDate: today, returnTime: new Date().toLocaleTimeString(), status: 'RETURNED' };
+    const returnedBowl = {
+        code: fullCode,
+        dish: preparedBowl.dish,
+        returnedBy: window.appData.user,
+        returnDate: today,
+        returnTime: new Date().toLocaleTimeString(),
+        status: 'RETURNED'
+    };
     window.appData.returnedBowls.push(returnedBowl);
-    window.appData.myScans.push({ type: 'return', code: vytInfo.fullUrl, user: window.appData.user, timestamp: new Date().toISOString() });
-    window.appData.scanHistory.unshift({ type: 'return', code: vytInfo.fullUrl, user: window.appData.user, timestamp: new Date().toISOString(), message: `✅ Returned: ${vytInfo.fullUrl.slice(-8)}` });
-    syncToFirebase();
-    return { message: `✅ Returned: ${vytInfo.fullUrl.slice(-8)}`, type: "success" };
+
+    // Log the scan for user stats and global history
+    window.appData.myScans.push({ type: 'return', code: fullCode, user: window.appData.user, timestamp: new Date().toISOString() });
+    const message = `✅ Returned: ${fullCode.slice(-8)}`;
+    window.appData.scanHistory.unshift({ type: 'return', code: fullCode, user: window.appData.user, timestamp: new Date().toISOString(), message });
+    
+    syncToFirebase(); // Sync changes
+    return { message, type: "success" };
 }
 
 function startScanning() {
@@ -695,6 +774,7 @@ function stopScanning() {
     updateDisplay();
     showMessage(`⏹ Scanning stopped`, 'info');
 }
+
 
 // ========== USER AND MODE MANAGEMENT ==========
 function initializeUsers() {
