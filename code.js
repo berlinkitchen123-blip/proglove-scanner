@@ -29,7 +29,10 @@ window.appData = {
     isProcessingScan: false, // FLAG: Prevents the app from accepting new scans during the sync operation
 };
 
-// --- DATA CONSTANTS (Isolated to prevent redeclaration errors) ---
+// --- DATA CONSTANTS (Isolated to prevent redeclaration and syntax errors) ---
+// This IIFE (Immediately Invoked Function Expression) creates a safe, private scope
+// for constants, which resolves "Identifier 'USERS' has already been declared" and 
+// avoids the syntax error caused by improper termination/parsing on tablets.
 const CONSTANTS = (function() {
     const USERS = [
         {name: "Hamid", role: "Kitchen"}, {name: "Richa", role: "Kitchen"}, 
@@ -124,7 +127,6 @@ function initializeFirebase() {
             messagingSenderId: "177575768177",
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
-        // NOTE: The original logic for __firebase_config is removed as it was not provided.
         const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
 
         const appId = firebaseConfig.projectId;
