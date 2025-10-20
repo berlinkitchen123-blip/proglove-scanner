@@ -45,9 +45,6 @@ const DISH_LETTERS = [
 ];
 
 // --- UTILITY FUNCTIONS ---
-/**
- * Converts an ISO timestamp or Date object to the standard YYYY-MM-DD format.
- */
 function formatDateStandard(date) {
     const d = new Date(date);
     let month = '' + (d.getMonth() + 1);
@@ -58,9 +55,6 @@ function formatDateStandard(date) {
     return [year, month, day].join('-');
 }
 
-/**
- * CALCULATES THE 24-HOUR REPORTING WINDOW (10 PM Yesterday to 10 PM Today).
- */
 function getReportingDayTimestamp() {
     const now = new Date();
     const cutoffHour = 22;
@@ -77,55 +71,34 @@ function getReportingDayTimestamp() {
     return { start: startOfReportingDay.toISOString(), end: endOfReportingDay.toISOString() };
 }
 
-/**
- * Displays user feedback messages with colors.
- */
 function showMessage(message, type = 'info', duration = 3000) {
     const messageContainer = document.getElementById('messageContainer');
     if (!messageContainer) return;
-
     const msgElement = document.createElement('div');
     let colorClass = 'bg-blue-900 text-blue-200 border-blue-700';
     if (type === 'success') colorClass = 'bg-green-900 text-green-200 border-green-700';
     else if (type === 'error') colorClass = 'bg-red-900 text-red-200 border-red-700';
     else if (type === 'warning') colorClass = 'bg-orange-900 text-orange-200 border-orange-700';
-
     msgElement.className = `p-3 rounded-lg shadow-xl text-center text-sm mb-2 transition-all duration-300 border ${colorClass}`;
     msgElement.innerHTML = message;
-
     messageContainer.prepend(msgElement);
-
     setTimeout(() => {
         msgElement.style.opacity = '0';
-        msgElement.style.maxHeight = '0';
-        msgElement.style.padding = '0';
         setTimeout(() => msgElement.remove(), 500);
     }, duration);
 }
 
-/**
- * Displays an error message inside the scanner input placeholder.
- */
 function showScanError(message) {
     const scanInput = document.getElementById('scanInput');
-    if (!scanInput) return; // Failsafe
-
+    if (!scanInput) return;
     scanInput.placeholder = message;
     scanInput.classList.add('scanning-error');
-
     setTimeout(() => {
         scanInput.classList.remove('scanning-error');
         const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
-        if (!window.appData.scanning) {
-            scanInput.placeholder = "Scanner stopped.";
-        } else if (isReadyToScan) {
-            scanInput.placeholder = `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...`;
-        } else {
-            scanInput.placeholder = 'Complete steps 1 & 2 to enable scanning...';
-        }
-    }, 4000); // 4-second duration for errors
+        scanInput.placeholder = isReadyToScan ? `Ready to Scan...` : 'Complete steps 1 & 2...';
+    }, 4000);
 }
-
 
 // --- FIREBASE SETUP & SYNC ---
 function initializeFirebase() {
@@ -140,20 +113,14 @@ function initializeFirebase() {
             appId: "1:177575768177:web:0a0acbf222218e0c0b2bd0",
         };
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : HARDCODED_FIREBASE_CONFIG;
-        const appId = firebaseConfig.projectId;
-        if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-            showMessage("❌ ERROR: Firebase library not loaded.", 'error');
-            return;
-        }
         const app = firebase.initializeApp(firebaseConfig);
         window.appData.db = firebase.database();
-        const basePath = `artifacts/${appId}/public/data/`;
+        const basePath = `artifacts/${firebaseConfig.projectId}/public/data/`;
         window.appData.refActive = firebase.database().ref(`${basePath}active_bowls`);
         window.appData.refPrepared = firebase.database().ref(`${basePath}prepared_bowls`);
         window.appData.refReturned = firebase.database().ref(`${basePath}returned_bowls`);
         window.appData.refScans = firebase.database().ref(`${basePath}scan_logs`);
         ensureDatabaseInitialized(window.appData.refActive);
-        showMessage("✅ Application initialized. Please select an operation mode.", 'success');
     } catch (error) {
         console.error("Firebase initialization failed:", error);
         showMessage("❌ ERROR: Firebase failed to initialize.", 'error');
@@ -172,7 +139,7 @@ async function ensureDatabaseInitialized(ref) {
         window.appData.isInitialized = true;
         loadFromFirebase();
     } catch (error) {
-        console.error("CRITICAL ERROR: Failed during initial data check/write.", error);
+        console.error("CRITICAL ERROR during DB init:", error);
         showMessage("❌ CRITICAL ERROR: Database access failed.", 'error', 10000);
     }
 }
@@ -201,23 +168,19 @@ function loadFromFirebase() {
             window.appData.myScans = snapshot.val() || [];
             updateDisplay();
             const lastSyncInfoEl = document.getElementById('lastSyncInfo');
-            if (lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
+            if(lastSyncInfoEl) lastSyncInfoEl.innerHTML = `💾 Last Sync: ${new Date().toLocaleTimeString()}`;
         }
     });
 }
 
 function syncToFirebase() {
     if (!window.appData.isInitialized) return;
-    const writes = [
+    Promise.all([
         window.appData.refActive.set(window.appData.activeBowls),
         window.appData.refPrepared.set(window.appData.preparedBowls),
         window.appData.refReturned.set(window.appData.returnedBowls),
         window.appData.refScans.set(window.appData.myScans),
-    ];
-    Promise.all(writes).catch(error => {
-        console.error("Firebase synchronization failed:", error);
-        showMessage("❌ ERROR: Data sync failed.", 'error');
-    });
+    ]).catch(err => showMessage("❌ Sync failed.", 'error'));
 }
 
 function clearActiveInventory() {
@@ -283,7 +246,6 @@ function updateDisplay() {
     if (scanInput && !scanInput.classList.contains('scanning-error')) {
         scanInput.placeholder = isReadyToScan ? `Ready to Scan in ${window.appData.mode.toUpperCase()} Mode...` : 'Complete Steps 1 & 2...';
     }
-    window.appData.scanning = isReadyToScan && window.appData.scanning;
     document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
     document.getElementById('preparedTodayCount').textContent = window.appData.preparedBowls.length;
     document.getElementById('exportReturnCount').textContent = window.appData.returnedBowls.length;
@@ -351,7 +313,6 @@ function selectDishLetter(value) {
     updateDisplay();
 }
 
-// --- Core Scanning, Export, Report, and Maintenance Logic ---
 function startScanning() {
     const isReadyToScan = window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter);
     if (!isReadyToScan) {
@@ -600,21 +561,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const scanInput = document.getElementById('scanInput');
     if (scanInput) {
-        // This is the original input listener from your file, which works for ProGlove.
-        scanInput.addEventListener('input', (e) => {
-            if (window.appData.scanTimer) {
-                clearTimeout(window.appData.scanTimer);
-            }
-            window.appData.scanTimer = setTimeout(() => {
+        // THIS IS THE CORRECTED LOGIC FOR A TABLET WITH A PROGLOVE SCANNER
+        // IT WAITS FOR THE 'ENTER' KEY, WHICH IS THE MOST RELIABLE METHOD.
+        scanInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); 
                 const scannedValue = scanInput.value.trim();
-                // We only process if the value is stable and meets criteria
-                if (scannedValue.length > 5 && window.appData.scanning && !window.appData.isProcessingScan) {
+                if (scannedValue.length > 5) {
                     processScan(scannedValue);
-                    scanInput.value = ''; // Clear after processing
                 }
-            }, 50); // 50ms timer
+                // This clears the input field AFTER processing, ready for the next scan.
+                scanInput.value = ''; 
+            }
         });
-        // The keydown listener has been removed to prevent conflicts.
     }
 
     document.addEventListener('keydown', (e) => {
