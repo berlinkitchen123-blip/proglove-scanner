@@ -52,12 +52,12 @@ var firebaseConfig = {
 };
 
 // ------------------- UTILITIES -------------------
-function showMessage(message, type) {
+function showMessage(message, type, containerId = null) {
     try {
-        var container = document.getElementById('messageContainer');
+        const targetId = containerId || 'messageContainer'; // Use specific container or default to global
+        var container = document.getElementById(targetId);
         if (!container) {
-            // fallback console
-            console.log(`[${type||'info'}]`, message);
+            console.log(`[${type||'info'}] (Container #${targetId} not found)`, message);
             return;
         }
         var el = document.createElement('div');
@@ -69,12 +69,23 @@ function showMessage(message, type) {
         el.style.marginTop = '8px';
         el.style.boxShadow = '0 6px 20px rgba(0,0,0,0.6)';
         el.innerText = message;
+
+        // For section-specific messages, clear previous ones to avoid clutter
+        if (containerId) {
+            container.innerHTML = '';
+        }
+
         container.appendChild(el);
         setTimeout(function() {
-            try { container.removeChild(el); } catch(e){}
+            try {
+                if (el.parentNode === container) {
+                    container.removeChild(el);
+                }
+            } catch(e){}
         }, 4000);
     } catch(e){ console.error("showMessage error:",e) }
 }
+
 
 function nowISO() { return (new Date()).toISOString(); }
 function todayDateStr() { return (new Date()).toLocaleDateString('en-GB'); }
@@ -191,7 +202,7 @@ function addActiveBowl(bowl) {
 function markBowlReturned(bowlCode, returnMeta) {
     const bowl = findActiveBowlByCode(bowlCode);
     if (!bowl) {
-        showMessage("Returned bowl not found in active list", "error");
+        showMessage("Returned bowl not found in active list", "error", "scannerMessageContainer");
         return false;
     }
     bowl.returned = true;
@@ -242,7 +253,7 @@ function handleScan(scanCode, user) {
         if (firebaseAvailable) syncToFirebase('/activeBowls', window.appData.activeBowls).catch(()=>{});
     } catch (e) {
         console.error("handleScan error:", e);
-        showMessage("Error processing scan", "error");
+        showMessage("Error processing scan", "error", "scannerMessageContainer");
     }
 }
 
@@ -256,7 +267,8 @@ function handleReturnScan(scanCode, user) {
             // try sync
             if (firebaseAvailable) syncToFirebase('/returnedBowls', window.appData.returnedBowls).catch(()=>{});
         } else {
-            showMessage(`Return failed — bowl ${scanCode} not tracked`, 'error');
+            // The error message is already shown inside markBowlReturned, no need for another one here.
+            console.warn(`Return failed for code: ${scanCode}`);
         }
     } catch (e) {
         console.error("handleReturnScan error:", e);
@@ -266,8 +278,8 @@ function handleReturnScan(scanCode, user) {
 // ------------------- DELIVERY JSON HANDLER (manual call) -------------------
 function handleNewDeliveryData(jsonData) {
     try {
-        if (!jsonData || !jsonData.boxes || !jsonData.boxes.length) {
-            showMessage("Invalid delivery data format", "error");
+        if (typeof jsonData !== 'object' || jsonData === null || !jsonData.boxes || !jsonData.boxes.length) {
+            showMessage("Invalid delivery data format. Expected a JSON object with a 'boxes' array.", "error", "dataMessageContainer");
             return;
         }
 
@@ -299,9 +311,10 @@ function handleNewDeliveryData(jsonData) {
 
     } catch (e) {
         console.error("handleNewDeliveryData error:", e);
-        showMessage("Error processing delivery data", "error");
+        showMessage("Error processing delivery data. Check console for details.", "error", "dataMessageContainer");
     }
 }
+
 
 // ------------------- BOOTSTRAP -------------------
 (function boot() {
