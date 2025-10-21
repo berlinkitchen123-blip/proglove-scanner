@@ -5,16 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ProGlove Bowl Tracking System</title>
 
-<!-- Firebase (compat v8 style used by app-logic.js) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-<!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
-<!-- Styles (kept dark theme and accents similar to your original) -->
 <style>
 :root{
   --bg-dark:#0f1724;
@@ -39,13 +36,22 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
 .section-title{font-weight:600;color:var(--text);font-size:16px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:12px}
 .flex-row{display:flex;gap:10px;flex-wrap:wrap}
 .flex-1{flex:1 1 0%}
-.mode-button{flex:1;padding:10px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:700;color:#fff;background:var(--card-light)}
+.mode-button{flex:1;padding:10px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:700;color:#fff;background:var(--card-light);transition: background .2s ease}
+.mode-button.active {background: var(--accent-pink); color: #391010;}
 .mode-button:disabled{opacity:.5;cursor:not-allowed}
 .btn-pill{border-radius:999px;padding:10px 18px}
 .btn-green{background:var(--accent-green);color:#05201a}
 .btn-red{background:var(--accent-red);color:#391010}
 .input,select,textarea{width:100%;padding:10px;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--text);font-size:14px}
 .scanner-input{font-size:16px;text-align:center;border-width:3px}
+
+/* --- FIX ADDED HERE --- */
+select option {
+  background: var(--card); /* Sets the dropdown option background to a dark color */
+  color: var(--text);      /* Ensures the text color is light */
+}
+/* ---------------------- */
+
 .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
 .metric{background:var(--card-light);padding:10px;border-radius:8px;text-align:center}
 .metric .value{font-size:20px;font-weight:800}
@@ -55,6 +61,7 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
 .data-table th{background:var(--card-light);color:var(--accent-pink);padding:8px;text-align:left;border-bottom:1px solid var(--border)}
 .data-table td{padding:8px;border-bottom:1px solid rgba(0,0,0,0.2)}
 .message-container{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;max-width:600px}
+.section-message-container{margin-top:12px;min-height:1px;}
 .small-note{color:var(--muted);font-size:13px;margin-top:8px}
 .footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
 
@@ -65,6 +72,7 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
 </style>
 </head>
 <body>
+
   <div class="message-container" id="messageContainer"></div>
 
   <div class="container">
@@ -74,7 +82,6 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       <div id="systemStatus">Initializing...</div>
     </header>
 
-    <!-- Mode -->
     <section class="app-card" id="modeSection">
       <div class="section-title">1. Select Operation Mode</div>
       <div class="flex-row">
@@ -84,7 +91,6 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       <div id="modeDisplay" class="small-note">Status: Please select a mode</div>
     </section>
 
-    <!-- User & Dish selection -->
     <section class="app-card" id="userSection">
       <div class="section-title">2. Select User & Dish</div>
       <div class="flex-row">
@@ -103,7 +109,6 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       </div>
     </section>
 
-    <!-- Scanner -->
     <section class="app-card" id="scannerSection">
       <div class="section-title">3. Scanner Input</div>
       <div class="flex-row">
@@ -114,6 +119,8 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       <div style="margin-top:12px">
         <input id="scanInput" class="input scanner-input" placeholder="Select user and press START..." disabled autocomplete="off" />
       </div>
+
+      <div id="scannerMessageContainer" class="section-message-container"></div>
 
       <div class="metrics-grid" style="margin-top:12px">
         <div class="metric">
@@ -135,7 +142,6 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       </div>
     </section>
 
-    <!-- Live Report -->
     <section class="app-card">
       <div class="section-title">Live Prep Report (10 PM Cycle)</div>
       <div class="table-wrap">
@@ -150,34 +156,221 @@ body{margin:0;font-family:'Inter',sans-serif;background:var(--bg-dark);color:var
       </div>
     </section>
 
-    <!-- Data Management -->
     <section class="app-card">
       <div class="section-title">Data Management & Export</div>
       <div id="lastSyncInfo" class="small-note">Awaiting sync...</div>
       <div style="margin-top:10px" class="flex-row">
-        <button class="mode-button" onclick="exportActiveBowls()">📥 Export Active Bowls</button>
-        <button class="mode-button" onclick="exportReturnData()">📥 Export Returns</button>
-        <button class="mode-button" onclick="exportAllData()">📊 Export ALL</button>
+        <button class="mode-button" onclick="exportData('activeBowls')">📥 Export Active Bowls</button>
+        <button class="mode-button" onclick="exportData('returnedBowls')">📥 Export Returns</button>
+        <button class="mode-button" onclick="exportData('all')">📊 Export ALL</button>
       </div>
 
-      <h4 style="margin-top:12px;color:var(--muted)">JSON Import (Customer Data Patch)</h4>
+      <h4 style="margin-top:12px;color:var(--muted)">JSON Import (Delivery Data)</h4>
       <textarea id="jsonData" class="input" style="height:120px" placeholder='Paste JSON here...'></textarea>
+      
+      <div id="dataMessageContainer" class="section-message-container"></div>
+      
       <div class="flex-row" style="margin-top:8px">
-        <button class="mode-button" onclick="processJSONData()">🔄 Patch Customer Data</button>
-        <button class="mode-button" onclick="resetTodaysPreparedBowls()">🗑️ Reset Prepared/Scans</button>
+        <button class="mode-button" onclick="processJSONData()">🔄 Process Delivery Data</button>
+        <button class="mode-button" onclick="resetTodaysScans()">🗑️ Reset My Scans</button>
       </div>
 
-      <div id="patchResults" style="display:none;margin-top:12px;background:var(--card-light);padding:10px;border-radius:8px">
-        <div id="patchSummary" style="font-weight:700"></div>
-        <div id="failedMatches" style="margin-top:8px;color:var(--muted)"></div>
-      </div>
     </section>
 
     <div class="footer">© 2025 Berlin Kitchen</div>
   </div>
 
-  <!-- Application script (app-logic.js is below) -->
-  <script src="app-logic.js?v=2025102006"></script>
+  <script src="app-logic.js?v=2025102101"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Elements ---
+        const kitchenBtn = document.getElementById('kitchenBtn');
+        const returnBtn = document.getElementById('returnBtn');
+        const modeDisplay = document.getElementById('modeDisplay');
+        const userSelect = document.getElementById('userSelect');
+        const dishWrapper = document.getElementById('dishWrapper');
+        const dishSelect = document.getElementById('dishSelect');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const scanInput = document.getElementById('scanInput');
+
+        // --- UI State ---
+        const uiState = {
+            isReadyToScan: () => window.appData.mode && window.appData.user && (window.appData.mode === 'return' || window.appData.dishLetter),
+        };
+        
+        // --- Functions ---
+        window.setMode = (mode) => {
+            window.appData.mode = mode;
+            modeDisplay.textContent = `Status: ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode selected.`;
+            
+            kitchenBtn.classList.toggle('active', mode === 'kitchen');
+            returnBtn.classList.toggle('active', mode === 'return');
+            
+            userSelect.innerHTML = '<option value="">-- Select User --</option>';
+            const role = mode === 'kitchen' ? 'Kitchen' : 'Return';
+            USERS.filter(u => u.role === role).forEach(user => {
+                const opt = document.createElement('option');
+                opt.value = user.name;
+                opt.textContent = user.name;
+                userSelect.appendChild(opt);
+            });
+            userSelect.disabled = false;
+            
+            dishWrapper.style.display = mode === 'kitchen' ? 'block' : 'none';
+            dishSelect.disabled = true;
+            startBtn.disabled = true;
+            window.appData.user = null;
+            window.appData.dishLetter = null;
+        };
+
+        window.selectUser = () => {
+            window.appData.user = userSelect.value;
+            if (window.appData.user) {
+                if(window.appData.mode === 'kitchen') {
+                    dishSelect.disabled = false;
+                } else {
+                    startBtn.disabled = false;
+                }
+            } else {
+                dishSelect.disabled = true;
+                startBtn.disabled = true;
+            }
+        };
+
+        window.selectDishLetter = () => {
+            window.appData.dishLetter = dishSelect.value;
+            startBtn.disabled = !uiState.isReadyToScan();
+            document.getElementById('myDishLetter').textContent = window.appData.dishLetter || '--';
+        };
+
+        window.startScanning = () => {
+            if (!uiState.isReadyToScan()) {
+                showMessage('Please select mode, user, and dish before starting.', 'error', 'scannerMessageContainer');
+                return;
+            }
+            window.appData.scanning = true;
+            scanInput.disabled = false;
+            scanInput.placeholder = 'Ready to scan...';
+            scanInput.focus();
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            userSelect.disabled = true;
+            dishSelect.disabled = true;
+        };
+        
+        window.stopScanning = () => {
+            window.appData.scanning = false;
+            scanInput.disabled = true;
+            scanInput.placeholder = 'Scanner stopped. Press START to resume.';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            userSelect.disabled = false;
+             if(window.appData.mode === 'kitchen') dishSelect.disabled = false;
+        };
+        
+        scanInput.addEventListener('change', (e) => {
+            const code = e.target.value.trim();
+            if (code && window.appData.scanning) {
+                if (window.appData.mode === 'kitchen') {
+                    handleScan(code, window.appData.user);
+                } else {
+                    handleReturnScan(code, window.appData.user);
+                }
+                e.target.value = '';
+                updateUI();
+            }
+        });
+        
+        window.processJSONData = () => {
+            const textarea = document.getElementById('jsonData');
+            const rawJson = textarea.value;
+            if (!rawJson) {
+                showMessage('JSON data cannot be empty.', 'error', 'dataMessageContainer');
+                return;
+            }
+            try {
+                const parsed = JSON.parse(rawJson);
+                handleNewDeliveryData(parsed);
+                textarea.value = '';
+                updateUI();
+            } catch (err) {
+                showMessage('Invalid JSON. Please check the format.', 'error', 'dataMessageContainer');
+                console.error("JSON Parse Error:", err);
+            }
+        };
+        
+        window.resetTodaysScans = () => {
+            if (confirm('Are you sure you want to clear YOUR scans for this session? This cannot be undone.')) {
+                window.appData.myScans = [];
+                saveToLocal();
+                updateUI();
+                showMessage('Your local scan count has been reset.', 'success');
+            }
+        };
+        
+        window.exportData = (dataType) => {
+            let dataToExport;
+            let filename;
+            const timestamp = new Date().toISOString().slice(0, 10);
+
+            switch(dataType) {
+                case 'activeBowls':
+                    dataToExport = window.appData.activeBowls;
+                    filename = `active-bowls-${timestamp}.json`;
+                    break;
+                case 'returnedBowls':
+                    dataToExport = window.appData.returnedBowls;
+                    filename = `returned-bowls-${timestamp}.json`;
+                    break;
+                case 'all':
+                    dataToExport = window.appData;
+                    filename = `proglove-full-backup-${timestamp}.json`;
+                    break;
+                default:
+                    return;
+            }
+            
+            const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            showMessage(`Exported ${filename}`, 'success');
+        };
+
+        const updateUI = () => {
+            const todayStr = todayDateStr();
+            // Metrics
+            document.getElementById('myScansCount').textContent = window.appData.myScans.length;
+            document.getElementById('preparedTodayCount').textContent = window.appData.scanHistory.filter(s => s.type === 'prepare' && s.when.startsWith(new Date().toISOString().slice(0, 10))).length;
+            document.getElementById('activeCount').textContent = window.appData.activeBowls.length;
+            document.getElementById('returnedCount').textContent = window.appData.returnedBowls.filter(b => b.returnedAt && b.returnedAt.startsWith(new Date().toISOString().slice(0, 10))).length;
+            
+            // Status
+            document.getElementById('systemStatus').textContent = firebaseAvailable ? 'ONLINE' : 'OFFLINE (Local)';
+            document.getElementById('systemStatus').style.background = firebaseAvailable ? 'var(--accent-green)' : 'var(--accent-red)';
+        };
+
+        // --- Initialization ---
+        const populateDishes = () => {
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
+            const numbers = "1234".split('');
+            [...letters, ...numbers].forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                dishSelect.appendChild(opt);
+            });
+        };
+        
+        populateDishes();
+        updateUI();
+        setInterval(updateUI, 5000);
+    });
+  </script>
 </body>
 </html>
-
