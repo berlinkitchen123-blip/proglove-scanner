@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ProGlove Bowl Tracking System</title>
 
-    <!-- Firebase SDKs - Loaded once in the head -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
     <style>
+        /* --- Color Variables --- */
         :root {
             --color-bg-dark: #111827;
             --color-bg-card: #273041;
@@ -25,11 +25,13 @@
             --color-success: #00e0b3;
             --color-error: #ff5252;
         }
+        /* --- Global & Base Styles --- */
         .app-body { background-color: var(--color-bg-dark); color: var(--color-text-light); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 1.5rem; line-height: 1.5; }
         .container { max-width: 56rem; margin-left: auto; margin-right: auto; }
         .app-spacing { margin-top: 1.5rem; margin-bottom: 1.5rem; }
         .transition-slow { transition: opacity 300ms ease-in-out; }
         .message-container { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 1rem; max-width: 28rem; margin-left: auto; margin-right: auto; pointer-events: none; }
+        /* --- Card & Section Styles --- */
         .app-card { background-color: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: 0.75rem; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6); padding: 1.5rem; margin-bottom: 1.5rem; }
         .header-shadow { box-shadow: 0 6px 12px rgba(255, 110, 150, 0.2); }
         .card-subtle { padding: 0.75rem; background-color: var(--color-bg-light-card); border-radius: 0.5rem; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4); }
@@ -37,6 +39,7 @@
         .header-title { color: var(--color-accent-pink); font-weight: 800; font-size: 1.875rem; }
         .header-subtitle { color: var(--color-text-secondary); margin-top: 0.25rem; }
         .section-title { color: var(--color-text-light); font-weight: 600; font-size: 1.25rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        /* --- Layouts & Inputs --- */
         .flex-row-group { display: flex; gap: 1rem; margin-top: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
         .flex-1 { flex: 1 1 0%; }
         .hidden { display: none !important; }
@@ -59,18 +62,22 @@
         .accent-red { background-color: var(--color-error); }
         .bg-blue-600 { background-color: #2563eb; } .bg-purple-600 { background-color: #9333ea; } .bg-indigo-600 { background-color: #4f46e5; } .bg-yellow-600 { background-color: #ca8a04; } .bg-red-800 { background-color: #991b1b; }
         .hover-blue:hover { background-color: #1d4ed8; } .hover-purple:hover { background-color: #7e22ce; } .hover-indigo:hover { background-color: #4338ca; } .hover-yellow:hover { background-color: #a16207; } .hover-red-dark:hover { background-color: #7f1d1d; }
+        /* --- Status & Table Styles --- */
         .status-box { text-align: center; padding: 0.5rem; border-radius: 0.25rem; background-color: #4b5563; color: var(--color-text-light); font-size: 0.875rem; font-weight: 600; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4); }
         .data-table { min-width: 100%; font-size: 0.875rem; border-collapse: collapse; }
         .table-header-row { color: var(--color-accent-pink); background-color: var(--color-bg-light-card); }
         .table-header-cell { padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; }
         .data-table tbody tr:hover { background-color: var(--color-bg-light-card); }
+        /* --- Accent Text Colors --- */
         .text-accent-green { color: var(--color-accent-green); } .text-accent-pink { color: var(--color-accent-pink); } .text-accent-red { color: var(--color-accent-red); } .text-accent-indigo { color: var(--color-accent-indigo); }
         .metric-value { font-size: 1.5rem; font-weight: 800; }
         .metric-label { font-size: 0.75rem; color: var(--color-text-secondary); }
+        /* --- Animations & Effects --- */
         @keyframes action-glow { 0% { box-shadow: 0 0 0 0 rgba(0, 224, 179, 0.7); } 50% { box-shadow: 0 0 0 15px rgba(0, 224, 179, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 224, 179, 0.7); } }
         .btn-action-glow { animation: action-glow 2s ease-in-out infinite; }
         @keyframes scanning-pulse { 0% { border-color: var(--color-accent-pink); box-shadow: 0 0 10px rgba(255, 110, 150, 0.7); } 50% { border-color: var(--color-accent-red); box-shadow: 0 0 20px rgba(255, 82, 82, 0.9); } 100% { border-color: var(--color-accent-pink); box-shadow: 0 0 10px rgba(255, 110, 150, 0.7); } }
         .scanner-input.scanning-active { animation: scanning-pulse 1s ease-in-out infinite alternate; }
+        /* --- Responsive Design --- */
         @media (max-width: 768px) { .metrics-grid { grid-template-columns: 1fr 1fr; } .flex-row-group { flex-direction: column; } .grid-col-2-group { grid-template-columns: 1fr; } .header-title { font-size: 1.5rem; } .app-header { padding: 1rem; } }
     </style>
 </head>
@@ -113,11 +120,12 @@
     <section class="app-card" id="scanningCard" style="opacity: 0.5; transition: opacity 300ms ease-in-out;">
         <h2 class="section-title">3. Scanner Input</h2>
         <div class="flex-row-group">
-            <button id="startBtn" onclick="startScanning()" class="mode-button btn-pill accent-green btn-action-glow" disabled>▶ START SCANNER</button>
+            <button id="startBtn" onclick="startScanning()" class="mode-button btn-pill accent-green" disabled>▶ START SCANNER</button>
             <button id="stopBtn" onclick="stopScanning()" class="mode-button btn-pill accent-red" disabled>⏹ STOP SCANNER</button>
         </div>
         <div class="relative mt-4">
             <input type="text" id="scanInput" placeholder="Select User and Press START..." class="scanner-input" disabled autocomplete="off">
+            <p id="responseTimeValue" style="position: absolute; right: 0.5rem; top: 0.5rem; color: var(--color-text-secondary); font-size: 0.75rem;"></p>
         </div>
         <div class="metrics-grid">
             <div class="card-subtle">
@@ -159,7 +167,7 @@
 
     <section class="app-card">
         <h2 class="section-title">Data Management & Export</h2>
-        <p id="lastSyncInfo">Awaiting sync...</p>
+        <p id="lastSyncInfo">Awaiting sync...</p> 
         <div class="grid-col-2-group">
             <button onclick="exportActiveBowls()" class="mode-button bg-blue-600 hover-blue">📥 Export Active Bowls</button>
             <button onclick="exportReturnData()" class="mode-button bg-purple-600 hover-purple">📥 Export Returns</button>
@@ -172,13 +180,15 @@
                 <button onclick="processJSONData(document.getElementById('jsonData').value)" class="mode-button bg-yellow-600 hover-yellow">🔄 Patch Customer Data</button>
                 <button onclick="resetTodaysPreparedBowls()" class="mode-button bg-red-800 hover-red-dark">🗑️ Reset Prepared/Scans</button>
             </div>
+            <div id="patchResults" style="display: none; margin-top: 10px;">
+                <p id="patchSummary" class="text-accent-pink"></p>
+                <p id="failedMatches" class="text-accent-red"></p>
+                <p id="jsonStatus" class="text-accent-green"></p>
+            </div>
         </div>
     </section>
 </div>
 
-<!-- SCRIPT IS LOADED ONCE AT THE END -->
 <script src="code.js"></script>
-
 </body>
 </html>
-
