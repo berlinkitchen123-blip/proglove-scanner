@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.exportActiveBowls = exportActiveBowls;
     window.exportReturnData = exportReturnData;
     window.exportAllData = exportAllData;
-    window.resetTodaysPreparedBowls = resetTodaysPreparedBowols;
+    window.resetTodaysPreparedBowls = resetTodaysPreparedBowls;
     window.clearActiveInventory = clearActiveInventory;
 
     initializeFirebase();
